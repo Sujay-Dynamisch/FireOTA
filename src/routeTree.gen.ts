@@ -20,9 +20,11 @@ import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as HealthRouteImport } from './routes/health'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
+import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as TeamRouteImport } from './routes/team'
+import { Route as TermsRouteImport } from './routes/terms'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as AppsIndexRouteImport } from './routes/apps.index'
 import { Route as AppsNewRouteImport } from './routes/apps.new'
@@ -105,6 +107,11 @@ const OnboardingRoute = OnboardingRouteImport.update({
   path: '/onboarding',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
   path: '/reset-password',
@@ -118,6 +125,11 @@ const SignupRoute = SignupRouteImport.update({
 const TeamRoute = TeamRouteImport.update({
   id: '/team',
   path: '/team',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TermsRoute = TermsRouteImport.update({
+  id: '/terms',
+  path: '/terms',
   getParentRoute: () => rootRouteImport,
 } as any)
 const VerifyEmailRoute = VerifyEmailRouteImport.update({
@@ -268,9 +280,11 @@ export interface FileRoutesByFullPath {
   '/health': typeof HealthRouteWithChildren
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
+  '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/team': typeof TeamRoute
+  '/terms': typeof TermsRoute
   '/verify-email': typeof VerifyEmailRoute
   '/apps/new': typeof AppsNewRoute
   '/docs/$slug': typeof DocsSlugRoute
@@ -309,9 +323,11 @@ export interface FileRoutesByTo {
   '/health': typeof HealthRouteWithChildren
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
+  '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/team': typeof TeamRoute
+  '/terms': typeof TermsRoute
   '/verify-email': typeof VerifyEmailRoute
   '/apps/new': typeof AppsNewRoute
   '/docs/$slug': typeof DocsSlugRoute
@@ -352,9 +368,11 @@ export interface FileRoutesById {
   '/health': typeof HealthRouteWithChildren
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
+  '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/team': typeof TeamRoute
+  '/terms': typeof TermsRoute
   '/verify-email': typeof VerifyEmailRoute
   '/apps/new': typeof AppsNewRoute
   '/docs/$slug': typeof DocsSlugRoute
@@ -396,9 +414,11 @@ export interface FileRouteTypes {
     | '/health'
     | '/login'
     | '/onboarding'
+    | '/privacy'
     | '/reset-password'
     | '/signup'
     | '/team'
+    | '/terms'
     | '/verify-email'
     | '/apps/new'
     | '/docs/$slug'
@@ -437,9 +457,11 @@ export interface FileRouteTypes {
     | '/health'
     | '/login'
     | '/onboarding'
+    | '/privacy'
     | '/reset-password'
     | '/signup'
     | '/team'
+    | '/terms'
     | '/verify-email'
     | '/apps/new'
     | '/docs/$slug'
@@ -479,9 +501,11 @@ export interface FileRouteTypes {
     | '/health'
     | '/login'
     | '/onboarding'
+    | '/privacy'
     | '/reset-password'
     | '/signup'
     | '/team'
+    | '/terms'
     | '/verify-email'
     | '/apps/new'
     | '/docs/$slug'
@@ -522,9 +546,11 @@ export interface RootRouteChildren {
   HealthRoute: typeof HealthRouteWithChildren
   LoginRoute: typeof LoginRoute
   OnboardingRoute: typeof OnboardingRoute
+  PrivacyRoute: typeof PrivacyRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SignupRoute: typeof SignupRoute
   TeamRoute: typeof TeamRoute
+  TermsRoute: typeof TermsRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
   AppsNewRoute: typeof AppsNewRoute
   ProjectsConnectRoute: typeof ProjectsConnectRoute
@@ -626,6 +652,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OnboardingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/reset-password': {
       id: '/reset-password'
       path: '/reset-password'
@@ -645,6 +678,13 @@ declare module '@tanstack/react-router' {
       path: '/team'
       fullPath: '/team'
       preLoaderRoute: typeof TeamRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/terms': {
+      id: '/terms'
+      path: '/terms'
+      fullPath: '/terms'
+      preLoaderRoute: typeof TermsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/verify-email': {
@@ -884,9 +924,11 @@ const rootRouteChildren: RootRouteChildren = {
   HealthRoute: HealthRouteWithChildren,
   LoginRoute: LoginRoute,
   OnboardingRoute: OnboardingRoute,
+  PrivacyRoute: PrivacyRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SignupRoute: SignupRoute,
   TeamRoute: TeamRoute,
+  TermsRoute: TermsRoute,
   VerifyEmailRoute: VerifyEmailRoute,
   AppsNewRoute: AppsNewRoute,
   ProjectsConnectRoute: ProjectsConnectRoute,

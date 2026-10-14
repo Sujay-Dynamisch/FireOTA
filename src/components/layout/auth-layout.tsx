@@ -49,11 +49,11 @@ export function AuthLayout({ children }: { children: ReactNode }) {
           {children}
           <p className="mt-8 font-mono text-[10px] text-faint">
             By continuing you accept the{" "}
-            <Link to="/docs" className="underline underline-offset-2 hover:text-muted-foreground">
+            <Link to="/terms" className="underline underline-offset-2 hover:text-muted-foreground">
               terms
             </Link>{" "}
             and{" "}
-            <Link to="/docs" className="underline underline-offset-2 hover:text-muted-foreground">
+            <Link to="/privacy" className="underline underline-offset-2 hover:text-muted-foreground">
               privacy policy
             </Link>
             .

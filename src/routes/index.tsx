@@ -92,9 +92,17 @@ function Landing() {
       <footer className="border-t border-border px-5 py-6">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 font-mono text-[10px] text-faint">
           <span>FireOTA · OTA release management for React Native</span>
-          <Link to="/docs" className="hover:text-muted-foreground">
-            Documentation
-          </Link>
+          <div className="flex gap-4">
+            <Link to="/docs" className="hover:text-muted-foreground">
+              Documentation
+            </Link>
+            <Link to="/privacy" className="hover:text-muted-foreground">
+              Privacy
+            </Link>
+            <Link to="/terms" className="hover:text-muted-foreground">
+              Terms
+            </Link>
+          </div>
         </div>
       </footer>
     </div>
