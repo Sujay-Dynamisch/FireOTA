@@ -1,0 +1,75 @@
+# Publishes the SDK and CLI when a GitHub Release is published (or on demand).
+#  - GitHub Packages: always, as @sujay-dynamisch/fireota-* (GitHub requires the scope to match
+#    the repository owner). These are what appear under "Packages" on the repository page.
+#  - npmjs.com: as @fireota/*, only when the NPM_TOKEN secret is set and the version is new.
+# Bump "version" in packages/*/package.json before creating a release.
+name: Publish packages
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - dir: packages/react-native
+            github_name: "@sujay-dynamisch/fireota-react-native"
+          - dir: packages/cli
+            github_name: "@sujay-dynamisch/fireota-cli"
+    defaults:
+      run:
+        working-directory: ${{ matrix.dir }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://npm.pkg.github.com
+          scope: "@sujay-dynamisch"
+
+      - name: Publish to GitHub Packages
+        run: |
+          cp package.json package.json.npm
+          npm pkg set name="${{ matrix.github_name }}" publishConfig.registry="https://npm.pkg.github.com"
+          npm pkg delete publishConfig.access
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view "${{ matrix.github_name }}@$VERSION" version >/dev/null 2>&1; then
+            echo "${{ matrix.github_name }}@$VERSION is already on GitHub Packages, skipping."
+          else
+            npm publish
+          fi
+          mv package.json.npm package.json
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+
+      - name: Publish to npmjs.com
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "NPM_TOKEN secret not set; skipping npmjs.com."
+            exit 0
+          fi
+          NAME=$(node -p "require('./package.json').name")
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
+            echo "$NAME@$VERSION is already on npmjs.com, skipping."
+          else
+            npm publish --provenance --access public
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
