@@ -1,10 +1,10 @@
 import { cn } from "@/lib/utils";
 
-/** FireOTA flame mark. Pair with the "FireOTA" wordmark text where space allows. */
+/** FireOTA mark (update ring + deploy arrow). Pair with the "FireOTA" wordmark where space allows. */
 export function BrandMark({ className }: { className?: string }) {
   return (
     <img
-      src="/logo-mark.png"
+      src="/logo-mark.svg"
       alt=""
       aria-hidden
       width={20}
