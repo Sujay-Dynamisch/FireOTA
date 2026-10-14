@@ -39,3 +39,6 @@ dist-ssr
 
 # Local test artifacts
 *.fota
+
+# Vercel
+.vercel
