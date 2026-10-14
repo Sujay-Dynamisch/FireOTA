@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.org_role_of(uuid, uuid) FROM authenticated;

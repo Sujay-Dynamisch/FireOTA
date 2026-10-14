@@ -1,0 +1,50 @@
+{
+  "name": "@fireota/react-native",
+  "version": "0.1.0",
+  "description": "Over-the-air JavaScript updates for React Native apps, served from your own Firebase project by FireOTA.",
+  "license": "MIT",
+  "author": "FireOTA",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "react-native": "src/index.ts",
+  "files": [
+    "src",
+    "android/build.gradle",
+    "android/src",
+    "ios",
+    "fireota-react-native.podspec",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "peerDependencies": {
+    "react-native": ">=0.73.0"
+  },
+  "dependencies": {
+    "@fireota/react-native": "file:fireota-react-native-0.1.0.tgz"
+  },
+  "keywords": [
+    "react-native",
+    "ota",
+    "over-the-air",
+    "code-push",
+    "hot-update",
+    "firebase",
+    "updates",
+    "hermes"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Sujay-Dynamisch/FireOTA.git",
+    "directory": "packages/react-native"
+  },
+  "homepage": "https://github.com/Sujay-Dynamisch/FireOTA/tree/main/packages/react-native#readme",
+  "bugs": {
+    "url": "https://github.com/Sujay-Dynamisch/FireOTA/issues"
+  }
+}

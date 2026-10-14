@@ -1,0 +1,281 @@
+/** Applications, platforms and channels. */
+import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
+
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { audit, orgContextForUser, ownedRow, requirePermission } from "@/lib/backend/context.server";
+import { fail } from "@/lib/backend/errors";
+import { isValidVersion } from "@/lib/backend/versions";
+import { dispatchWebhooks } from "@/lib/backend/webhooks.server";
+
+const DEFAULT_CHANNELS = [
+  { name: "production", environment: "production", description: "Live traffic", rollout: 100 },
+  { name: "beta", environment: "beta", description: "Opt-in testers", rollout: 100 },
+  { name: "staging", environment: "staging", description: "Internal verification", rollout: 100 },
+  { name: "development", environment: "development", description: "Developer builds", rollout: 100 },
+];
+
+const slugify = (v: string) =>
+  v.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48);
+
+async function shapeApps(ctx: Awaited<ReturnType<typeof orgContextForUser>>, appIds?: string[]) {
+  let appsQuery = ctx.db
+    .from("apps")
+    .select("id, name, slug, status, runtime_version, default_channel, firebase_project_id, created_at")
+    .eq("organization_id", ctx.organizationId);
+  if (appIds) appsQuery = appsQuery.in("id", appIds);
+  const [{ data: apps }, { data: platforms }, { data: channels }, { data: devices }, { data: releases }] = await Promise.all([
+    appsQuery.order("created_at", { ascending: true }),
+    ctx.db.from("app_platforms").select("app_id, platform, package_name, bundle_identifier, native_version, runtime_version").eq("organization_id", ctx.organizationId),
+    ctx.db.from("channels").select("id, app_id, name, active_release_id").eq("organization_id", ctx.organizationId),
+    ctx.db.from("device_installations").select("app_id, platform, current_release_id").eq("organization_id", ctx.organizationId),
+    ctx.db.from("releases").select("id, app_id, number, version, status, created_at").eq("organization_id", ctx.organizationId).order("number", { ascending: false }),
+  ]);
+
+  return (apps ?? []).map((app) => {
+    const appPlatforms = (platforms ?? []).filter((p) => p.app_id === app.id);
+    const appDevices = (devices ?? []).filter((d) => d.app_id === app.id);
+    const appReleases = (releases ?? []).filter((r) => r.app_id === app.id);
+    const latestPublished = appReleases.find((r) => r.status === "published");
+    const android = appDevices.filter((d) => d.platform === "android");
+    const ios = appDevices.filter((d) => d.platform === "ios");
+    const updateRate = (list: typeof appDevices) =>
+      list.length === 0 ? 0 : Number(((list.filter((d) => d.current_release_id).length / list.length) * 100).toFixed(0));
+
+    return {
+      id: app.id as string,
+      name: app.name as string,
+      slug: app.slug as string,
+      platforms: appPlatforms.map((p) => p.platform as "android" | "ios"),
+      androidPackage: (appPlatforms.find((p) => p.platform === "android")?.package_name as string) ?? "",
+      iosBundleId: (appPlatforms.find((p) => p.platform === "ios")?.bundle_identifier as string) ?? "",
+      runtimeVersion: app.runtime_version as string,
+      channels: (channels ?? []).filter((c) => c.app_id === app.id).map((c) => c.name as string),
+      currentRelease: latestPublished ? `#${latestPublished.number} (${latestPublished.version})` : "—",
+      status: app.status as "active" | "paused" | "setup",
+      firebaseProjectId: (app.firebase_project_id as string) ?? "",
+      devices: { android: android.length, ios: ios.length },
+      updateRate: { android: updateRate(android), ios: updateRate(ios) },
+    };
+  });
+}
+
+export const listApps = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const ctx = await orgContextForUser(context.userId);
+    requirePermission(ctx, "app.read");
+    return shapeApps(ctx);
+  });
+
+export const getApp = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { id: string }) => z.object({ id: z.string().min(1).max(80) }).parse(input))
+  .handler(async ({ data, context }) => {
+    const ctx = await orgContextForUser(context.userId);
+    requirePermission(ctx, "app.read");
+    const { data: row } = await ctx.db
+      .from("apps")
+      .select("id")
+      .eq("organization_id", ctx.organizationId)
+      .or(`slug.eq.${data.id},id.eq.${/^[0-9a-f-]{36}$/i.test(data.id) ? data.id : "00000000-0000-0000-0000-000000000000"}`)
+      .maybeSingle();
+    if (!row) fail("RESOURCE_NOT_FOUND", "Application not found.");
+    const [app] = await shapeApps(ctx, [row.id as string]);
+    if (!app) fail("RESOURCE_NOT_FOUND", "Application not found.");
+    return app;
+  });
+
+export const createApp = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (input: {
+      name: string;
+      slug?: string;
+      firebaseProjectId?: string;
+      runtimeVersion: string;
+      platforms: { platform: "android" | "ios"; packageName?: string; bundleIdentifier?: string; nativeVersion: string }[];
+    }) =>
+      z
+        .object({
+          name: z.string().min(2).max(80),
+          slug: z.string().max(48).optional(),
+          firebaseProjectId: z.string().uuid().optional(),
+          runtimeVersion: z.string().min(1).max(40),
+          platforms: z
+            .array(
+              z.object({
+                platform: z.enum(["android", "ios"]),
+                packageName: z.string().max(160).optional(),
+                bundleIdentifier: z.string().max(160).optional(),
+                nativeVersion: z.string().min(1).max(40),
+              }),
+            )
+            .min(1),
+        })
+        .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const ctx = await orgContextForUser(context.userId);
+    requirePermission(ctx, "app.create");
+    if (!isValidVersion(data.runtimeVersion)) fail("INVALID_RUNTIME", "Runtime version must look like 1.2.3.");
+
+    if (data.firebaseProjectId) {
+      await ownedRow(ctx, "firebase_projects", data.firebaseProjectId, "id");
+    }
+
+    const slug = slugify(data.slug ?? data.name) || `app-${Date.now()}`;
+    const { data: app, error } = await ctx.db
+      .from("apps")
+      .insert({
+        organization_id: ctx.organizationId,
+        firebase_project_id: data.firebaseProjectId ?? null,
+        name: data.name,
+        slug,
+        runtime_version: data.runtimeVersion,
+        status: "active",
+        created_by: context.userId,
+      })
+      .select("id, name, slug")
+      .single();
+    if (error) fail("CONFLICT", "An application with that identifier already exists.");
+
+    await ctx.db.from("app_platforms").insert(
+      data.platforms.map((p) => ({
+        organization_id: ctx.organizationId,
+        app_id: app.id,
+        platform: p.platform,
+        package_name: p.packageName ?? null,
+        bundle_identifier: p.bundleIdentifier ?? null,
+        native_version: p.nativeVersion,
+        runtime_version: data.runtimeVersion,
+      })),
+    );
+
+    await ctx.db.from("channels").insert(
+      DEFAULT_CHANNELS.map((c) => ({
+        organization_id: ctx.organizationId,
+        app_id: app.id,
+        name: c.name,
+        environment: c.environment,
+        description: c.description,
+        platform: "all",
+        rollout_percentage: c.rollout,
+        status: "empty",
+        update_policy: c.name === "production" ? "staged" : "immediate",
+      })),
+    );
+
+    await audit(ctx, { action: "app.created", resourceType: "app", resourceId: app.id, appId: app.id, appName: app.name, after: { slug } });
+    await dispatchWebhooks(ctx.db, ctx.organizationId, "app.created", { appId: app.id, name: app.name, slug });
+    return { id: app.id as string, name: app.name as string, slug: app.slug as string };
+  });
+
+export const updateApp = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { id: string; name?: string; status?: "active" | "paused"; runtimeVersion?: string }) =>
+    z
+      .object({
+        id: z.string().uuid(),
+        name: z.string().min(2).max(80).optional(),
+        status: z.enum(["active", "paused"]).optional(),
+        runtimeVersion: z.string().min(1).max(40).optional(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const ctx = await orgContextForUser(context.userId);
+    requirePermission(ctx, "app.update");
+    const before = await ownedRow<{ name: string; status: string; runtime_version: string }>(
+      ctx,
+      "apps",
+      data.id,
+      "name, status, runtime_version",
+    );
+    const patch: Record<string, unknown> = {};
+    if (data.name !== undefined) patch["name"] = data.name;
+    if (data.status !== undefined) patch["status"] = data.status;
+    if (data.runtimeVersion !== undefined) patch["runtime_version"] = data.runtimeVersion;
+
+    await ctx.db.from("apps").update(patch).eq("id", data.id).eq("organization_id", ctx.organizationId);
+    await audit(ctx, { action: "app.updated", resourceType: "app", resourceId: data.id, appId: data.id, appName: before.name, before, after: patch });
+    return { id: data.id, ...patch };
+  });
+
+async function shapeChannels(ctx: Awaited<ReturnType<typeof orgContextForUser>>, appId?: string) {
+  let query = ctx.db
+    .from("channels")
+    .select(
+      "id, app_id, name, environment, description, platform, active_release_id, rollout_percentage, status, update_policy, updated_at",
+    )
+    .eq("organization_id", ctx.organizationId);
+  if (appId) query = query.eq("app_id", appId);
+
+  const [{ data: channels }, { data: apps }, { data: releases }, { data: deployments }] = await Promise.all([
+    query.order("created_at", { ascending: true }),
+    ctx.db.from("apps").select("id, name").eq("organization_id", ctx.organizationId),
+    ctx.db.from("releases").select("id, number, version, status").eq("organization_id", ctx.organizationId),
+    ctx.db
+      .from("deployments")
+      .select("channel_id, release_id, created_at, type")
+      .eq("organization_id", ctx.organizationId)
+      .order("created_at", { ascending: false })
+      .limit(200),
+  ]);
+
+  const appName = (id: string) => (apps ?? []).find((a) => a.id === id)?.name ?? "";
+  const release = (id: string | null) => (releases ?? []).find((r) => r.id === id);
+
+  return (channels ?? []).map((c) => {
+    const active = release(c.active_release_id as string | null);
+    return {
+      id: c.id as string,
+      name: c.name as string,
+      environment: c.environment as "production" | "beta" | "staging" | "development",
+      description: (c.description as string) ?? "",
+      appId: c.app_id as string,
+      appName: appName(c.app_id as string),
+      platform: c.platform as "android" | "ios" | "all",
+      currentRelease: active ? `#${active.number} (${active.version})` : "—",
+      rollout: Number(c.rollout_percentage ?? 0),
+      status: c.status as "active" | "paused" | "empty",
+      updatedAt: new Date(c.updated_at as string).toISOString().slice(0, 16).replace("T", " "),
+      updatePolicy: (c.update_policy as string) ?? "",
+      history: (deployments ?? [])
+        .filter((d) => d.channel_id === c.id)
+        .slice(0, 8)
+        .map((d) => {
+          const rel = release(d.release_id as string | null);
+          return {
+            release: rel ? `#${rel.number}` : "—",
+            version: rel?.version ?? "",
+            at: new Date(d.created_at as string).toISOString().slice(0, 16).replace("T", " "),
+            status: (rel?.status ?? "draft") as never,
+          };
+        }),
+    };
+  });
+}
+
+export const listChannels = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { appId?: string } | undefined) =>
+    z.object({ appId: z.string().uuid().optional() }).optional().parse(input ?? undefined),
+  )
+  .handler(async ({ data, context }) => {
+    const ctx = await orgContextForUser(context.userId);
+    requirePermission(ctx, "channel.read");
+    return shapeChannels(ctx, data?.appId);
+  });
+
+export const getChannel = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { id: string }) => z.object({ id: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const ctx = await orgContextForUser(context.userId);
+    requirePermission(ctx, "channel.read");
+    const row = await ownedRow<{ app_id: string }>(ctx, "channels", data.id, "app_id");
+    const found = (await shapeChannels(ctx, row.app_id)).find((c) => c.id === data.id);
+    if (!found) fail("RESOURCE_NOT_FOUND", "Channel not found.");
+    return found;
+  });

@@ -1,0 +1,51 @@
+buildscript {
+  ext.safeExtGet = { prop, fallback -> rootProject.ext.has(prop) ? rootProject.ext.get(prop) : fallback }
+  repositories { google(); mavenCentral() }
+  dependencies {
+    classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:${safeExtGet('kotlinVersion', '2.1.20')}"
+  }
+}
+
+apply plugin: "com.android.library"
+
+/**
+ * AGP 9 compiles Kotlin itself ("built-in Kotlin", on by default) and registers the `kotlin`
+ * extension; applying kotlin-android on top fails with "Cannot add extension with name 'kotlin'".
+ * Only apply it on AGP 8 or when the app turned built-in Kotlin off (android.builtInKotlin=false).
+ */
+def needsKotlinPlugin() {
+  def agpMajor = com.android.Version.ANDROID_GRADLE_PLUGIN_VERSION.tokenize('.')[0].toInteger()
+  if (agpMajor <= 8) return true
+  def builtIn = providers.gradleProperty("android.builtInKotlin").orNull
+  return builtIn != null && !builtIn.toBoolean()
+}
+
+def useKotlinPlugin = needsKotlinPlugin()
+if (useKotlinPlugin) {
+  apply plugin: "kotlin-android"
+}
+
+android {
+  namespace "dev.fireota.reactnative"
+  compileSdk safeExtGet("compileSdkVersion", 35)
+  defaultConfig {
+    minSdk safeExtGet("minSdkVersion", 24)
+  }
+  compileOptions {
+    sourceCompatibility JavaVersion.VERSION_17
+    targetCompatibility JavaVersion.VERSION_17
+  }
+}
+
+if (useKotlinPlugin) {
+  // Built-in Kotlin derives this from compileOptions; the standalone plugin needs it explicitly.
+  tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+    kotlinOptions.jvmTarget = "17"
+  }
+}
+
+repositories { google(); mavenCentral() }
+
+dependencies {
+  implementation "com.facebook.react:react-android"
+}

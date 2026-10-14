@@ -1,0 +1,10 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <uses-permission android:name="android.permission.INTERNET" />
+  <application>
+    <activity
+      android:name="dev.fireota.reactnative.FireOTARestartActivity"
+      android:exported="false"
+      android:process=":fireota_restart"
+      android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+  </application>
+</manifest>

@@ -1,0 +1,231 @@
+/**
+ * Firebase connection lifecycle: Google OAuth start, project discovery,
+ * verification, re-authorization and disconnect.
+ */
+import { createServerFn } from "@tanstack/react-start";
+import { getRequest } from "@tanstack/react-start/server";
+import { z } from "zod";
+
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { audit, notify, orgContextForUser, requirePermission } from "@/lib/backend/context.server";
+import { ApiError, fail } from "@/lib/backend/errors";
+import { pkcePair, randomToken } from "@/lib/backend/crypto.server";
+import {
+  accessTokenFromConnection,
+  authorizationUrl,
+  listProjects,
+  projectHealth,
+} from "@/lib/backend/firebase.server";
+import { dispatchWebhooks } from "@/lib/backend/webhooks.server";
+
+function origin() {
+  const request = getRequest();
+  return new URL(request.url).origin;
+}
+
+/** Step 1 of connecting: hand the browser a Google consent URL bound to a one-time state. */
+export const startFirebaseAuthorization = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const ctx = await orgContextForUser(context.userId);
+    requirePermission(ctx, "project.connect");
+
+    const state = randomToken(24);
+    const { verifier, challenge } = pkcePair();
+    await ctx.db.from("oauth_states").insert({
+      state,
+      organization_id: ctx.organizationId,
+      user_id: context.userId,
+      code_verifier: verifier,
+      redirect_to: "/projects",
+    });
+    await audit(ctx, { action: "firebase.authorization_started", resourceType: "firebase_connection" });
+    return { url: authorizationUrl({ state, challenge, origin: origin() }) };
+  });
+
+/** Projects the connected Google account can see, for the selection step. */
+export const listSelectableProjects = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const ctx = await orgContextForUser(context.userId);
+    requirePermission(ctx, "project.read");
+    const { data: connection } = await ctx.db
+      .from("firebase_connections")
+      .select("id, refresh_token_ciphertext, google_account")
+      .eq("organization_id", ctx.organizationId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!connection) fail("FIREBASE_CONNECTION_ERROR", "Authorize a Google account first.");
+
+    const accessToken = await accessTokenFromConnection(connection.refresh_token_ciphertext as string | null);
+    const projects = await listProjects(accessToken);
+    return {
+      googleAccount: connection.google_account as string,
+      projects: projects.map((p) => ({ id: p.projectId, name: p.displayName, region: p.storageBucket ?? "" })),
+    };
+  });
+
+/** Step 2: attach one discovered Firebase project to the organization and verify it. */
+export const connectProject = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { firebaseProjectId: string }) =>
+    z.object({ firebaseProjectId: z.string().min(3).max(120) }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const ctx = await orgContextForUser(context.userId);
+    requirePermission(ctx, "project.connect");
+
+    const { data: connection } = await ctx.db
+      .from("firebase_connections")
+      .select("id, refresh_token_ciphertext, google_account, scopes")
+      .eq("organization_id", ctx.organizationId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!connection) fail("FIREBASE_CONNECTION_ERROR", "Authorize a Google account first.");
+
+    const accessToken = await accessTokenFromConnection(connection.refresh_token_ciphertext as string | null);
+    const health = await projectHealth(accessToken, data.firebaseProjectId);
+
+    const { data: row, error } = await ctx.db
+      .from("firebase_projects")
+      .upsert(
+        {
+          organization_id: ctx.organizationId,
+          firebase_connection_id: connection.id,
+          firebase_project_id: data.firebaseProjectId,
+          project_number: health.projectNumber,
+          display_name: health.displayName,
+          storage_bucket: health.storageBucket,
+          storage_enabled: health.storage,
+          firestore_enabled: health.firestore,
+          google_account: connection.google_account,
+          permissions: health.permissions,
+          status: health.status,
+          last_verified_at: new Date().toISOString(),
+        },
+        { onConflict: "organization_id,firebase_project_id" },
+      )
+      .select("id, firebase_project_id, display_name")
+      .single();
+    if (error) fail("FIREBASE_CONNECTION_ERROR", "Could not save this Firebase project.");
+
+    await audit(ctx, {
+      action: "firebase.project_connected",
+      resourceType: "firebase_project",
+      resourceId: row.id,
+      after: { projectId: data.firebaseProjectId, storage: health.storage },
+    });
+    await notify(ctx, { title: `Firebase project ${health.displayName} connected`, tone: "success" });
+
+    return { id: row.id, firebaseProjectId: row.firebase_project_id, name: row.display_name, status: health.status };
+  });
+
+/** The database distinguishes why a connection is unhealthy; the UI shows four states. */
+function uiStatus(status: string): "connected" | "degraded" | "expired" | "disconnected" {
+  if (status === "auth_expired") return "expired";
+  if (status === "permission_error") return "degraded";
+  if (status === "connected" || status === "degraded" || status === "disconnected") return status;
+  return "degraded";
+}
+
+export const listFirebaseProjects = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const ctx = await orgContextForUser(context.userId);
+    requirePermission(ctx, "project.read");
+    const { data } = await ctx.db
+      .from("firebase_projects")
+      .select(
+        "id, firebase_project_id, display_name, storage_bucket, firestore_enabled, storage_enabled, status, last_verified_at, google_account, permissions",
+      )
+      .eq("organization_id", ctx.organizationId)
+      .order("created_at", { ascending: true });
+
+    const counts = await ctx.db.from("apps").select("firebase_project_id").eq("organization_id", ctx.organizationId);
+
+    return (data ?? []).map((p) => ({
+      id: p.id as string,
+      name: p.display_name as string,
+      firebaseId: p.firebase_project_id as string,
+      storageBucket: (p.storage_bucket as string) ?? "",
+      firestore: p.firestore_enabled ? ("enabled" as const) : ("disabled" as const),
+      storage: p.storage_enabled ? ("enabled" as const) : ("disabled" as const),
+      apps: (counts.data ?? []).filter((a) => a.firebase_project_id === p.id).length,
+      status: uiStatus(p.status as string),
+      lastVerified: p.last_verified_at ? new Date(p.last_verified_at as string).toISOString().slice(0, 16).replace("T", " ") : "never",
+      googleAccount: (p.google_account as string) ?? "",
+      permissions: (p.permissions as { label: string; granted: boolean; optional?: boolean }[]) ?? [],
+    }));
+  });
+
+export const verifyFirebaseProject = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { id: string }) => z.object({ id: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const ctx = await orgContextForUser(context.userId);
+    requirePermission(ctx, "project.read");
+    const { data: project } = await ctx.db
+      .from("firebase_projects")
+      .select("id, firebase_project_id, firebase_connection_id")
+      .eq("id", data.id)
+      .eq("organization_id", ctx.organizationId)
+      .maybeSingle();
+    if (!project) fail("RESOURCE_NOT_FOUND", "That Firebase project is not connected.");
+
+    const { data: connection } = await ctx.db
+      .from("firebase_connections")
+      .select("refresh_token_ciphertext")
+      .eq("id", project.firebase_connection_id ?? "")
+      .maybeSingle();
+
+    try {
+      const accessToken = await accessTokenFromConnection(connection?.refresh_token_ciphertext as string | null);
+      const health = await projectHealth(accessToken, project.firebase_project_id as string);
+      await ctx.db
+        .from("firebase_projects")
+        .update({
+          storage_bucket: health.storageBucket,
+          storage_enabled: health.storage,
+          firestore_enabled: health.firestore,
+          permissions: health.permissions,
+          status: health.status === "connected" ? "connected" : "degraded",
+          last_verified_at: new Date().toISOString(),
+        })
+        .eq("id", project.id);
+      await audit(ctx, { action: "firebase.verified", resourceType: "firebase_project", resourceId: project.id, after: health.permissions });
+      return { id: project.id, status: health.status === "connected" ? ("connected" as const) : ("degraded" as const), verifiedAt: "just now" };
+    } catch (error) {
+      const code = error instanceof ApiError ? error.code : null;
+      const status =
+        code === "FIREBASE_AUTH_EXPIRED" ? "auth_expired" : code === "FIREBASE_PERMISSION_ERROR" ? "permission_error" : "degraded";
+      await ctx.db
+        .from("firebase_projects")
+        .update({ status, last_verified_at: new Date().toISOString() })
+        .eq("id", project.id);
+      await audit(ctx, { action: "firebase.verification_failed", resourceType: "firebase_project", resourceId: project.id, result: "failure" });
+      await dispatchWebhooks(ctx.db, ctx.organizationId, "firebase.expired", { firebaseProjectId: project.id });
+      throw error;
+    }
+  });
+
+export const disconnectFirebaseProject = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { id: string }) => z.object({ id: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const ctx = await orgContextForUser(context.userId);
+    requirePermission(ctx, "project.disconnect");
+
+    const { count } = await ctx.db
+      .from("apps")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", ctx.organizationId)
+      .eq("firebase_project_id", data.id);
+    if ((count ?? 0) > 0) fail("CONFLICT", "Move or delete the applications using this project first.");
+
+    await ctx.db.from("firebase_projects").update({ status: "disconnected" }).eq("id", data.id).eq("organization_id", ctx.organizationId);
+    await audit(ctx, { action: "firebase.disconnected", resourceType: "firebase_project", resourceId: data.id });
+    await dispatchWebhooks(ctx.db, ctx.organizationId, "firebase.disconnected", { firebaseProjectId: data.id });
+    return { id: data.id, status: "disconnected" as const };
+  });
