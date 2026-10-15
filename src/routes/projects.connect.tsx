@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/layout/app-shell";
@@ -29,7 +29,22 @@ const steps = ["Google account", "Select project", "Verify"];
 
 function ConnectProjectPage() {
   const navigate = useNavigate();
-  const [step, setStep] = useState(0);
+  // Google redirects back here with ?status=connected|denied|expired|failed|invalid.
+  const [step, setStep] = useState(() =>
+    typeof window !== "undefined" && new URLSearchParams(window.location.search).get("status") === "connected" ? 1 : 0,
+  );
+  const [authorizing, setAuthorizing] = useState(false);
+  useEffect(() => {
+    const status = new URLSearchParams(window.location.search).get("status");
+    const messages: Record<string, string> = {
+      denied: "Google access was not granted. Nothing was connected.",
+      expired: "The Google sign-in expired. Please try again.",
+      failed: "Google sign-in failed. Please try again.",
+      invalid: "The Google sign-in response was invalid. Please try again.",
+    };
+    if (status === "connected") toast.success("Google account authorized. Choose a Firebase project.");
+    else if (status && messages[status]) toast.error(messages[status]);
+  }, []);
   const [selected, setSelected] = useState("");
   const [verifying, setVerifying] = useState(false);
   const [verified, setVerified] = useState(false);
@@ -55,14 +70,30 @@ function ConnectProjectPage() {
           steps={steps}
           current={0}
           title="Authorize a Google account"
-          description="FireOTA requests read access to your project list and write access to the bucket you choose."
+          description="Google will ask you to approve these permissions. FireOTA only uses them when you connect, verify or publish."
           footer={
             <>
               <Button variant="outline" size="sm" onClick={() => void navigate({ to: "/projects" })}>
                 Cancel
               </Button>
-              <Button size="sm" onClick={() => setStep(1)}>
-                Continue with Google
+              <Button variant="ghost" size="sm" onClick={() => setStep(1)}>
+                Use connected account
+              </Button>
+              <Button
+                size="sm"
+                disabled={authorizing}
+                onClick={async () => {
+                  // Always go through Google's consent screen, so a different account can be connected.
+                  setAuthorizing(true);
+                  try {
+                    await firebaseService.reconnect();
+                  } catch (error) {
+                    setAuthorizing(false);
+                    toast.error(error instanceof Error ? error.message : "Could not start Google sign-in.");
+                  }
+                }}
+              >
+                {authorizing ? "Opening Google…" : "Continue with Google"}
               </Button>
             </>
           }
@@ -70,10 +101,9 @@ function ConnectProjectPage() {
           <div className="max-w-lg space-y-3">
             <CheckList
               items={[
-                { label: "List your Firebase projects", granted: true },
-                { label: "Read and write objects in the selected Storage bucket", granted: true },
-                { label: "Read Firestore release metadata", granted: true },
-                { label: "Manage Firebase Authentication users", granted: false, optional: true },
+                { label: "List your Firebase projects and read their Storage bucket name", granted: true },
+                { label: "Upload, verify and delete update packages in the selected bucket (fireota/ folder only)", granted: true },
+                { label: "See the email address of the Google account you connect", granted: true },
               ]}
             />
             <p className="text-[11px] text-muted-foreground">
