@@ -3,6 +3,7 @@ import { BrandMark } from "@/components/fireota/brand-mark";
 
 import { Button } from "@/components/ui/button";
 import { CodeBlock } from "@/components/fireota/primitives";
+import { useAuthUser } from "@/hooks/use-auth-user";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -25,6 +26,7 @@ export const Route = createFileRoute("/")({
 });
 
 function Landing() {
+  const { user, loading } = useAuthUser();
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="sticky top-0 z-20 border-b border-border bg-background/90 backdrop-blur">
@@ -41,13 +43,33 @@ function Landing() {
               Agents
             </Link>
           </nav>
-          <div className="ml-auto flex items-center gap-2">
-            <Button variant="ghost" size="sm" asChild>
-              <Link to="/login">Sign in</Link>
-            </Button>
-            <Button size="sm" asChild>
-              <Link to="/signup">Create account</Link>
-            </Button>
+          <div className="ml-auto flex min-h-8 items-center gap-2">
+            {loading ? null : user ? (
+              <>
+                <span className="hidden items-center gap-2 text-[12px] text-muted-foreground sm:flex">
+                  {user.avatarUrl ? (
+                    <img src={user.avatarUrl} alt="" referrerPolicy="no-referrer" className="size-7 rounded-full" />
+                  ) : (
+                    <span className="grid size-7 place-items-center rounded-full bg-brand/20 font-mono text-[10px] text-brand">
+                      {(user.name || user.email).slice(0, 2).toUpperCase()}
+                    </span>
+                  )}
+                  <span className="max-w-[180px] truncate">{user.name || user.email}</span>
+                </span>
+                <Button size="sm" asChild>
+                  <Link to="/dashboard">Open dashboard</Link>
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="ghost" size="sm" asChild>
+                  <Link to="/login">Sign in</Link>
+                </Button>
+                <Button size="sm" asChild>
+                  <Link to="/signup">Create account</Link>
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </header>
@@ -63,7 +85,7 @@ function Landing() {
         </p>
         <div className="mt-7 flex flex-wrap items-center gap-2">
           <Button asChild>
-            <Link to="/signup">Create account</Link>
+            {user ? <Link to="/dashboard">Open dashboard</Link> : <Link to="/signup">Create account</Link>}
           </Button>
           <Button variant="outline" asChild>
             <Link to="/docs">Read the docs</Link>

@@ -1,5 +1,6 @@
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useAuthUser } from "@/hooks/use-auth-user";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { AuthLayout, GoogleButton } from "@/components/layout/auth-layout";
@@ -23,6 +24,11 @@ export const Route = createFileRoute("/signup")({
 
 function SignupPage() {
   const navigate = useNavigate();
+  const { user } = useAuthUser();
+  // Already signed in: there is nothing to do here.
+  useEffect(() => {
+    if (user) void navigate({ to: "/dashboard", replace: true });
+  }, [user, navigate]);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
