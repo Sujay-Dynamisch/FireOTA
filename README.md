@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="public/logo-mark.svg" alt="FireOTA" width="72" />
+  <img src="public/logo-mark.png" alt="FireOTA" width="96" />
 </p>
 
 <h1 align="center">FireOTA</h1>
