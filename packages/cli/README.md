@@ -1,6 +1,21 @@
-# @fireota/cli
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Sujay-Dynamisch/FireOTA/main/public/logo-mark.png" alt="FireOTA" width="96" />
+</p>
 
-Build FireOTA update packages and publish React Native over-the-air releases from a terminal or CI. Works with [`@fireota/react-native`](https://www.npmjs.com/package/@fireota/react-native).
+<h1 align="center">FireOTA CLI</h1>
+
+<p align="center">
+  Build FireOTA update packages and publish React Native over-the-air releases from a terminal or CI.<br />
+  Works with <a href="https://www.npmjs.com/package/@fireota/react-native"><code>@fireota/react-native</code></a>.
+</p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/@fireota/cli"><img alt="@fireota/cli" src="https://img.shields.io/npm/v/@fireota/cli?label=%40fireota%2Fcli" /></a>
+  <a href="https://www.npmjs.com/package/@fireota/react-native"><img alt="@fireota/react-native" src="https://img.shields.io/npm/v/@fireota/react-native?label=%40fireota%2Freact-native" /></a>
+  <img alt="license" src="https://img.shields.io/badge/license-MIT-blue" />
+</p>
+
+---
 
 > **Beta (0.x).** Requires Node.js 18.17+.
 
