@@ -1,6 +1,6 @@
 # @fireota/react-native
 
-Over-the-air JavaScript updates for React Native, served from **your own Firebase project** by [FireOTA](https://www.npmjs.com/package/@fireota/cli).
+Over-the-air JavaScript updates for React Native, by [FireOTA](https://www.npmjs.com/package/@fireota/cli).
 
 - SHA-256 verified downloads, straight from your Firebase Storage bucket
 - Staged rollouts, pause and rollback from the FireOTA dashboard
