@@ -1,6 +1,6 @@
 {
   "name": "@fireota/react-native",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Over-the-air JavaScript updates for React Native apps, served from your own Firebase project by FireOTA.",
   "license": "MIT",
   "author": "FireOTA",
