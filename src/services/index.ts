@@ -412,7 +412,11 @@ export const rolloutsService = {
 export const analyticsService = {
   summary: (filters?: Record<string, string>): Promise<AnalyticsSummary> =>
     getAnalytics({
-      data: filters?.["appId"] ? { appId: filters["appId"] } : undefined,
+      data: {
+        // "all" is the UI's "every application" option, not an app ID.
+        ...(filters?.["appId"] && filters["appId"] !== "all" ? { appId: filters["appId"] } : {}),
+        days: ({ "7d": 7, "30d": 30, "90d": 90 } as Record<string, number>)[filters?.["range"] ?? ""] ?? 14,
+      },
     }) as Promise<AnalyticsSummary>,
 };
 

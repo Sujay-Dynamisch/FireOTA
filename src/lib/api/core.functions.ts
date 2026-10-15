@@ -381,6 +381,49 @@ export const listActivity = createServerFn({ method: "GET" })
     }));
   });
 
+type Ctx = Awaited<ReturnType<typeof orgContextForUser>>;
+
+/** Install outcomes over the last 7 days, counted exactly by the database. */
+async function eventCounts(ctx: Ctx) {
+  const since = new Date(Date.now() - 7 * 86400_000).toISOString();
+  const count = async (type: string) => {
+    const { count: n } = await ctx.db
+      .from("analytics_events")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", ctx.organizationId)
+      .eq("event_type", type)
+      .gte("created_at", since);
+    return n ?? 0;
+  };
+  const [successful, failed, rollbacks] = await Promise.all([count("install_succeeded"), count("install_failed"), count("rollback")]);
+  return { successful, failed, rollbacks };
+}
+
+/** Share of devices seen in the last 7 days that run a release currently published on a channel. */
+async function adoptionRate(ctx: Ctx) {
+  const since = new Date(Date.now() - 7 * 86400_000).toISOString();
+  const { data: targets } = await ctx.db
+    .from("channel_targets")
+    .select("release_id")
+    .eq("organization_id", ctx.organizationId)
+    .not("release_id", "is", null);
+  const live = (targets ?? []).map((t) => t.release_id as string);
+  const active = ctx.db
+    .from("device_installations")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", ctx.organizationId)
+    .gte("last_seen_at", since);
+  const { count: total } = await active;
+  if (!total || live.length === 0) return 0;
+  const { count: current } = await ctx.db
+    .from("device_installations")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", ctx.organizationId)
+    .gte("last_seen_at", since)
+    .in("current_release_id", live);
+  return Math.min(100, Math.round(((current ?? 0) / total) * 100));
+}
+
 export const getDashboard = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -408,21 +451,13 @@ export const getDashboard = createServerFn({ method: "GET" })
         .order("created_at", { ascending: true })
         .limit(1)
         .maybeSingle(),
-      ctx.db
-        .from("analytics_events")
-        .select("event_type")
-        .eq("organization_id", ctx.organizationId)
-        .gte("created_at", new Date(Date.now() - 7 * 86400_000).toISOString())
-        .limit(20000),
+      eventCounts(ctx),
     ]);
 
-    const rows = events.data ?? [];
-    const successful = rows.filter((r) => r.event_type === "install_succeeded").length;
-    const failed = rows.filter((r) => r.event_type === "install_failed").length;
-    const rollbacks = rows.filter((r) => r.event_type === "rollback").length;
-    const checks = rows.filter((r) => r.event_type === "update_check").length;
+    // Exact counts (row selects are capped at 1000 by PostgREST).
+    const { successful, failed, rollbacks } = events;
     const successRate = successful + failed > 0 ? Number(((successful / (successful + failed)) * 100).toFixed(1)) : 0;
-    const adoption = checks > 0 ? Number(((successful / checks) * 100).toFixed(0)) : 0;
+    const adoption = await adoptionRate(ctx);
 
     const permissions = Array.isArray(project.data?.permissions)
       ? (project.data?.permissions as { granted: boolean; optional?: boolean }[]).every((p) => p.granted || p.optional)

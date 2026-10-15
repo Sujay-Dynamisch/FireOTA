@@ -166,7 +166,7 @@ function DashboardPage() {
         <SectionCard
           className="xl:col-span-2"
           title="Release health"
-          aside={<span className="font-mono text-[10px] text-faint">last 24h</span>}
+          aside={<span className="font-mono text-[10px] text-faint">last 7 days</span>}
         >
           {summary.data ? (
             <div className="grid grid-cols-2 divide-border sm:grid-cols-4 sm:divide-x">

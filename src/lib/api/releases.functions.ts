@@ -1,5 +1,6 @@
 /** Releases, rollouts and analytics server functions for the dashboard. */
 import { createServerFn } from "@tanstack/react-start";
+import { fetchAllRows } from "@/lib/backend/paging";
 import { z } from "zod";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
@@ -412,27 +413,35 @@ export const getAnalytics = createServerFn({ method: "GET" })
     const days = data?.days ?? 14;
     const since = new Date(Date.now() - days * 86400_000).toISOString();
 
-    let events = ctx.db
-      .from("analytics_events")
-      .select("event_type, platform, created_at, release_id")
-      .eq("organization_id", ctx.organizationId)
-      .gte("created_at", since)
-      .limit(100000);
-    if (data?.appId) events = events.eq("app_id", data.appId);
+    const eventsPage = (from: number, to: number) => {
+      let q = ctx.db
+        .from("analytics_events")
+        .select("event_type, platform, created_at, release_id")
+        .eq("organization_id", ctx.organizationId)
+        .gte("created_at", since)
+        .order("id")
+        .range(from, to);
+      if (data?.appId) q = q.eq("app_id", data.appId);
+      return q;
+    };
+    const devicesPage = (from: number, to: number) => {
+      let q = ctx.db
+        .from("device_installations")
+        .select("platform, current_release_id")
+        .eq("organization_id", ctx.organizationId)
+        .order("id")
+        .range(from, to);
+      if (data?.appId) q = q.eq("app_id", data.appId);
+      return q;
+    };
 
-    let installs = ctx.db
-      .from("device_installations")
-      .select("platform, current_release_id")
-      .eq("organization_id", ctx.organizationId);
-    if (data?.appId) installs = installs.eq("app_id", data.appId);
-
-    const [{ data: rows }, { data: devices }, { data: releases }] = await Promise.all([
-      events,
-      installs,
+    const [rows, devices, { data: releases }] = await Promise.all([
+      fetchAllRows<{ event_type: string; platform: string; created_at: string; release_id: string | null }>(eventsPage),
+      fetchAllRows<{ platform: string; current_release_id: string | null }>(devicesPage),
       ctx.db.from("releases").select("id, version").eq("organization_id", ctx.organizationId),
     ]);
 
-    const all = rows ?? [];
+    const all = rows;
     const count = (type: string) => all.filter((r) => r.event_type === type).length;
     const successfulInstalls = count("install_succeeded");
     const failedInstalls = count("install_failed");
@@ -454,7 +463,8 @@ export const getAnalytics = createServerFn({ method: "GET" })
 
     const versionCounts = new Map<string, number>();
     for (const device of devices ?? []) {
-      const version = (releases ?? []).find((r) => r.id === device.current_release_id)?.version ?? "unknown";
+      // Devices without an OTA release are still running the bundle shipped in the store binary.
+      const version = (releases ?? []).find((r) => r.id === device.current_release_id)?.version ?? "store";
       versionCounts.set(version, (versionCounts.get(version) ?? 0) + 1);
     }
 
@@ -471,7 +481,7 @@ export const getAnalytics = createServerFn({ method: "GET" })
           : 0,
       adoptionSeries: [...byDay.entries()].map(([day, v]) => ({
         day,
-        adoption: v.checks > 0 ? Number(((v.updated / v.checks) * 100).toFixed(0)) : 0,
+        adoption: v.checks > 0 ? Math.min(100, Number(((v.updated / v.checks) * 100).toFixed(0))) : 0,
         failures: v.failed,
       })),
       versionDistribution: [...versionCounts.entries()]

@@ -153,7 +153,7 @@ function AnalyticsPage() {
               {data.versionDistribution.map((row) => (
                 <li key={row.version} className="p-3.5">
                   <div className="flex items-center justify-between text-[12px]">
-                    <span className="font-mono">v{row.version}</span>
+                    <span className="font-mono">{row.version === "store" ? "Store build (no OTA yet)" : `v${row.version}`}</span>
                     <span className="font-mono text-[11px] text-muted-foreground">{row.devices.toLocaleString()}</span>
                   </div>
                   <RolloutBar
