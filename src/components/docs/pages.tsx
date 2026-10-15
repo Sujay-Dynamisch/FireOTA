@@ -5,6 +5,8 @@
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
+import { ProductVideo } from "@/components/fireota/product-video";
+
 import { Bullets, C, Callout, Code, ExtLink, PlatformTabs, Steps } from "./docs-ui";
 
 export interface DocSection {
@@ -210,6 +212,11 @@ export const docGroups: DocGroup[] = [
         title: "How FireOTA works",
         description: "Ship JavaScript fixes and features to your React Native app without waiting for a store review — from your own Firebase project.",
         sections: [
+          {
+            id: "demo",
+            title: "Watch the demo",
+            body: <ProductVideo />,
+          },
           {
             id: "flow",
             title: "The update flow",

@@ -141,8 +141,8 @@ function DocsLayout() {
             </SheetContent>
           </Sheet>
           <Link to="/" className="flex items-center gap-2">
-            <BrandMark className="size-6" />
-            <span className="font-display text-[17px] font-bold tracking-tight">FireOTA</span>
+            <BrandMark className="size-9" />
+            <span className="font-display text-[19px] font-bold tracking-tight">FireOTA</span>
           </Link>
           <span className="hidden h-5 w-px bg-border sm:block" />
           <Link to="/docs" className="hidden text-[14px] font-medium text-brand sm:block">

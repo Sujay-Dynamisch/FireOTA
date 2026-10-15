@@ -20,8 +20,8 @@ export function LegalPage({
       <header className="border-b border-border">
         <div className="mx-auto flex h-14 max-w-4xl items-center gap-3 px-5">
           <Link to="/" className="flex items-center gap-2">
-            <BrandMark className="size-6" />
-            <span className="font-display text-[16px] font-bold tracking-tight">FireOTA</span>
+            <BrandMark className="size-9" />
+            <span className="font-display text-[19px] font-bold tracking-tight">FireOTA</span>
           </Link>
           <nav className="ml-auto flex items-center gap-4 text-[13px] text-muted-foreground">
             <Link to="/privacy" className="hover:text-foreground [&.active]:text-foreground">

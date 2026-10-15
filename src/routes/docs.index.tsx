@@ -1,6 +1,7 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 
 import { MIcon } from "@/components/docs/docs-ui";
+import { ProductVideo } from "@/components/fireota/product-video";
 import { docGroups } from "@/components/docs/pages";
 
 export const Route = createFileRoute("/docs/")({
@@ -25,6 +26,8 @@ function DocsHome() {
         Ship JavaScript fixes and features without a store review, from your own Firebase project — with staged rollouts,
         checksum verification and automatic rollback.
       </p>
+
+      <ProductVideo className="mt-8" />
 
       <div className="mt-8 grid gap-3 sm:grid-cols-2">
         {highlights.map((h) => (

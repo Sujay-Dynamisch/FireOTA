@@ -7,9 +7,9 @@ export function BrandMark({ className }: { className?: string }) {
       src="/logo-mark-96.png"
       alt=""
       aria-hidden
-      width={20}
-      height={20}
-      className={cn("size-5 shrink-0 object-contain", className)}
+      width={32}
+      height={32}
+      className={cn("size-8 shrink-0 object-contain", className)}
     />
   );
 }

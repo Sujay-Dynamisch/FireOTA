@@ -55,7 +55,7 @@ function OnboardingPage() {
       <div className="mx-auto max-w-2xl">
         <div className="mb-5 flex items-center gap-2">
           <BrandMark />
-          <span className="font-display text-[15px] font-bold tracking-tight">FireOTA</span>
+          <span className="font-display text-[18px] font-bold tracking-tight">FireOTA</span>
         </div>
 
         {step === 0 && (

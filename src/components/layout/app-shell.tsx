@@ -84,7 +84,7 @@ function Logo({ compact = false }: { compact?: boolean }) {
   return (
     <Link to="/dashboard" className="flex items-center gap-2">
       <BrandMark />
-      {!compact ? <span className="font-display text-[15px] font-bold tracking-tight">FireOTA</span> : null}
+      {!compact ? <span className="font-display text-[18px] font-bold tracking-tight">FireOTA</span> : null}
     </Link>
   );
 }

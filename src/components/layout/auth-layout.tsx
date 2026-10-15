@@ -9,7 +9,7 @@ export function AuthLayout({ children }: { children: ReactNode }) {
       <div className="hidden flex-col justify-between border-r border-border bg-surface/40 p-10 lg:flex">
         <Link to="/" className="flex items-center gap-2">
           <BrandMark />
-          <span className="font-display text-[15px] font-bold tracking-tight">FireOTA</span>
+          <span className="font-display text-[18px] font-bold tracking-tight">FireOTA</span>
         </Link>
 
         <div className="max-w-md">
@@ -44,7 +44,7 @@ export function AuthLayout({ children }: { children: ReactNode }) {
         <div className="mx-auto w-full max-w-sm">
           <Link to="/" className="mb-8 flex items-center gap-2 lg:hidden">
             <BrandMark />
-            <span className="font-display text-[15px] font-bold tracking-tight">FireOTA</span>
+            <span className="font-display text-[18px] font-bold tracking-tight">FireOTA</span>
           </Link>
           {children}
           <p className="mt-8 font-mono text-[10px] text-faint">
