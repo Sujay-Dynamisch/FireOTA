@@ -17,8 +17,10 @@ import {
   StatCard,
   StatusBadge,
 } from "@/components/fireota/primitives";
+import { CodeSigningPanel, DeleteAppPanel, RuntimesPanel } from "@/components/fireota/app-admin";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { usePermissions } from "@/hooks/use-permissions";
 import { q } from "@/lib/queries";
 
 export const Route = createFileRoute("/apps/$appId/")({
@@ -39,6 +41,7 @@ export const Route = createFileRoute("/apps/$appId/")({
 function AppDetailPage() {
   const { appId } = useParams({ from: "/apps/$appId/" });
   const navigate = useNavigate();
+  const { can } = usePermissions();
   const app = useQuery(q.app(appId));
   const releases = useQuery(q.releases({ appId }));
   const channels = useQuery(q.channels(appId));
@@ -129,10 +132,20 @@ function AppDetailPage() {
       <Tabs defaultValue="releases">
         <TabsList>
           <TabsTrigger value="releases">Releases</TabsTrigger>
+          <TabsTrigger value="runtimes">Runtimes</TabsTrigger>
           <TabsTrigger value="channels">Channels</TabsTrigger>
+          <TabsTrigger value="signing">Code signing</TabsTrigger>
           <TabsTrigger value="configuration">Configuration</TabsTrigger>
           <TabsTrigger value="sdk">SDK</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="runtimes" className="mt-3">
+          <RuntimesPanel app={data} />
+        </TabsContent>
+
+        <TabsContent value="signing" className="mt-3">
+          <CodeSigningPanel app={data} canEdit={can("app.update")} />
+        </TabsContent>
 
         <TabsContent value="releases" className="mt-3">
           <SectionCard title="Release history">
@@ -160,8 +173,11 @@ function AppDetailPage() {
                       params={{ releaseId: release.id }}
                       className="font-mono text-[12px] hover:text-brand"
                     >
-                      #{release.number} v{release.version}
+                      #{release.number} · {release.shortId ?? release.id.slice(0, 8)}
+                      {release.version ? ` (${release.version})` : ""}
                     </Link>
+                    <span className="font-mono text-[10px] text-faint">runtime {release.runtimeVersion}</span>
+                    {release.signed ? <span className="font-mono text-[10px] text-success">signed</span> : null}
                     <EnvBadge environment={release.environment} />
                     <PlatformTag platform={release.platform} />
                     <StatusBadge status={release.status} />
@@ -213,6 +229,11 @@ function AppDetailPage() {
               ]}
             />
           </SectionCard>
+          {can("app.delete") ? (
+            <div className="mt-3">
+              <DeleteAppPanel app={data} />
+            </div>
+          ) : null}
         </TabsContent>
 
         <TabsContent value="sdk" className="mt-3">
@@ -221,7 +242,7 @@ function AppDetailPage() {
               <CodeBlock code={`npm install @fireota/react-native`} />
               <CodeBlock
                 language="tsx"
-                code={`import { FireOTA } from "@fireota/react-native";\n\nFireOTA.configure({\n  appId: "${data.id}",\n  channel: "${data.channels[0] ?? "production"}",\n  runtimeVersion: "${data.runtimeVersion}",\n  checkOnAppStart: true,\n});`}
+                code={`import { FireOTA } from "@fireota/react-native";\n\nFireOTA.configure({\n  appId: "${data.id}",\n  serverUrl: "${typeof window !== "undefined" ? window.location.origin : "https://your-fireota-domain"}",\n  channel: "${data.channels[0] ?? "production"}",\n  runtimeVersion: "${data.runtimeVersion}", // must match the store build\n  checkOnAppStart: true,${data.codeSigning?.keyId ? "\n  codeSigningCertificate: PUBLIC_KEY_PEM, // required: this app verifies signatures" : ""}\n});`}
               />
               <p className="text-[11px] text-muted-foreground">
                 Bundles are downloaded straight from your own Firebase Storage bucket — FireOTA never proxies your

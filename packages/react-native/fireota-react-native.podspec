@@ -16,4 +16,5 @@ Pod::Spec.new do |s|
   s.source_files = "ios/**/*.{h,m}"
   s.libraries    = "z"
   s.dependency "React-Core"
+  s.frameworks = "Security"
 end

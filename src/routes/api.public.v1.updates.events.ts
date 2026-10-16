@@ -78,6 +78,22 @@ export const Route = createFileRoute("/api/public/v1/updates/events")({
               .update({ current_release_id: body.releaseId, last_seen_at: new Date().toISOString() })
               .eq("app_id", release.app_id)
               .eq("installation_id", body.installationId);
+            // Tell the team the moment a new update is live on its first real device.
+            const { count } = await db
+              .from("analytics_events")
+              .select("id", { count: "exact", head: true })
+              .eq("release_id", body.releaseId)
+              .eq("event_type", "install_succeeded");
+            if (count === 1) {
+              await db.from("notifications").insert({
+                organization_id: release.organization_id,
+                title: "Update installed on its first device",
+                body: `A ${body.platform} device on runtime ${body.runtimeVersion} is now running the update.`,
+                tone: "success",
+                kind: "rollout",
+                link: `/releases/${body.releaseId}`,
+              });
+            }
           }
 
           if (body.event === "install_failed" || body.event === "rollback") {

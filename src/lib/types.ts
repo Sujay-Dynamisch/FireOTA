@@ -27,6 +27,7 @@ export interface Organization {
   slug: string;
   timezone: string;
   defaultChannel: string;
+  requirePublishConfirmation?: boolean;
 }
 
 export interface User {
@@ -38,6 +39,38 @@ export interface User {
   lastActive: string;
   joined: string;
   initials: string;
+  customRoleId?: string | null;
+  customRoleName?: string | null;
+  isYou?: boolean;
+}
+
+export interface CustomRole {
+  id: string;
+  name: string;
+  description: string;
+  permissions: string[];
+  members: number;
+}
+
+export interface SecurityEvent {
+  id: string;
+  kind: string;
+  severity: "low" | "medium" | "high";
+  title: string;
+  details: string;
+  actor: string;
+  ip: string;
+  status: "open" | "resolved";
+  at: string;
+  ago: string;
+}
+
+export interface RuntimeGroup {
+  runtimeVersion: string;
+  isCurrent: boolean;
+  devices: { android: number; ios: number };
+  updateCount: number;
+  updates: { id: string; label: string; platform: Platform; status: string; message: string; createdAt: string }[];
 }
 
 export interface FirebaseProject {
@@ -68,6 +101,7 @@ export interface AppRecord {
   firebaseProjectId: string;
   devices: { android: number; ios: number };
   updateRate: { android: number; ios: number };
+  codeSigning?: { keyId: string | null; required: boolean };
 }
 
 export interface Artifact {
@@ -88,6 +122,10 @@ export interface ReleaseRecord {
   channelName: string;
   environment: Environment;
   version: string;
+  shortId?: string;
+  groupId?: string | null;
+  signed?: boolean;
+  signatureKeyId?: string | null;
   runtimeVersion: string;
   nativeCompatibility: string;
   status: ReleaseStatus;
@@ -130,6 +168,7 @@ export interface ChannelRecord {
   status: "active" | "paused" | "empty";
   updatedAt: string;
   updatePolicy: string;
+  activeReleaseId?: string | null;
   history: { release: string; version: string; at: string; status: ReleaseStatus }[];
 }
 
@@ -170,6 +209,8 @@ export interface AuditEvent {
 export interface ApiKey {
   id: string;
   name: string;
+  prefix?: string;
+  lastUsedIp?: string | null;
   environment: Environment;
   scopes: string[];
   created: string;
@@ -187,14 +228,25 @@ export interface Webhook {
   successRate: number;
   created: string;
   secretSet: boolean;
-  deliveries: { id: string; event: string; status: number; latency: string; at: string; attempt: number }[];
+  deliveries: {
+    id: string;
+    event: string;
+    status: number;
+    latency: string;
+    at: string;
+    attempt: number;
+    succeeded?: boolean;
+    error?: string | null;
+    retry?: string | null;
+  }[];
 }
 
 export interface Agent {
   id: string;
+  key?: string;
   name: string;
   description: string;
-  status: "available" | "enabled" | "coming_soon";
+  status: "available" | "enabled" | "disabled" | "coming_soon";
   lastExecution: string | null;
   capabilities: string[];
   permissions: { tool: string; mode: PermissionMode }[];
@@ -259,6 +311,8 @@ export interface NotificationItem {
   title: string;
   body: string;
   tone: "success" | "warning" | "danger" | "info";
+  kind?: string;
+  link?: string | null;
   at: string;
   read: boolean;
 }

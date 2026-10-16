@@ -11,6 +11,7 @@ import {
   Play,
   ScrollText,
   Settings,
+  ShieldAlert,
   Terminal,
   Users,
   Webhook,
@@ -21,6 +22,8 @@ export interface NavItem {
   label: string;
   to: string;
   icon: LucideIcon;
+  /** Hidden for members without this permission. */
+  permission?: string;
 }
 
 export interface NavGroup {
@@ -45,13 +48,14 @@ export const navGroups: NavGroup[] = [
     items: [
       { label: "Projects", to: "/projects", icon: Database },
       { label: "Team", to: "/team", icon: Users },
-      { label: "Audit Logs", to: "/audit-logs", icon: ScrollText },
+      { label: "Audit Logs", to: "/audit-logs", icon: ScrollText, permission: "audit.read" },
+      { label: "Security", to: "/security", icon: ShieldAlert, permission: "security.read" },
     ],
   },
   {
     label: "Integrations",
     items: [
-      { label: "API Keys", to: "/settings/api-keys", icon: KeyRound },
+      { label: "API Keys", to: "/settings/api-keys", icon: KeyRound, permission: "api_key.read" },
       { label: "CI/CD", to: "/settings/ci-cd", icon: Terminal },
       { label: "Webhooks", to: "/settings/webhooks", icon: Webhook },
     ],

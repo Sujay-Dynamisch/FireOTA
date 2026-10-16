@@ -14,6 +14,7 @@ import {
 } from "@/components/fireota/primitives";
 import { CheckList } from "@/components/fireota/wizard";
 import { Button } from "@/components/ui/button";
+import { usePermissions } from "@/hooks/use-permissions";
 import { q } from "@/lib/queries";
 import { firebaseService } from "@/services";
 
@@ -41,6 +42,7 @@ const statusTone: Record<string, string> = {
 
 function ProjectsPage() {
   const client = useQueryClient();
+  const { can } = usePermissions();
   const projects = useQuery(q.projects());
 
   const verify = useMutation({
@@ -62,6 +64,16 @@ function ProjectsPage() {
       toast.success("Project disconnected. Existing bundles stay in your bucket.");
       void client.invalidateQueries({ queryKey: ["projects"] });
     },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not disconnect the project."),
+  });
+  const remove = useMutation({
+    mutationFn: (id: string) => firebaseService.remove(id),
+    onSuccess: () => {
+      toast.success("Project removed from FireOTA. Files in your bucket were not touched.");
+      void client.invalidateQueries({ queryKey: ["projects"] });
+      void client.invalidateQueries({ queryKey: ["dashboard"] });
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not remove the project."),
   });
 
   return (
@@ -70,9 +82,11 @@ function ProjectsPage() {
         title="Firebase projects"
         description="You own the infrastructure. Bundles live in your buckets and you pay Google directly."
         actions={
-          <Button size="sm" asChild>
-            <Link to="/projects/connect">Connect project</Link>
-          </Button>
+          can("project.connect") ? (
+            <Button size="sm" asChild>
+              <Link to="/projects/connect">Connect project</Link>
+            </Button>
+          ) : null
         }
       />
 
@@ -135,6 +149,7 @@ function ProjectsPage() {
                 >
                   {verify.isPending ? "Verifying…" : "Verify connection"}
                 </Button>
+                {can("project.disconnect") && project.status !== "disconnected" ? (
                 <ConfirmAction
                   trigger={
                     <Button variant="ghost" size="sm" className="h-7 text-[11px] text-danger">
@@ -156,6 +171,33 @@ function ProjectsPage() {
                     await disconnect.mutateAsync(project.id);
                   }}
                 />
+                ) : null}
+                {can("project.delete") ? (
+                  <ConfirmAction
+                    trigger={
+                      <Button variant="ghost" size="sm" className="ml-auto h-7 text-[11px] text-danger">
+                        Remove project
+                      </Button>
+                    }
+                    title="Remove this Firebase project from FireOTA"
+                    description="The project and its stored Google authorization are deleted from this workspace. Your Firebase project itself and every file in its bucket are left untouched."
+                    warning={
+                      project.apps > 0
+                        ? `${project.apps} application(s) still use this project — delete them or move them first.`
+                        : undefined
+                    }
+                    confirmLabel="Remove project"
+                    destructive
+                    requireTyped="REMOVE"
+                    details={[
+                      { label: "Project", value: project.name },
+                      { label: "Firebase ID", value: project.firebaseId },
+                    ]}
+                    onConfirm={async () => {
+                      await remove.mutateAsync(project.id);
+                    }}
+                  />
+                ) : null}
               </div>
             </SectionCard>
           ))}

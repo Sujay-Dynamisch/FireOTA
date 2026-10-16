@@ -100,7 +100,19 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         content: "Connect your Firebase project and manage OTA releases from one place.",
       },
       { property: "og:type", content: "website" },
+      { property: "og:site_name", content: "FireOTA" },
+      { property: "og:image", content: "/media/fireota-demo-poster.jpg" },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "FireOTA — OTA release management for React Native" },
+      { name: "twitter:image", content: "/media/fireota-demo-poster.jpg" },
+      { name: "robots", content: "index, follow" },
+      { name: "application-name", content: "FireOTA" },
+      { name: "theme-color", content: "#0a0a0b" },
+      {
+        name: "keywords",
+        content:
+          "React Native OTA, over-the-air updates, CodePush alternative, Firebase OTA, React Native hot updates, staged rollouts, Expo updates alternative",
+      },
     ],
     links: [
       { rel: "stylesheet", href: appCss },

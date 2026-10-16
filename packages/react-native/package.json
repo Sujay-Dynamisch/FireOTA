@@ -22,9 +22,6 @@
   "peerDependencies": {
     "react-native": ">=0.73.0"
   },
-  "dependencies": {
-    "@fireota/react-native": "file:fireota-react-native-0.1.0.tgz"
-  },
   "keywords": [
     "react-native",
     "ota",

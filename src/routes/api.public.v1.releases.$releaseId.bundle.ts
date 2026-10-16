@@ -47,6 +47,9 @@ export const Route = createFileRoute("/api/public/v1/releases/$releaseId/bundle"
           }
 
           const expectedHash = request.headers.get("x-bundle-sha256");
+          const signatureField = form.get("signature");
+          const signature =
+            request.headers.get("x-fireota-signature") ?? (typeof signatureField === "string" ? signatureField : null);
           const result = await uploadReleaseBundle(ctx, {
             releaseId: params.releaseId,
             bundle: {
@@ -55,6 +58,7 @@ export const Route = createFileRoute("/api/public/v1/releases/$releaseId/bundle"
               ...(expectedHash ? { expectedHash } : {}),
             },
             assets,
+            ...(signature ? { signature: signature.trim() } : {}),
           });
 
           return jsonOk(result, { headers: { "x-request-id": requestId } });

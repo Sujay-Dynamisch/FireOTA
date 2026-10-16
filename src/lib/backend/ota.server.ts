@@ -37,7 +37,13 @@ export interface UpdateCheckResult {
     runtimeVersion: string;
     mandatory: boolean;
     notes: string;
+    /** Same as notes; Expo calls the update description its "message". */
+    message: string;
+    groupId: string | null;
+    createdAt: string;
     bundle: { url: string; hash: string; size: number };
+    /** Present when the app uses code signing: base64 RSA-SHA256 over the signed message. */
+    signature: { value: string; keyId: string | null; algorithm: "rsa-v1_5-sha256" } | null;
     manifest: unknown;
   };
 }
@@ -103,7 +109,7 @@ export async function updateCheck(db: SupabaseClient, input: UpdateCheckInput): 
   const { data: release } = await db
     .from("releases")
     .select(
-      "id, organization_id, app_id, platform, version, runtime_version, native_version_constraint, status, rollout_percentage, mandatory, release_notes, bundle_hash, bundle_size, storage_path, manifest",
+      "id, organization_id, app_id, platform, version, runtime_version, native_version_constraint, status, rollout_percentage, mandatory, release_notes, bundle_hash, bundle_size, storage_path, manifest, signature, signature_key_id, group_id, created_at",
     )
     .eq("id", target.release_id)
     .eq("organization_id", app.organization_id)
@@ -153,11 +159,21 @@ export async function updateCheck(db: SupabaseClient, input: UpdateCheckInput): 
       runtimeVersion: release.runtime_version as string,
       mandatory: Boolean(release.mandatory),
       notes: (release.release_notes as string) ?? "",
+      message: (release.release_notes as string) ?? "",
+      groupId: (release.group_id as string | null) ?? null,
+      createdAt: release.created_at as string,
       bundle: {
         url: bundleUrl,
         hash: (release.bundle_hash as string) ?? "",
         size: Number(release.bundle_size ?? 0),
       },
+      signature: release.signature
+        ? {
+            value: release.signature as string,
+            keyId: (release.signature_key_id as string | null) ?? null,
+            algorithm: "rsa-v1_5-sha256",
+          }
+        : null,
       manifest: release.manifest,
     },
   };

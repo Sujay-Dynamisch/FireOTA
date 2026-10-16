@@ -64,7 +64,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
               value={`release ${release.number} ${release.version} ${release.appName}`}
               onSelect={() => go(`/releases/${release.id}`)}
             >
-              #{release.number} · v{release.version}
+              #{release.number} · {release.shortId ?? release.id.slice(0, 8)}{release.version ? ` · ${release.version}` : ""}
               <span className="ml-auto font-mono text-[10px] text-faint">{release.appName}</span>
             </CommandItem>
           ))}

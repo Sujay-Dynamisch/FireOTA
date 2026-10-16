@@ -147,7 +147,7 @@ export function DataTable<T>({
       {error ? (
         <ErrorState title="We couldn't load this list" description={error.message} />
       ) : isLoading ? (
-        <SkeletonRows rows={5} cols={visibleColumns.length} />
+        <SkeletonRows rows={15} cols={visibleColumns.length} />
       ) : filtered.length === 0 ? (
         emptyState
       ) : (

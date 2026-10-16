@@ -150,16 +150,16 @@ describe("permission matrix", () => {
   const matrix: Record<OrgRole, { can: Permission[]; cannot: Permission[] }> = {
     owner: { can: ["project.disconnect", "org.delete", "release.delete", "team.manage"], cannot: [] },
     admin: {
-      can: ["app.create", "release.delete", "api_key.create", "webhook.create", "team.manage", "project.connect"],
-      cannot: ["project.disconnect", "org.delete", "org.update"],
+      can: ["app.create", "release.delete", "api_key.create", "api_key.read", "webhook.create", "team.manage", "project.connect", "project.disconnect", "project.delete", "org.update", "security.manage"],
+      cannot: ["org.delete"],
     },
     release_manager: {
       can: ["release.publish", "release.pause", "release.rollback", "release.archive", "rollout.update", "channel.create", "audit.read"],
       cannot: ["release.delete", "app.create", "app.delete", "team.manage", "api_key.create", "channel.delete", "project.connect"],
     },
     developer: {
-      can: ["release.create", "release.upload", "release.read", "api_key.read"],
-      cannot: ["release.publish", "release.rollback", "release.delete", "rollout.update", "audit.read", "api_key.create"],
+      can: ["release.create", "release.upload", "release.read"],
+      cannot: ["release.publish", "release.rollback", "release.delete", "rollout.update", "audit.read", "api_key.create", "api_key.read"],
     },
     viewer: {
       can: ["release.read", "app.read", "analytics.read"],

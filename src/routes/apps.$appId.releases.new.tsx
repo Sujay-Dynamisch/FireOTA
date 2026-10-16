@@ -58,7 +58,8 @@ function NewReleasePage() {
   // Same rule as the server (isValidVersion): 1.4 or 1.4.2, optional v prefix and -tag.
   const versionProblem = (value: string, label: string) =>
     !value || isValidVersion(value) ? null : `${label} must look like 1.4.2 (or 1.4, 1.4.2-beta.1).`;
-  const versionError = versionProblem(version, "Version");
+  // The version is only an optional label: updates are identified by their ID (Expo-style).
+  const versionError = version && !/^[\w.+-]{1,40}$/.test(version) ? "Use letters, digits, dots, dashes or +." : null;
   const runtimeError = versionProblem(runtime, "Runtime version");
   const appPlatforms = app.data?.platforms ?? [];
 
@@ -90,8 +91,17 @@ function NewReleasePage() {
   const publish = async () => {
     setPending(true);
     try {
-      await releasesService.create({ appId, platform: platform as "android" | "ios", channel, version, runtimeVersion: runtime, notes, mandatory, rollout });
-      toast.success(`Release v${version} published to ${channel} at ${rollout}%.`);
+      const created = await releasesService.create({
+        appId,
+        platform: platform as "android" | "ios",
+        channel,
+        ...(version ? { version } : {}),
+        runtimeVersion: runtime,
+        notes,
+        mandatory,
+        rollout,
+      });
+      toast.success(`Update #${created.number} published to ${channel} at ${rollout}%.`);
       void navigate({ to: "/releases" });
     } catch (error) {
       // Show the server's reason (validation, permissions, Firebase Storage) instead of a generic line.
@@ -253,7 +263,7 @@ function NewReleasePage() {
               <Button variant="outline" size="sm" onClick={() => setStep(1)}>
                 Back
               </Button>
-              <Button size="sm" disabled={!version || !runtime || Boolean(versionError) || Boolean(runtimeError)} onClick={() => setStep(3)}>
+              <Button size="sm" disabled={!notes.trim() || !runtime || Boolean(versionError) || Boolean(runtimeError)} onClick={() => setStep(3)}>
                 Continue
               </Button>
             </>
@@ -262,15 +272,15 @@ function NewReleasePage() {
           <div className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <Field
-                label="Version"
+                label="Version label (optional)"
                 htmlFor="version"
-                hint="Semantic version shown in the dashboard and SDK, e.g. 1.3.1."
+                hint="Updates get their own ID automatically. Add a label only if it helps your team, e.g. 1.3.1-hotfix."
               >
                 <Input
                   id="version"
                   value={version}
                   onChange={(event) => setVersion(event.target.value)}
-                  placeholder="4.2.1"
+                  placeholder="optional"
                   aria-invalid={Boolean(versionError)}
                   className="h-9 font-mono text-[12px]"
                 />
@@ -281,7 +291,7 @@ function NewReleasePage() {
                 htmlFor="runtime-version"
                 aside={
                   <HelpHint>
-                    Only devices running a native build with this runtime version will receive the release.
+                    The runtime version of the store build this update is for. Only phones running that exact build receive it.
                   </HelpHint>
                 }
               >
@@ -296,13 +306,13 @@ function NewReleasePage() {
                 {runtimeError ? <p className="font-mono text-[10px] text-danger">{runtimeError}</p> : null}
               </Field>
             </div>
-            <Field label="Release notes" htmlFor="notes">
+            <Field label="Message" htmlFor="notes" hint="Describe what changed — like a commit message. Shown in the dashboard and the SDK.">
               <Textarea
                 id="notes"
                 value={notes}
                 onChange={(event) => setNotes(event.target.value)}
                 rows={4}
-                placeholder="Fixed transaction sync retry loop."
+                placeholder="Fix the Send money button label."
                 className="text-[12px]"
               />
             </Field>
@@ -391,7 +401,7 @@ function NewReleasePage() {
                   requireTyped="PUBLISH"
                   details={[
                     { label: "Application", value: app.data?.name ?? appId },
-                    { label: "Version", value: version },
+                    { label: "Version label", value: version || "—" },
                     { label: "Channel", value: channel },
                     { label: "Initial rollout", value: `${rollout}%` },
                     { label: "Mandatory", value: mandatory ? "Yes" : "No" },
@@ -411,12 +421,12 @@ function NewReleasePage() {
               ["Application", app.data?.name ?? appId],
               ["Platform", platform],
               ["Channel", channel],
-              ["Version", version],
+              ["Version label", version || "—"],
               ["Runtime version", runtime],
               ["Bundle size", uploaded?.size ?? "—"],
               ["Initial rollout", `${rollout}%`],
               ["Mandatory", mandatory ? "Yes" : "No"],
-              ["Notes", notes || "—"],
+              ["Message", notes || "—"],
             ].map(([label, value]) => (
               <div key={label}>
                 <dt className="font-mono text-[10px] uppercase tracking-[0.1em] text-faint">{label}</dt>

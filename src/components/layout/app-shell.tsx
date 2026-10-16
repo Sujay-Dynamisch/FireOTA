@@ -29,7 +29,7 @@ import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/s
 import { CommandPalette, useCommandPalette } from "@/components/layout/command-palette";
 import { navGroups } from "@/components/layout/nav";
 import { q } from "@/lib/queries";
-import { authService } from "@/services";
+import { authService, notificationsService } from "@/services";
 import { cn } from "@/lib/utils";
 
 export interface Crumb {
@@ -39,9 +39,18 @@ export interface Crumb {
 
 function SidebarNav({ collapsed, onNavigate }: { collapsed?: boolean; onNavigate?: () => void }) {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const session = useQuery(q.session());
+  const permissions = session.data?.user.permissions;
+  // Items behind a permission are hidden from members who cannot use them (the server enforces it anyway).
+  const groups = navGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => !item.permission || !permissions || permissions.includes(item.permission)),
+    }))
+    .filter((group) => group.items.length > 0);
   return (
     <nav className="flex-1 overflow-y-auto py-2 text-[12px]">
-      {navGroups.map((group, index) => (
+      {groups.map((group, index) => (
         <div key={group.label}>
           {index > 0 ? <div className="my-2 h-px bg-border" /> : null}
           {!collapsed ? (
@@ -123,33 +132,85 @@ function UserAvatar({ name, email, avatarUrl }: { name: string; email: string; a
 
 function NotificationBell() {
   const { data } = useQuery(q.notifications());
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
   const unread = (data ?? []).filter((item) => !item.read).length;
   const tone = { success: "bg-success", warning: "bg-warning", danger: "bg-danger", info: "bg-info" };
+  const markRead = async () => {
+    await notificationsService.markAllRead();
+    void queryClient.invalidateQueries({ queryKey: ["notifications"] });
+  };
   return (
-    <Popover>
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        // Closing the panel marks what was shown as read (per member).
+        if (!next && unread > 0) void markRead();
+      }}
+    >
       <PopoverTrigger asChild>
         <Button variant="ghost" size="icon" className="relative size-8" aria-label={`Notifications (${unread} unread)`}>
           <Bell aria-hidden className="size-3.5" />
-          {unread > 0 ? <span aria-hidden className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-brand" /> : null}
+          {unread > 0 ? (
+            <span
+              aria-hidden
+              className="absolute -right-0.5 -top-0.5 grid min-w-4 place-items-center rounded-full bg-brand px-1 font-mono text-[9px] leading-4 text-white"
+            >
+              {unread > 9 ? "9+" : unread}
+            </span>
+          ) : null}
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-80 p-0">
+      <PopoverContent align="end" className="w-96 p-0">
         <div className="flex items-center justify-between border-b border-border px-3 py-2">
           <span className="text-[12px] font-medium">Notifications</span>
-          <span className="font-mono text-[10px] text-faint">{unread} unread</span>
+          <span className="flex items-center gap-3">
+            <span className="font-mono text-[10px] text-faint">{unread} unread</span>
+            {unread > 0 ? (
+              <button type="button" onClick={() => void markRead()} className="text-[11px] text-brand hover:underline">
+                Mark all read
+              </button>
+            ) : null}
+          </span>
         </div>
-        <ul className="max-h-80 divide-y divide-border overflow-y-auto">
+        <ul className="max-h-96 divide-y divide-border overflow-y-auto">
+          {(data ?? []).length === 0 ? (
+            <li className="px-3 py-6 text-center text-[12px] text-muted-foreground">No notifications yet.</li>
+          ) : null}
           {(data ?? []).map((item) => (
-            <li key={item.id} className="flex gap-2.5 px-3 py-2.5">
-              <span aria-hidden className={cn("mt-1.5 size-1.5 shrink-0 rounded-full", tone[item.tone])} />
-              <div className="min-w-0">
-                <p className="text-[12px] font-medium">{item.title}</p>
-                <p className="text-[11px] text-muted-foreground">{item.body}</p>
-                <p className="font-mono text-[10px] text-faint">{item.at}</p>
-              </div>
+            <li key={item.id}>
+              <button
+                type="button"
+                disabled={!item.link}
+                onClick={() => {
+                  if (!item.link) return;
+                  setOpen(false);
+                  void markRead();
+                  void navigate({ to: item.link as never });
+                }}
+                className={cn(
+                  "flex w-full gap-2.5 px-3 py-2.5 text-left",
+                  item.link && "hover:bg-surface-2/50",
+                  !item.read && "bg-brand/[0.04]",
+                )}
+              >
+                <span aria-hidden className={cn("mt-1.5 size-1.5 shrink-0 rounded-full", tone[item.tone])} />
+                <span className="min-w-0">
+                  <span className={cn("block text-[12px]", item.read ? "font-normal" : "font-semibold")}>{item.title}</span>
+                  <span className="block text-[11px] text-muted-foreground">{item.body}</span>
+                  <span className="block font-mono text-[10px] text-faint">{item.at}</span>
+                </span>
+              </button>
             </li>
           ))}
         </ul>
+        <div className="border-t border-border px-3 py-2 text-right">
+          <Link to="/settings" className="text-[11px] text-muted-foreground hover:text-foreground" onClick={() => setOpen(false)}>
+            Notification settings
+          </Link>
+        </div>
       </PopoverContent>
     </Popover>
   );
