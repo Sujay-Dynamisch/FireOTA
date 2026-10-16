@@ -2,7 +2,7 @@
  * Release lifecycle engine. Shared by the dashboard server functions and the
  * public /api/v1 surface so both paths obey the identical rules.
  */
-import { audit, notify, requirePermission, type OrgContext } from "./context.server";
+import { audit, requirePermission, type OrgContext } from "./context.server";
 import { sha256Hex } from "./crypto.server";
 import { fail, type ErrorCode } from "./errors";
 import {
@@ -14,7 +14,8 @@ import {
 import { buildManifest, isFireOtaPackage, storagePrefix } from "./manifest";
 import { withDownloadToken } from "./ota.server";
 import { assertTransition, canTransition, type ReleaseState } from "./release-state";
-import { compareVersions, isValidVersion } from "./versions";
+import { signatureMessage, verifyUpdateSignature } from "./signing";
+import { isValidVersion } from "./versions";
 import { dispatchWebhooks } from "./webhooks.server";
 
 export interface ReleaseRow {
@@ -43,10 +44,13 @@ export interface ReleaseRow {
   created_by_label: string;
   published_at: string | null;
   created_at: string;
+  signature: string | null;
+  signature_key_id: string | null;
+  group_id: string | null;
 }
 
 const RELEASE_COLUMNS =
-  "id, organization_id, app_id, channel_id, number, platform, environment, version, runtime_version, native_version_constraint, status, rollout_percentage, mandatory, release_notes, bundle_hash, bundle_size, compressed_size, storage_path, manifest, git_commit_sha, git_branch, build_number, created_by_label, published_at, created_at";
+  "id, organization_id, app_id, channel_id, number, platform, environment, version, runtime_version, native_version_constraint, status, rollout_percentage, mandatory, release_notes, bundle_hash, bundle_size, compressed_size, storage_path, manifest, git_commit_sha, git_branch, build_number, created_by_label, published_at, created_at, signature, signature_key_id, group_id";
 
 export { RELEASE_COLUMNS };
 
@@ -90,14 +94,19 @@ async function firebaseTargetForApp(ctx: OrgContext, appId: string) {
   return { appName: app.name as string, bucket: project.storage_bucket as string, accessToken };
 }
 
-/** Creates a draft release. Version + runtime are validated; numbering is per app. */
+/**
+ * Creates a draft update. Like Expo, an update is identified by its UUID and targets exactly
+ * one runtime version; `version` is only an optional human label (e.g. "1.3.1-hotfix").
+ * Updates built for both platforms from one bundle share a `groupId`.
+ */
 export async function createRelease(
   ctx: OrgContext,
   input: {
     appId: string;
     channelName: string;
     platform: "android" | "ios";
-    version: string;
+    version?: string;
+    groupId?: string;
     runtimeVersion: string;
     nativeVersionConstraint?: string;
     releaseNotes?: string;
@@ -109,7 +118,8 @@ export async function createRelease(
   },
 ) {
   requirePermission(ctx, "release.create");
-  if (!isValidVersion(input.version)) fail("INVALID_RELEASE", "Version must look like 1.4.2.");
+  const label = (input.version ?? "").trim();
+  if (label.length > 40 || /[^\w.+-]/.test(label)) fail("INVALID_RELEASE", "The version label may use letters, digits, dots, dashes and +.");
   if (!isValidVersion(input.runtimeVersion)) fail("INVALID_RUNTIME", "Runtime version must look like 1.4.0.");
 
   if (input.idempotencyKey) {
@@ -146,16 +156,6 @@ export async function createRelease(
     .maybeSingle();
   if (!channel) fail("INVALID_CHANNEL", "Unknown channel for this application.");
 
-  const { data: conflict } = await ctx.db
-    .from("releases")
-    .select("id, status")
-    .eq("app_id", input.appId)
-    .eq("channel_id", channel.id)
-    .eq("platform", input.platform)
-    .eq("version", input.version)
-    .not("status", "in", "(archived,failed,deleted)")
-    .maybeSingle();
-  if (conflict) fail("RELEASE_VERSION_CONFLICT", "That version already exists on this channel.");
 
   // Numbers are allocated optimistically; a concurrent insert loses the unique race and retries.
   let release: unknown = null;
@@ -177,7 +177,8 @@ export async function createRelease(
           number: Number(last?.number ?? 0) + 1,
           platform: input.platform,
           environment: channel.environment,
-          version: input.version,
+          version: label,
+          group_id: input.groupId ?? null,
           runtime_version: input.runtimeVersion,
           native_version_constraint: input.nativeVersionConstraint ?? "*",
           status: "draft",
@@ -216,12 +217,14 @@ export async function createRelease(
     resourceId: row.id,
     appId: input.appId,
     appName: app.name as string,
-    after: { number: row.number, version: row.version, channel: channel.name },
+    after: { number: row.number, version: row.version, runtime: row.runtime_version, channel: channel.name },
   });
   await dispatchWebhooks(ctx.db, ctx.organizationId, "release.created", {
     releaseId: row.id,
     number: row.number,
     version: row.version,
+    runtimeVersion: row.runtime_version,
+    groupId: row.group_id,
     appId: input.appId,
   });
   return row;
@@ -237,6 +240,8 @@ export async function uploadReleaseBundle(
     releaseId: string;
     bundle: { bytes: Uint8Array; contentType: string; expectedHash?: string };
     assets?: { name: string; bytes: Uint8Array; contentType: string }[];
+    /** Base64 RSA-SHA256 signature over signatureMessage(), made with the app's private key. */
+    signature?: string;
   },
 ) {
   requirePermission(ctx, "release.upload");
@@ -251,8 +256,18 @@ export async function uploadReleaseBundle(
 
   const hash = sha256Hex(input.bundle.bytes);
   if (input.bundle.expectedHash && input.bundle.expectedHash.toLowerCase() !== hash) {
+    await audit(ctx, {
+      action: "release.upload_failed",
+      resourceType: "release",
+      resourceId: release.id,
+      appId: release.app_id,
+      result: "failure",
+      after: { reason: "checksum" },
+    });
     fail("CHECKSUM_MISMATCH", "The uploaded bundle does not match the supplied checksum.");
   }
+
+  const signing = await verifySignatureForUpload(ctx, release, hash, input.signature);
 
   await ctx.db.from("releases").update({ status: "uploading" }).eq("id", release.id);
 
@@ -341,6 +356,8 @@ export async function uploadReleaseBundle(
         compressed_size: uploaded.size,
         storage_path: withDownloadToken(uploaded.path, uploaded.downloadToken),
         manifest,
+        signature: signing.signature,
+        signature_key_id: signing.keyId,
         error_code: null,
         error_message: null,
       })
@@ -352,7 +369,7 @@ export async function uploadReleaseBundle(
       resourceId: release.id,
       appId: release.app_id,
       appName: target.appName,
-      after: { hash, size: uploaded.size },
+      after: { hash, size: uploaded.size, signed: Boolean(signing.signature) },
     });
 
     await dispatchWebhooks(ctx.db, ctx.organizationId, "release.ready", {
@@ -377,6 +394,39 @@ export async function uploadReleaseBundle(
     await dispatchWebhooks(ctx.db, ctx.organizationId, "release.failed", { releaseId: release.id, reason: "upload" });
     throw error;
   }
+}
+
+/**
+ * Checks the update signature against the app's registered public key. With a key on file a
+ * supplied signature must verify; with "required" on, a missing one is refused too.
+ */
+async function verifySignatureForUpload(ctx: OrgContext, release: ReleaseRow, hash: string, signature?: string) {
+  const { data: app } = await ctx.db
+    .from("apps")
+    .select("code_signing_public_key, code_signing_key_id, code_signing_required")
+    .eq("id", release.app_id)
+    .maybeSingle();
+  const pem = (app?.code_signing_public_key as string | null | undefined) ?? null;
+  if (!pem) return { signature: null, keyId: null };
+  if (!signature) {
+    if (app?.code_signing_required) {
+      fail("SIGNATURE_REQUIRED", "This app requires signed updates. Publish with --private-key (see Code signing in the docs).");
+    }
+    return { signature: null, keyId: null };
+  }
+  const message = signatureMessage({ runtimeVersion: release.runtime_version, platform: release.platform, sha256: hash });
+  if (!verifyUpdateSignature(pem, message, signature)) {
+    await audit(ctx, {
+      action: "release.upload_failed",
+      resourceType: "release",
+      resourceId: release.id,
+      appId: release.app_id,
+      result: "failure",
+      after: { reason: "signature" },
+    });
+    fail("SIGNATURE_INVALID", "The update signature does not match the app's code signing key.");
+  }
+  return { signature, keyId: (app?.code_signing_key_id as string | null | undefined) ?? null };
 }
 
 async function recordDeployment(
@@ -468,6 +518,10 @@ export async function publishRelease(ctx: OrgContext, input: { releaseId: string
   const percentage = Math.max(0, Math.min(100, Math.round(input.rolloutPercentage)));
   if (release.status === "published") fail("RELEASE_ALREADY_PUBLISHED", "This release is already published.");
   if (!canTransition(release.status, "published")) fail("RELEASE_NOT_READY", "Upload and verify a bundle before publishing.");
+  if (!release.signature) {
+    const { data: app } = await ctx.db.from("apps").select("code_signing_required").eq("id", release.app_id).maybeSingle();
+    if (app?.code_signing_required) fail("SIGNATURE_REQUIRED", "This app requires signed updates; this update is unsigned.");
+  }
 
   const previous = await activeTarget(ctx, release.channel_id, release.platform);
   const result = await lifecycleRpc<{ previous_release_id: string | null; channel_id: string; channel_name: string }>(
@@ -484,16 +538,16 @@ export async function publishRelease(ctx: OrgContext, input: { releaseId: string
   );
 
   if (previous && previous !== release.id) {
-    const { data: prev } = await ctx.db.from("releases").select("version").eq("id", previous).maybeSingle();
-    if (prev && compareVersions(release.version, prev.version as string) < 0) {
-      // Publishing an older version is allowed but always recorded as a downgrade.
+    const { data: prev } = await ctx.db.from("releases").select("id, created_at").eq("id", previous).maybeSingle();
+    if (prev && new Date(release.created_at).getTime() < new Date(prev.created_at as string).getTime()) {
+      // Republishing an older update is allowed but always recorded (update IDs carry no order).
       await audit(ctx, {
         action: "release.downgrade_published",
         resourceType: "release",
         resourceId: release.id,
         appId: release.app_id,
-        before: { version: prev.version },
-        after: { version: release.version },
+        before: { activeRelease: prev.id },
+        after: { release: release.id },
       });
     }
   }
@@ -505,11 +559,6 @@ export async function publishRelease(ctx: OrgContext, input: { releaseId: string
     appId: release.app_id,
     before: { status: release.status, activeRelease: result.previous_release_id },
     after: { rollout: percentage, channel: result.channel_name, platform: release.platform },
-  });
-  await notify(ctx, {
-    title: `Release #${release.number} published`,
-    body: `${release.version} is live on ${result.channel_name} (${release.platform}) at ${percentage}%.`,
-    tone: "success",
   });
   await dispatchWebhooks(ctx.db, ctx.organizationId, "release.published", {
     releaseId: release.id,
@@ -621,7 +670,6 @@ export async function rollbackRelease(
     before: { activeRelease: release.id, status: release.status },
     after: { reason: input.reason, activeRelease: targetId },
   });
-  await notify(ctx, { title: `Release #${release.number} rolled back`, body: input.reason, tone: "danger" });
   await dispatchWebhooks(ctx.db, ctx.organizationId, "release.rolled_back", {
     releaseId: release.id,
     restoredReleaseId: targetId,
@@ -689,6 +737,7 @@ export async function deleteRelease(ctx: OrgContext, input: { releaseId: string 
     }
   }
 
+  let bundleKept = false;
   if (release.storage_path) {
     const path = release.storage_path.split("#")[0] as string;
     const { data: sharing } = await ctx.db
@@ -704,28 +753,65 @@ export async function deleteRelease(ctx: OrgContext, input: { releaseId: string 
         const target = await firebaseTargetForApp(ctx, release.app_id);
         await deleteArtifact({ accessToken: target.accessToken, bucket: target.bucket, path });
       } catch (error) {
+        // Bundle cleanup is best-effort (same as app deletion): the release is still removed
+        // and the file stays in the customer's bucket.
         console.error(JSON.stringify({ level: "warn", requestId: ctx.requestId, cleanup: String(error) }));
-        await audit(ctx, {
-          action: "release.delete_failed",
-          resourceType: "release",
-          resourceId: release.id,
-          appId: release.app_id,
-          result: "failure",
-        });
-        fail("STORAGE_ERROR", "The bundle could not be removed from Firebase Storage. The release was kept; retry later.");
+        bundleKept = true;
       }
     }
   }
 
-  await guardedStatus(ctx, release, "deleted");
+  // Hard delete so nothing is left pointing at the release: FKs cascade rollouts and assets and
+  // clear channel/device/analytics references; its deployment history is removed explicitly.
+  assertTransition(release.status, "deleted");
+  await ctx.db.from("deployments").delete().eq("organization_id", ctx.organizationId).eq("release_id", release.id);
+  const { data: removed } = await ctx.db
+    .from("releases")
+    .delete()
+    .eq("id", release.id)
+    .eq("status", release.status)
+    .select("id");
+  if (!removed || removed.length === 0) fail("CONFLICT", "This release changed while you were working. Refresh and retry.");
   await audit(ctx, {
     action: "release.deleted",
     resourceType: "release",
     resourceId: release.id,
     appId: release.app_id,
     before: { status: release.status, version: release.version, hash: release.bundle_hash },
+    ...(bundleKept ? { after: { bundleKept: true } } : {}),
   });
-  return { id: release.id, deleted: true };
+  return { id: release.id, deleted: true, bundleKept };
+}
+
+/**
+ * Best-effort removal of every stored bundle of an app from the customer's bucket, used
+ * when the app itself is deleted. Returns how many artifacts were removed / left behind.
+ */
+export async function deleteAppArtifacts(ctx: OrgContext, appId: string) {
+  const { data: rows } = await ctx.db
+    .from("releases")
+    .select("storage_path")
+    .eq("organization_id", ctx.organizationId)
+    .eq("app_id", appId)
+    .not("storage_path", "is", null)
+    .limit(500);
+  const paths = [...new Set((rows ?? []).map((r) => String(r.storage_path).split("#")[0] as string))];
+  if (paths.length === 0) return { removed: 0, kept: 0 };
+  let removed = 0;
+  try {
+    const target = await firebaseTargetForApp(ctx, appId);
+    for (const path of paths) {
+      try {
+        await deleteArtifact({ accessToken: target.accessToken, bucket: target.bucket, path });
+        removed += 1;
+      } catch {
+        // already gone, or no longer reachable — keep going
+      }
+    }
+  } catch {
+    // Firebase disconnected: the files stay in the customer's bucket.
+  }
+  return { removed, kept: paths.length - removed };
 }
 
 /** Promotes an existing ready/published release onto another channel. */
@@ -774,6 +860,9 @@ export async function promoteRelease(ctx: OrgContext, input: { releaseId: string
       git_commit_sha: release.git_commit_sha,
       git_branch: release.git_branch,
       build_number: release.build_number,
+      signature: release.signature,
+      signature_key_id: release.signature_key_id,
+      group_id: release.group_id,
       created_by: ctx.userId,
       created_by_label: ctx.actorLabel,
     })

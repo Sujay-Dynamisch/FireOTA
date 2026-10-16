@@ -13,9 +13,10 @@ import {
   SectionCard,
   SkeletonRows,
 } from "@/components/fireota/primitives";
+import { AgentToolModes, ProviderSettings, RunAgentPanel } from "@/components/fireota/agent-panels";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { usePermissions } from "@/hooks/use-permissions";
 import { q } from "@/lib/queries";
 import { agentsService } from "@/services";
 
@@ -34,11 +35,6 @@ export const Route = createFileRoute("/agents")({
   component: AgentsPage,
 });
 
-const modeTone: Record<string, string> = {
-  allowed: "text-success",
-  denied: "text-danger",
-  requires_approval: "text-warning",
-};
 
 const riskTone: Record<string, string> = {
   low: "text-success",
@@ -51,8 +47,10 @@ function AgentsPage() {
   const agents = useQuery(q.agents());
   const executions = useQuery(q.agentExecutions());
   const approvals = useQuery(q.agentApprovals());
-  const [question, setQuestion] = useState("");
-  const [answer, setAnswer] = useState<{ answer: string; sources: string[] } | null>(null);
+  const settings = useQuery(q.agentSettings());
+  const { can } = usePermissions();
+  const configured = Boolean(settings.data?.configured);
+  const [tab, setTab] = useState<string | null>(null);
 
   const decide = useMutation({
     mutationFn: ({ id, decision }: { id: string; decision: "approve" | "reject" }) => agentsService.decide(id, decision),
@@ -61,27 +59,32 @@ function AgentsPage() {
       void client.invalidateQueries({ queryKey: ["agent-approvals"] });
       void client.invalidateQueries({ queryKey: ["agent-executions"] });
     },
-  });
-
-  const ask = useMutation({
-    mutationFn: () => agentsService.ask(question),
-    onSuccess: (result) => setAnswer({ answer: result.answer, sources: result.sources }),
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not complete the action."),
   });
 
   return (
     <AppShell breadcrumb={[{ label: "Helio Labs", to: "/dashboard" }, { label: "Agents" }]}>
       <PageHeader
         title="Agents"
-        description="Agents observe and propose. Anything that touches production waits for a human."
+        description="AI teammates that deploy, review and watch for malicious activity — on your own Claude or OpenAI key, with human approval for anything risky."
       />
 
-      <Tabs defaultValue="approvals">
+      <Tabs value={tab ?? (configured ? "run" : "provider")} onValueChange={setTab}>
         <TabsList>
-          <TabsTrigger value="approvals">Approvals</TabsTrigger>
-          <TabsTrigger value="agents">Agents</TabsTrigger>
-          <TabsTrigger value="executions">Executions</TabsTrigger>
-          <TabsTrigger value="ask">Ask</TabsTrigger>
+          <TabsTrigger value="run">Run</TabsTrigger>
+          <TabsTrigger value="approvals">Approvals{approvals.data?.length ? ` (${approvals.data.length})` : ""}</TabsTrigger>
+          <TabsTrigger value="agents">Agents & permissions</TabsTrigger>
+          <TabsTrigger value="executions">History</TabsTrigger>
+          <TabsTrigger value="provider">AI provider</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="run" className="mt-3">
+          <RunAgentPanel agents={agents.data ?? []} configured={configured} />
+        </TabsContent>
+
+        <TabsContent value="provider" className="mt-3">
+          <ProviderSettings canManage={can("agent.manage")} />
+        </TabsContent>
 
         <TabsContent value="approvals" className="mt-3 space-y-3">
           {approvals.isLoading ? (
@@ -162,52 +165,14 @@ function AgentsPage() {
         </TabsContent>
 
         <TabsContent value="agents" className="mt-3">
-          <div className="grid gap-3 xl:grid-cols-2">
+          {(agents.data ?? []).length === 0 ? (
+            <SectionCard>
+              <EmptyState icon={Bot} title="No agents yet." description="Agents appear once an admin adds an AI provider key." />
+            </SectionCard>
+          ) : null}
+          <div className="grid gap-3 xl:grid-cols-3">
             {(agents.data ?? []).map((agent) => (
-              <SectionCard
-                key={agent.id}
-                title={agent.name}
-                aside={
-                  <span
-                    className={`font-mono text-[10px] ${
-                      agent.status === "enabled" ? "text-success" : agent.status === "available" ? "text-warning" : "text-faint"
-                    }`}
-                  >
-                    {agent.status.replace("_", " ").toUpperCase()}
-                  </span>
-                }
-              >
-                <div className="space-y-3 p-4">
-                  <p className="text-[12px] text-muted-foreground">{agent.description}</p>
-                  <div>
-                    <p className="font-mono text-[10px] uppercase tracking-[0.1em] text-faint">Capabilities</p>
-                    <ul className="mt-1 space-y-0.5">
-                      {agent.capabilities.map((capability) => (
-                        <li key={capability} className="text-[11px]">
-                          {capability}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                  <div>
-                    <p className="font-mono text-[10px] uppercase tracking-[0.1em] text-faint">Tool permissions</p>
-                    <ul className="mt-1 space-y-0.5">
-                      {agent.permissions.map((permission) => (
-                        <li key={permission.tool} className="flex items-center gap-2 font-mono text-[11px]">
-                          <span>{permission.tool}</span>
-                          <span className={`ml-auto text-[10px] ${modeTone[permission.mode]}`}>
-                            {permission.mode.replace("_", " ").toUpperCase()}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                  <p className="border-t border-border pt-3 text-[11px] text-muted-foreground">{agent.approvalPolicy}</p>
-                  <p className="font-mono text-[10px] text-faint">
-                    last execution {agent.lastExecution ?? "never"}
-                  </p>
-                </div>
-              </SectionCard>
+              <AgentToolModes key={agent.id} agent={agent} canManage={can("agent.manage")} />
             ))}
           </div>
         </TabsContent>
@@ -245,40 +210,6 @@ function AgentsPage() {
           </SectionCard>
         </TabsContent>
 
-        <TabsContent value="ask" className="mt-3">
-          <SectionCard title="Ask about your releases">
-            <div className="space-y-3 p-4">
-              <form
-                className="flex flex-wrap gap-2"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  if (question.trim()) ask.mutate();
-                }}
-              >
-                <Input
-                  value={question}
-                  onChange={(event) => setQuestion(event.target.value)}
-                  placeholder="Why was release #56 rolled back?"
-                  aria-label="Question about your releases"
-                  className="h-9 min-w-[240px] flex-1 text-[12px]"
-                />
-                <Button size="sm" type="submit" disabled={!question.trim() || ask.isPending}>
-                  {ask.isPending ? "Thinking…" : "Ask"}
-                </Button>
-              </form>
-              {answer ? (
-                <div className="rounded-md border border-border bg-surface-2/40 p-3">
-                  <p className="text-[12px]">{answer.answer}</p>
-                  <p className="mt-2 font-mono text-[10px] text-faint">sources: {answer.sources.join(", ")}</p>
-                </div>
-              ) : (
-                <p className="text-[11px] text-muted-foreground">
-                  Answers are grounded in your release, rollout and audit data — never invented.
-                </p>
-              )}
-            </div>
-          </SectionCard>
-        </TabsContent>
       </Tabs>
     </AppShell>
   );

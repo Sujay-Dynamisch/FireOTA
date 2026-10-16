@@ -15,6 +15,7 @@ import {
   organizationService,
   releasesService,
   rolloutsService,
+  securityService,
   teamService,
   webhooksService,
 } from "@/services";
@@ -23,7 +24,8 @@ export const q = {
   session: () => queryOptions({ queryKey: ["session"], queryFn: () => authService.session() }),
   dashboard: () => queryOptions({ queryKey: ["dashboard"], queryFn: () => dashboardService.summary() }),
   activity: () => queryOptions({ queryKey: ["activity"], queryFn: () => activityService.list() }),
-  notifications: () => queryOptions({ queryKey: ["notifications"], queryFn: () => notificationsService.list() }),
+  notifications: () =>
+    queryOptions({ queryKey: ["notifications"], queryFn: () => notificationsService.list(), refetchInterval: 30_000 }),
 
   apps: () => queryOptions({ queryKey: ["apps"], queryFn: () => appsService.list() }),
   app: (id: string) => queryOptions({ queryKey: ["apps", id], queryFn: () => appsService.get(id) }),
@@ -46,6 +48,12 @@ export const q = {
   project: (id: string) => queryOptions({ queryKey: ["projects", id], queryFn: () => firebaseService.get(id) }),
 
   team: () => queryOptions({ queryKey: ["team"], queryFn: () => teamService.list() }),
+  roles: () => queryOptions({ queryKey: ["roles"], queryFn: () => teamService.roles() }),
+  security: (status: "open" | "resolved" | "all" = "open") =>
+    queryOptions({ queryKey: ["security", status], queryFn: () => securityService.list(status) }),
+  runtimes: (appId: string) => queryOptions({ queryKey: ["runtimes", appId], queryFn: () => appsService.runtimes(appId) }),
+  agentSettings: () => queryOptions({ queryKey: ["agent-settings"], queryFn: () => agentsService.settings() }),
+  notificationPrefs: () => queryOptions({ queryKey: ["notification-prefs"], queryFn: () => notificationsService.prefs() }),
   audit: (filters?: Parameters<typeof auditService.list>[0]) =>
     queryOptions({ queryKey: ["audit", filters ?? null], queryFn: () => auditService.list(filters) }),
 

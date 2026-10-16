@@ -4,10 +4,12 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { clientIp } from "./client-ip";
 import { admin, newRequestId, type OrgContext } from "./context.server";
 import { hashApiKey } from "./crypto.server";
 import { fail } from "./errors";
 import type { OrgRole } from "./rbac";
+import { recordSecurityEvent } from "./security.server";
 
 /** Maps API key scopes onto an effective role so one permission model governs everything. */
 function roleForScopes(scopes: string[]): OrgRole {
@@ -30,14 +32,30 @@ export async function contextFromApiKey(request: Request, requiredScope?: string
   const db = await admin();
   const { data: key } = await db
     .from("api_keys")
-    .select("id, organization_id, name, scopes, status, expires_at, organizations(name)")
+    .select("id, organization_id, name, scopes, status, expires_at, last_used_ip, organizations(name, slug)")
     .eq("token_hash", hashApiKey(token as string))
     .maybeSingle();
 
   if (!key) fail("API_KEY_INVALID", "The API key is not valid.");
-  if (key.status === "revoked") fail("API_KEY_REVOKED", "This API key has been revoked.");
+  const rawIp = clientIp(request);
+  const ip = rawIp === "unknown" ? null : rawIp;
+  const keyLabel = `api key: ${key.name as string}`;
+  // A revoked or expired key still in use usually means it leaked or a pipeline was forgotten.
+  if (key.status === "revoked") {
+    await recordSecurityEvent(db, key.organization_id as string, { kind: "revoked_key_used", severity: "high", title: `Revoked API key "${key.name as string}" was used` }, { label: keyLabel, ip });
+    fail("API_KEY_REVOKED", "This API key has been revoked.");
+  }
   if (key.expires_at && new Date(key.expires_at as string) < new Date()) {
+    await recordSecurityEvent(db, key.organization_id as string, { kind: "expired_key_used", severity: "medium", title: `Expired API key "${key.name as string}" was used` }, { label: keyLabel, ip });
     fail("API_KEY_EXPIRED", "This API key has expired.");
+  }
+  if (ip && key.last_used_ip && key.last_used_ip !== ip) {
+    await recordSecurityEvent(
+      db,
+      key.organization_id as string,
+      { kind: "api_key_new_ip", severity: "low", title: `API key "${key.name as string}" used from a new IP address`, details: { previousIp: key.last_used_ip } },
+      { label: keyLabel, ip },
+    );
   }
 
   const scopes = (key.scopes as string[]) ?? [];
@@ -45,14 +63,19 @@ export async function contextFromApiKey(request: Request, requiredScope?: string
     fail("AUTHORIZATION_ERROR", `This API key lacks the ${requiredScope} scope.`);
   }
 
-  await db.from("api_keys").update({ last_used_at: new Date().toISOString() }).eq("id", key.id);
+  await db
+    .from("api_keys")
+    .update({ last_used_at: new Date().toISOString(), ...(ip ? { last_used_ip: ip } : {}) })
+    .eq("id", key.id);
 
   return {
     db,
     organizationId: key.organization_id as string,
     organizationName: ((Array.isArray(key.organizations) ? key.organizations[0] : key.organizations) as { name?: string } | null)?.name ?? "",
+    organizationSlug: ((Array.isArray(key.organizations) ? key.organizations[0] : key.organizations) as { slug?: string } | null)?.slug ?? "",
     userId: null,
-    actorLabel: `api key: ${key.name as string}`,
+    actorLabel: keyLabel,
+    ip,
     role: roleForScopes(scopes),
     requestId: request.headers.get("x-request-id") ?? newRequestId(),
     source: "api_key",

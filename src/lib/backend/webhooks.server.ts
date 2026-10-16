@@ -21,8 +21,14 @@ export type WebhookEvent =
   | "firebase.disconnected"
   | "firebase.expired"
   | "app.created"
+  | "channel.created"
   | "channel.updated"
-  | "agent.approval_requested";
+  | "channel.deleted"
+  | "release.deleted"
+  | "app.deleted"
+  | "agent.approval_requested"
+  | "security.alert"
+  | "webhook.test";
 
 export const WEBHOOK_EVENTS: WebhookEvent[] = [
   "release.created",
@@ -37,8 +43,13 @@ export const WEBHOOK_EVENTS: WebhookEvent[] = [
   "firebase.disconnected",
   "firebase.expired",
   "app.created",
+  "channel.created",
   "channel.updated",
+  "channel.deleted",
+  "release.deleted",
+  "app.deleted",
   "agent.approval_requested",
+  "security.alert",
 ];
 
 export const MAX_ATTEMPTS = 6;
@@ -186,20 +197,23 @@ export async function dispatchWebhooks(
         return attempt(db, organizationId, hook as HookRow, event, body, deliveryId, 1);
       }),
     );
+    // The scheduled sweep may run only daily (Vercel Hobby cron), so piggy-back a couple of
+    // due retries for this organization on live traffic. Bounded to keep requests fast.
+    if (!onlyWebhookId) await retryDueWebhooks(db, 2, organizationId);
   } catch (error) {
     console.error(JSON.stringify({ level: "error", webhookDispatch: String(error) }));
   }
 }
 
 /** Retries queued deliveries whose backoff has elapsed. Each row is claimed atomically. */
-export async function retryDueWebhooks(db: SupabaseClient, limit = 50) {
-  const { data: due } = await db
+export async function retryDueWebhooks(db: SupabaseClient, limit = 50, organizationId?: string) {
+  let dueQuery = db
     .from("webhook_deliveries")
     .select("id")
     .lte("next_attempt_at", new Date().toISOString())
-    .eq("dead", false)
-    .order("next_attempt_at", { ascending: true })
-    .limit(limit);
+    .eq("dead", false);
+  if (organizationId) dueQuery = dueQuery.eq("organization_id", organizationId);
+  const { data: due } = await dueQuery.order("next_attempt_at", { ascending: true }).limit(limit);
 
   let delivered = 0;
   let failed = 0;

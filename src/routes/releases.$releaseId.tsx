@@ -93,12 +93,34 @@ function ReleaseDetailPage() {
       invalidate();
     },
   });
+  const onError = (error: unknown) => toast.error(error instanceof Error ? error.message : "Something went wrong.");
   const pause = useMutation({
-    mutationFn: () => releasesService.pause(releaseId),
-    onSuccess: () => {
-      toast.success("Rollout paused. No new devices will receive this release.");
+    mutationFn: async (resume: boolean) => {
+      if (resume) await releasesService.resume(releaseId);
+      else await releasesService.pause(releaseId);
+    },
+    onSuccess: (_d, resume) => {
+      toast.success(resume ? "Rollout resumed." : "Rollout paused. No new devices will receive this release.");
       invalidate();
     },
+    onError,
+  });
+  const archive = useMutation({
+    mutationFn: () => releasesService.archive(releaseId),
+    onSuccess: () => {
+      toast.success("Update archived. It is no longer served.");
+      invalidate();
+    },
+    onError,
+  });
+  const remove = useMutation({
+    mutationFn: () => releasesService.remove(releaseId),
+    onSuccess: () => {
+      toast.success("Update deleted and its bundle removed from Firebase Storage.");
+      invalidate();
+      void navigate({ to: "/releases" });
+    },
+    onError,
   });
   const rollback = useMutation({
     mutationFn: (reason: string) => releasesService.rollback(releaseId, reason),
@@ -166,24 +188,72 @@ function ReleaseDetailPage() {
       ]}
     >
       <PageHeader
-        title={`Release #${data.number} · v${data.version}`}
+        title={`Update #${data.number}${data.version ? ` · ${data.version}` : ""}`}
         description={data.notes}
         meta={
           <>
             <StatusBadge status={data.status} />
             <EnvBadge environment={data.environment} />
             <PlatformTag platform={data.platform} />
-            <span className="font-mono text-[11px] text-faint">
-              {data.appName} · runtime {data.runtimeVersion} · {data.compressedSize}
+            <span className="font-mono text-[11px] text-faint" title={data.id}>
+              id {data.shortId ?? data.id.slice(0, 8)} · {data.appName} · runtime {data.runtimeVersion} · {data.compressedSize}
             </span>
+            {data.signed ? (
+              <span className="rounded-sm border border-success/30 bg-success/10 px-1.5 py-0.5 font-mono text-[10px] text-success">
+                signed · key {data.signatureKeyId ?? "—"}
+              </span>
+            ) : (
+              <span className="rounded-sm border border-border px-1.5 py-0.5 font-mono text-[10px] text-faint">unsigned</span>
+            )}
           </>
         }
         actions={
           <>
-            {data.status !== "rolled_back" && data.status !== "draft" && data.status !== "failed" ? (
-              <Button variant="outline" size="sm" disabled={pause.isPending} onClick={() => pause.mutate()}>
+            {data.status === "published" || data.status === "paused" ? (
+              <Button variant="outline" size="sm" disabled={pause.isPending} onClick={() => pause.mutate(data.status === "paused")}>
                 {data.status === "paused" ? "Resume rollout" : "Pause rollout"}
               </Button>
+            ) : null}
+            {["ready", "published", "paused", "rolled_back"].includes(data.status) ? (
+              <ConfirmAction
+                trigger={
+                  <Button variant="outline" size="sm">
+                    Archive
+                  </Button>
+                }
+                title="Archive this update"
+                description="It stops being served and leaves its channel. Archived updates can then be deleted."
+                confirmLabel="Archive update"
+                details={[
+                  { label: "Update", value: `#${data.number}` },
+                  { label: "Channel", value: data.channelName },
+                ]}
+                onConfirm={async () => {
+                  await archive.mutateAsync();
+                }}
+              />
+            ) : null}
+            {["draft", "failed", "ready", "archived", "uploading"].includes(data.status) ? (
+              <ConfirmAction
+                trigger={
+                  <Button variant="destructive" size="sm">
+                    Delete
+                  </Button>
+                }
+                title="Delete this update"
+                description="The update is deleted and its bundle is removed from your Firebase Storage bucket."
+                warning="This cannot be undone."
+                confirmLabel="Delete update"
+                destructive
+                requireTyped="DELETE"
+                details={[
+                  { label: "Update", value: `#${data.number} · ${data.shortId ?? data.id.slice(0, 8)}` },
+                  { label: "Status", value: data.status },
+                ]}
+                onConfirm={async () => {
+                  await remove.mutateAsync();
+                }}
+              />
             ) : null}
             {data.status !== "draft" && data.status !== "failed" ? (
               <ConfirmAction
@@ -207,7 +277,7 @@ function ReleaseDetailPage() {
                 }}
               />
             ) : null}
-            {data.status !== "draft" && data.status !== "failed" ? (
+            {data.status === "published" || data.status === "paused" ? (
               <ConfirmAction
                 trigger={
                   <Button variant="destructive" size="sm">

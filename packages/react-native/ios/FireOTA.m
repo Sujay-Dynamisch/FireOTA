@@ -1,6 +1,7 @@
 #import "FireOTA.h"
 
 #import <CommonCrypto/CommonDigest.h>
+#import <Security/Security.h>
 #import <React/RCTReloadCommand.h>
 #import <zlib.h>
 
@@ -249,6 +250,39 @@ RCT_EXPORT_METHOD(clearFailed:(RCTPromiseResolveBlock)resolve reject:(RCTPromise
 {
   [FOTADefaults() removeObjectForKey:kFailed];
   resolve(nil);
+}
+
+/// Verifies an RSA-SHA256 (PKCS#1 v1.5) update signature against the app's embedded public key.
+/// publicKey is base64 PKCS#1 (the JS layer unwraps the PEM's SubjectPublicKeyInfo).
+RCT_EXPORT_METHOD(verifySignature:(NSString *)message
+                  signature:(NSString *)signatureBase64
+                  publicKey:(NSString *)publicKeyBase64
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+  NSData *keyData = [[NSData alloc] initWithBase64EncodedString:publicKeyBase64 options:0];
+  NSData *signature = [[NSData alloc] initWithBase64EncodedString:signatureBase64 options:0];
+  NSData *payload = [message dataUsingEncoding:NSUTF8StringEncoding];
+  if (!keyData || !signature || !payload) {
+    resolve(@NO);
+    return;
+  }
+  NSDictionary *attributes = @{
+    (__bridge id)kSecAttrKeyType : (__bridge id)kSecAttrKeyTypeRSA,
+    (__bridge id)kSecAttrKeyClass : (__bridge id)kSecAttrKeyClassPublic,
+  };
+  CFErrorRef error = NULL;
+  SecKeyRef key = SecKeyCreateWithData((__bridge CFDataRef)keyData, (__bridge CFDictionaryRef)attributes, &error);
+  if (!key) {
+    if (error) CFRelease(error);
+    resolve(@NO);
+    return;
+  }
+  Boolean valid = SecKeyVerifySignature(key, kSecKeyAlgorithmRSASignatureMessagePKCS1v15SHA256,
+                                        (__bridge CFDataRef)payload, (__bridge CFDataRef)signature, &error);
+  if (error) CFRelease(error);
+  CFRelease(key);
+  resolve(@(valid));
 }
 
 /// Reloads JavaScript; React Native asks AppDelegate.bundleURL again, which applies the pending release.

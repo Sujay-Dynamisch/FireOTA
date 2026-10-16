@@ -153,7 +153,7 @@ Publish an update:
 
 ```sh
 FIREOTA_URL=https://<your-domain> FIREOTA_API_KEY=fota_sk_... \
-  npx fireota publish --app YOUR_APP_ID --platform android --version 1.3.1 --runtime 1.3.0 --rollout 10
+  npx fireota publish --app YOUR_APP_ID --platform all --runtime 1.3.0 --rollout 10 --message "Fix checkout crash"
 ```
 
 The full guide — Firebase setup, iOS, runtime versions, rollouts, CI and troubleshooting — is in the in-app docs at **`/docs`**, and in the package READMEs: [`packages/react-native`](packages/react-native/README.md) · [`packages/cli`](packages/cli/README.md).

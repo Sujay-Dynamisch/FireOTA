@@ -1,9 +1,8 @@
 /** API keys, webhooks, CI/CD deployment history and agent workflows. */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { audit, notify, orgContextForUser, ownedRow, requirePermission } from "@/lib/backend/context.server";
+import { audit, orgContextForUser, ownedRow, requirePermission } from "@/lib/backend/context.server";
 import { generateApiKey, randomToken } from "@/lib/backend/crypto.server";
 import { fail } from "@/lib/backend/errors";
 import { API_SCOPES } from "@/lib/backend/apikeys.server";
@@ -13,7 +12,17 @@ import {
   sealWebhookSecret,
   webhookEndpointProblem,
 } from "@/lib/backend/webhooks.server";
-import { publishRelease, rollbackRelease, setRolloutPercentage } from "@/lib/backend/releases.server";
+import {
+  CLAUDE_MODELS,
+  DEFAULT_MODEL,
+  TOOL_CATALOG,
+  ensureAgents,
+  loadAiSettings,
+  revokeKeyForAgent,
+  runAgent,
+  saveAiSettings,
+} from "@/lib/backend/agents.server";
+import { pauseRelease, promoteRelease, publishRelease, rollbackRelease, setRolloutPercentage } from "@/lib/backend/releases.server";
 
 const stamp = (v: string | null) => (v ? new Date(v).toISOString().slice(0, 16).replace("T", " ") : null);
 
@@ -24,17 +33,22 @@ export const listApiKeys = createServerFn({ method: "GET" })
     requirePermission(ctx, "api_key.read");
     const { data } = await ctx.db
       .from("api_keys")
-      .select("id, name, environment, scopes, status, expires_at, last_used_at, created_at")
+      .select("id, name, environment, prefix, scopes, status, expires_at, last_used_at, last_used_ip, created_at")
       .eq("organization_id", ctx.organizationId)
       .order("created_at", { ascending: false });
     return (data ?? []).map((k) => ({
       id: k.id as string,
       name: k.name as string,
+      prefix: (k.prefix as string) ?? "",
+      lastUsedIp: (k.last_used_ip as string | null) ?? null,
       environment: k.environment as "production" | "beta" | "staging" | "development",
       scopes: (k.scopes as string[]) ?? [],
       created: stamp(k.created_at as string) ?? "",
       lastUsed: stamp(k.last_used_at as string | null),
-      status: k.status as "active" | "revoked" | "expired",
+      status:
+        k.status === "active" && k.expires_at && new Date(k.expires_at as string) < new Date()
+          ? ("expired" as const)
+          : (k.status as "active" | "revoked" | "expired"),
       expires: stamp(k.expires_at as string | null),
     }));
   });
@@ -101,6 +115,19 @@ export const revokeApiKey = createServerFn({ method: "POST" })
     return { id: data.id, status: "revoked" as const };
   });
 
+/** Permanently removes a key. Active keys are revoked by the same call, so this never leaves a usable key. */
+export const deleteApiKey = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { id: string }) => z.object({ id: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const ctx = await orgContextForUser(context.userId);
+    requirePermission(ctx, "api_key.revoke");
+    const key = await ownedRow<{ name: string }>(ctx, "api_keys", data.id, "name");
+    await ctx.db.from("api_keys").delete().eq("id", data.id).eq("organization_id", ctx.organizationId);
+    await audit(ctx, { action: "api_key.deleted", resourceType: "api_key", resourceId: data.id, after: { name: key.name } });
+    return { id: data.id, removed: true };
+  });
+
 export const listWebhooks = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -114,7 +141,7 @@ export const listWebhooks = createServerFn({ method: "GET" })
         .order("created_at", { ascending: false }),
       ctx.db
         .from("webhook_deliveries")
-        .select("id, webhook_id, event, status_code, latency_ms, attempt, succeeded, created_at")
+        .select("id, webhook_id, event, status_code, latency_ms, attempt, succeeded, error, dead, next_attempt_at, created_at")
         .eq("organization_id", ctx.organizationId)
         .order("created_at", { ascending: false })
         .limit(200),
@@ -139,6 +166,9 @@ export const listWebhooks = createServerFn({ method: "GET" })
           latency: `${Number(d.latency_ms ?? 0)}ms`,
           at: stamp(d.created_at as string) ?? "",
           attempt: Number(d.attempt ?? 1),
+          succeeded: Boolean(d.succeeded),
+          error: (d.error as string | null) ?? null,
+          retry: d.dead ? "gave up" : d.next_attempt_at ? `retry ${stamp(d.next_attempt_at as string)}` : null,
         })),
       };
     });
@@ -176,15 +206,51 @@ export const createWebhook = createServerFn({ method: "POST" })
     return { id: row.id as string, endpoint: data.endpoint, events: data.events, secret };
   });
 
+/** Changes subscribed events, pauses/resumes, or rotates the signing secret (returned once). */
+export const updateWebhook = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { id: string; events?: string[]; status?: "active" | "paused"; rotateSecret?: boolean }) =>
+    z
+      .object({
+        id: z.string().uuid(),
+        events: z.array(z.string().max(48)).min(1).optional(),
+        status: z.enum(["active", "paused"]).optional(),
+        rotateSecret: z.boolean().optional(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const ctx = await orgContextForUser(context.userId);
+    requirePermission(ctx, "webhook.update");
+    const hook = await ownedRow<{ endpoint: string }>(ctx, "webhooks", data.id, "endpoint");
+    const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (data.events) {
+      const unknown = data.events.filter((e) => !WEBHOOK_EVENTS.includes(e as never));
+      if (unknown.length > 0) fail("INVALID_INPUT", `Unknown events: ${unknown.join(", ")}`);
+      patch["events"] = data.events;
+    }
+    if (data.status) patch["status"] = data.status;
+    const secret = data.rotateSecret ? randomToken(24) : null;
+    if (secret) patch["secret"] = sealWebhookSecret(secret);
+    await ctx.db.from("webhooks").update(patch).eq("id", data.id).eq("organization_id", ctx.organizationId);
+    await audit(ctx, {
+      action: "webhook.updated",
+      resourceType: "webhook",
+      resourceId: data.id,
+      after: { endpoint: hook.endpoint, events: data.events, status: data.status, secretRotated: Boolean(secret) },
+    });
+    return { id: data.id, secret };
+  });
+
 export const deleteWebhook = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: { id: string }) => z.object({ id: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
     const ctx = await orgContextForUser(context.userId);
     requirePermission(ctx, "webhook.delete");
-    await ownedRow(ctx, "webhooks", data.id, "id");
+    const hook = await ownedRow<{ endpoint: string }>(ctx, "webhooks", data.id, "endpoint");
     await ctx.db.from("webhooks").delete().eq("id", data.id).eq("organization_id", ctx.organizationId);
-    await audit(ctx, { action: "webhook.deleted", resourceType: "webhook", resourceId: data.id });
+    await audit(ctx, { action: "webhook.deleted", resourceType: "webhook", resourceId: data.id, after: { endpoint: hook.endpoint } });
     return { id: data.id, removed: true };
   });
 
@@ -195,8 +261,28 @@ export const sendWebhookTest = createServerFn({ method: "POST" })
     const ctx = await orgContextForUser(context.userId);
     requirePermission(ctx, "webhook.update");
     await ownedRow(ctx, "webhooks", data.id, "id");
-    await dispatchWebhooks(ctx.db, ctx.organizationId, "release.created", { test: true, webhookId: data.id }, data.id);
-    return { ok: true };
+    await dispatchWebhooks(
+      ctx.db,
+      ctx.organizationId,
+      "webhook.test",
+      { test: true, webhookId: data.id, organization: { id: ctx.organizationId, slug: ctx.organizationSlug ?? "" } },
+      data.id,
+    );
+    // Report the outcome of this exact attempt so the UI can say whether it worked.
+    const { data: last } = await ctx.db
+      .from("webhook_deliveries")
+      .select("succeeded, status_code, error, latency_ms")
+      .eq("webhook_id", data.id)
+      .eq("event", "webhook.test")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    return {
+      ok: Boolean(last?.succeeded),
+      status: Number(last?.status_code ?? 0),
+      error: (last?.error as string | null | undefined) ?? null,
+      latencyMs: Number(last?.latency_ms ?? 0),
+    };
   });
 
 export const listDeployments = createServerFn({ method: "GET" })
@@ -229,6 +315,9 @@ export const listAgents = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const ctx = await orgContextForUser(context.userId);
     requirePermission(ctx, "agent.read");
+    // Built-in agents are created once a workspace configures an AI provider.
+    const { count } = await ctx.db.from("agents").select("id", { count: "exact", head: true }).eq("organization_id", ctx.organizationId);
+    if (!count && (await loadAiSettings(ctx))) await ensureAgents(ctx);
     const [{ data: agents }, { data: permissions }] = await Promise.all([
       ctx.db
         .from("agents")
@@ -241,7 +330,8 @@ export const listAgents = createServerFn({ method: "GET" })
       id: a.id as string,
       name: a.name as string,
       description: (a.description as string) ?? "",
-      status: a.status as "available" | "enabled" | "coming_soon",
+      key: a.key as string,
+      status: a.status as "available" | "enabled" | "disabled" | "coming_soon",
       lastExecution: stamp(a.last_execution_at as string | null),
       capabilities: (a.capabilities as string[]) ?? [],
       permissions: (permissions ?? [])
@@ -354,6 +444,19 @@ export const decideAgentApproval = createServerFn({ method: "POST" })
     } else if (request.action === "rollout.update") {
       requirePermission(ctx, "rollout.update");
       await setRolloutPercentage(ctx, { releaseId, percentage: Number(request.payload["percentage"] ?? 0) });
+    } else if (request.action === "release.pause") {
+      requirePermission(ctx, "release.pause");
+      await pauseRelease(ctx, { releaseId });
+    } else if (request.action === "release.promote") {
+      requirePermission(ctx, "release.publish");
+      await promoteRelease(ctx, {
+        releaseId,
+        channelName: String(request.payload["channel"] ?? ""),
+        rolloutPercentage: Number(request.payload["rolloutPercentage"] ?? 0),
+      });
+    } else if (request.action === "api_key.revoke") {
+      requirePermission(ctx, "api_key.revoke");
+      await revokeKeyForAgent(ctx, String(request.payload["apiKeyId"] ?? request.resource_id ?? ""));
     } else {
       fail("INVALID_INPUT", "That agent action is not supported.");
     }
@@ -363,8 +466,122 @@ export const decideAgentApproval = createServerFn({ method: "POST" })
       .update({ status: "approved", approved_by: context.userId, approved_at: new Date().toISOString() })
       .eq("id", data.id);
     await audit(ctx, { action: "agent.approval_approved", resourceType: "approval_request", resourceId: data.id, after: request.payload });
-    await notify(ctx, { title: "Agent action approved", body: request.action, tone: "info" });
     return { id: data.id, decision: "approve" as const };
+  });
+
+export const getAgentSettings = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const ctx = await orgContextForUser(context.userId);
+    requirePermission(ctx, "agent.read");
+    const settings = await loadAiSettings(ctx);
+    return {
+      configured: Boolean(settings),
+      provider: settings?.provider ?? "anthropic",
+      model: settings?.model ?? DEFAULT_MODEL.anthropic,
+      keyHint: settings?.key_hint ?? "",
+      enabled: settings?.enabled ?? false,
+      updatedAt: stamp(settings?.updated_at ?? null),
+      claudeModels: [...CLAUDE_MODELS],
+      tools: TOOL_CATALOG,
+    };
+  });
+
+export const saveAgentSettings = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { provider: "anthropic" | "openai"; model: string; apiKey?: string; enabled: boolean }) =>
+    z
+      .object({
+        provider: z.enum(["anthropic", "openai"]),
+        model: z.string().trim().max(80),
+        apiKey: z.string().trim().max(400).optional(),
+        enabled: z.boolean(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const ctx = await orgContextForUser(context.userId);
+    requirePermission(ctx, "agent.manage");
+    return saveAiSettings(ctx, {
+      provider: data.provider,
+      model: data.model,
+      enabled: data.enabled,
+      ...(data.apiKey ? { apiKey: data.apiKey } : {}),
+    });
+  });
+
+export const removeAgentSettings = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const ctx = await orgContextForUser(context.userId);
+    requirePermission(ctx, "agent.manage");
+    await ctx.db.from("agent_ai_settings").delete().eq("organization_id", ctx.organizationId);
+    await audit(ctx, { action: "agent.settings_updated", resourceType: "agent_settings", after: { removed: true } });
+    return { removed: true };
+  });
+
+export const setAgentToolMode = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { agentId: string; tool: string; mode: "allowed" | "requires_approval" | "denied" }) =>
+    z
+      .object({
+        agentId: z.string().uuid(),
+        tool: z.string().max(40),
+        mode: z.enum(["allowed", "requires_approval", "denied"]),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const ctx = await orgContextForUser(context.userId);
+    requirePermission(ctx, "agent.manage");
+    const agent = await ownedRow<{ name: string; capabilities: string[] }>(ctx, "agents", data.agentId, "name, capabilities");
+    if (!agent.capabilities.includes(data.tool)) fail("INVALID_INPUT", "That tool is not available to this agent.");
+    await ctx.db
+      .from("agent_permissions")
+      .upsert(
+        { organization_id: ctx.organizationId, agent_id: data.agentId, tool: data.tool, mode: data.mode },
+        { onConflict: "agent_id,tool" },
+      );
+    await audit(ctx, {
+      action: "agent.permission_changed",
+      resourceType: "agent",
+      resourceId: data.agentId,
+      after: { agent: agent.name, tool: data.tool, mode: data.mode },
+    });
+    return { ok: true };
+  });
+
+export const setAgentEnabled = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { agentId: string; enabled: boolean }) =>
+    z.object({ agentId: z.string().uuid(), enabled: z.boolean() }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const ctx = await orgContextForUser(context.userId);
+    requirePermission(ctx, "agent.manage");
+    await ownedRow(ctx, "agents", data.agentId, "id");
+    await ctx.db
+      .from("agents")
+      .update({ status: data.enabled ? "enabled" : "disabled" })
+      .eq("id", data.agentId)
+      .eq("organization_id", ctx.organizationId);
+    return { ok: true };
+  });
+
+/** Runs an agent on a request; it can only do what the asking member is allowed to do. */
+export const runAgentFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { agentId: string; prompt: string }) =>
+    z.object({ agentId: z.string().uuid(), prompt: z.string().trim().min(3).max(2000) }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const ctx = await orgContextForUser(context.userId);
+    requirePermission(ctx, "agent.execute");
+    const result = await runAgent(ctx, data);
+    return {
+      answer: result.answer,
+      steps: result.steps.map((s) => ({ tool: s.tool, input: JSON.stringify(s.input), status: s.status, summary: s.summary })),
+    };
   });
 
 /** Grounded question answering over the organization's own release data. */

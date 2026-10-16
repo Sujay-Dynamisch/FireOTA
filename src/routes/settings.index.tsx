@@ -1,5 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
-import { Link, createFileRoute } from "@tanstack/react-router";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -12,8 +12,9 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { usePermissions } from "@/hooks/use-permissions";
 import { q } from "@/lib/queries";
-import { authService, organizationService } from "@/services";
+import { authService, notificationsService, organizationService } from "@/services";
 
 export const Route = createFileRoute("/settings/")({
   head: () => ({
@@ -30,14 +31,53 @@ export const Route = createFileRoute("/settings/")({
   component: SettingsPage,
 });
 
+function NotificationPreferences() {
+  const client = useQueryClient();
+  const prefs = useQuery(q.notificationPrefs());
+  const save = useMutation({
+    mutationFn: (next: Record<string, boolean>) => notificationsService.savePrefs(next),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ["notification-prefs"] });
+      void client.invalidateQueries({ queryKey: ["notifications"] });
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not save preferences."),
+  });
+  const current = Object.fromEntries((prefs.data ?? []).map((p) => [p.key, p.enabled]));
+  return (
+    <SectionCard title="Notification preferences" aside={<span className="font-mono text-[10px] text-faint">applies to you only</span>}>
+      {prefs.isLoading ? (
+        <SkeletonRows rows={4} cols={2} />
+      ) : (
+        <ul className="divide-y divide-border">
+          {(prefs.data ?? []).map((pref) => (
+            <li key={pref.key} className="flex items-center justify-between gap-4 p-4">
+              <div>
+                <p className="text-[12px] font-medium">{pref.label}</p>
+                <p className="text-[11px] text-muted-foreground">{pref.hint}</p>
+              </div>
+              <Switch
+                checked={pref.enabled}
+                disabled={save.isPending}
+                onCheckedChange={(enabled) => save.mutate({ ...current, [pref.key]: enabled })}
+                aria-label={pref.label}
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+    </SectionCard>
+  );
+}
+
 function SettingsPage() {
+  const client = useQueryClient();
+  const navigate = useNavigate();
+  const { can, role } = usePermissions();
   const organization = useQuery(q.session());
   const [name, setName] = useState("");
-  const [timezone, setTimezone] = useState("UTC");
-  const [requireApproval, setRequireApproval] = useState(true);
+  const [slug, setSlug] = useState("");
+  const [timezone, setTimezone] = useState("");
   const [autoRollback, setAutoRollback] = useState(true);
-  const [notifyFailures, setNotifyFailures] = useState(true);
-  const [notifyPublishes, setNotifyPublishes] = useState(false);
   const [saving, setSaving] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -73,8 +113,18 @@ function SettingsPage() {
                       className="h-9 text-[12px]"
                     />
                   </Field>
-                  <Field label="Slug" hint="Used in API paths and CLI output.">
-                    <Input value={org.slug} readOnly className="h-9 font-mono text-[12px] text-muted-foreground" />
+                  <Field
+                    label="Workspace ID"
+                    htmlFor="org-slug"
+                    hint="Unique ID shown by `fireota whoami`, sent in webhook payloads, and typed to confirm deleting the workspace."
+                  >
+                    <Input
+                      id="org-slug"
+                      value={slug || org.slug}
+                      readOnly={!can("org.update")}
+                      onChange={(event) => setSlug(event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"))}
+                      className="h-9 font-mono text-[12px]"
+                    />
                   </Field>
                   <Field label="Timezone">
                     <Select value={timezone || org.timezone} onValueChange={setTimezone}>
@@ -93,21 +143,33 @@ function SettingsPage() {
                     <Input value={org.defaultChannel} readOnly className="h-9 font-mono text-[12px] text-muted-foreground" />
                   </Field>
                 </div>
-                <Button
-                  size="sm"
-                  disabled={saving}
-                  onClick={async () => {
-                    setSaving(true);
-                    try {
-                      await organizationService.update({ name: name || org.name, timezone: timezone || org.timezone });
-                      toast.success("Organization settings saved.");
-                    } finally {
-                      setSaving(false);
-                    }
-                  }}
-                >
-                  {saving ? "Saving…" : "Save changes"}
-                </Button>
+                {can("org.update") ? (
+                  <Button
+                    size="sm"
+                    disabled={saving}
+                    onClick={async () => {
+                      setSaving(true);
+                      try {
+                        await organizationService.update({
+                          name: name || org.name,
+                          timezone: timezone || org.timezone,
+                          ...(slug && slug !== org.slug ? { slug } : {}),
+                        });
+                        toast.success("Organization settings saved.");
+                        setSlug("");
+                        void client.invalidateQueries({ queryKey: ["session"] });
+                      } catch (error) {
+                        toast.error(error instanceof Error ? error.message : "Could not save the settings.");
+                      } finally {
+                        setSaving(false);
+                      }
+                    }}
+                  >
+                    {saving ? "Saving…" : "Save changes"}
+                  </Button>
+                ) : (
+                  <p className="text-[11px] text-muted-foreground">Only owners and admins can change workspace settings.</p>
+                )}
               </div>
             )}
           </SectionCard>
@@ -124,8 +186,16 @@ function SettingsPage() {
                   </p>
                 </div>
                 <Switch
-                  checked={requireApproval}
-                  onCheckedChange={setRequireApproval}
+                  checked={org?.requirePublishConfirmation ?? true}
+                  disabled={!can("org.update")}
+                  onCheckedChange={async (value) => {
+                    try {
+                      await organizationService.update({ requirePublishConfirmation: value });
+                      void client.invalidateQueries({ queryKey: ["session"] });
+                    } catch (error) {
+                      toast.error(error instanceof Error ? error.message : "Could not save.");
+                    }
+                  }}
                   aria-label="Require approval for production publishes"
                 />
               </li>
@@ -140,6 +210,7 @@ function SettingsPage() {
               </li>
             </ul>
           </SectionCard>
+          {role === "owner" ? (
           <SectionCard title="Danger zone">
             <div className="flex flex-wrap items-center justify-between gap-3 p-4">
               <div>
@@ -159,36 +230,29 @@ function SettingsPage() {
                 warning="All release history, channels, rollouts and audit logs are permanently removed."
                 confirmLabel="Delete organization"
                 destructive
-                requireTyped="DELETE"
-                requireReason
-                details={[{ label: "Organization", value: org?.name ?? "—" }]}
-                onConfirm={() => {
-                  toast.error("Deleting an organization is disabled in this environment.");
+                requireTyped={org?.slug ?? "DELETE"}
+                details={[
+                  { label: "Organization", value: org?.name ?? "—" },
+                  { label: "Type to confirm", value: <span className="font-mono">{org?.slug ?? ""}</span> },
+                ]}
+                onConfirm={async () => {
+                  try {
+                    await organizationService.remove(org?.slug ?? "");
+                    toast.success("Workspace deleted.");
+                    client.clear();
+                    void navigate({ to: "/onboarding" });
+                  } catch (error) {
+                    toast.error(error instanceof Error ? error.message : "Could not delete the workspace.");
+                  }
                 }}
               />
             </div>
           </SectionCard>
+          ) : null}
         </TabsContent>
 
         <TabsContent value="notifications" className="mt-3">
-          <SectionCard title="Notification preferences">
-            <ul className="divide-y divide-border">
-              <li className="flex items-center justify-between gap-4 p-4">
-                <div>
-                  <p className="text-[12px] font-medium">Failure and rollback alerts</p>
-                  <p className="text-[11px] text-muted-foreground">Email and in-app alerts when a rollout degrades.</p>
-                </div>
-                <Switch checked={notifyFailures} onCheckedChange={setNotifyFailures} aria-label="Failure alerts" />
-              </li>
-              <li className="flex items-center justify-between gap-4 p-4">
-                <div>
-                  <p className="text-[12px] font-medium">Every publish</p>
-                  <p className="text-[11px] text-muted-foreground">Notify me whenever any teammate publishes a release.</p>
-                </div>
-                <Switch checked={notifyPublishes} onCheckedChange={setNotifyPublishes} aria-label="Publish notifications" />
-              </li>
-            </ul>
-          </SectionCard>
+          <NotificationPreferences />
         </TabsContent>
 
         <TabsContent value="account" className="mt-3">

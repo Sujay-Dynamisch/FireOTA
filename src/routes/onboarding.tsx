@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { BrandMark } from "@/components/fireota/brand-mark";
 
@@ -9,6 +9,7 @@ import { CopyButton, Label as TokenLabel } from "@/components/fireota/primitives
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { q } from "@/lib/queries";
 import type { FirebaseProject } from "@/lib/types";
 import { firebaseService, organizationService } from "@/services";
 
@@ -29,6 +30,15 @@ const steps = ["Welcome", "Organization", "Connect Firebase", "Verify", "First a
 function OnboardingPage() {
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
+  const session = useQuery(q.session());
+  const joined = session.data?.organization ?? null;
+  // An accepted invitation (or an existing workspace) skips onboarding.
+  useEffect(() => {
+    if (joined && step === 0) {
+      toast.success(`You are a member of ${joined.name}.`);
+      void navigate({ to: "/dashboard" });
+    }
+  }, [joined, step, navigate]);
   const [orgName, setOrgName] = useState("");
   const [orgSlug, setOrgSlug] = useState("");
   const [project, setProject] = useState("");

@@ -14,7 +14,10 @@ const createSchema = z.object({
   appId: z.string().uuid(),
   channel: z.string().min(1).max(40),
   platform: z.enum(["android", "ios"]),
-  version: z.string().min(1).max(40),
+  /** Optional human label. Updates are identified by their UUID (Expo-style). */
+  version: z.string().max(40).optional(),
+  /** Shared by the Android and iOS updates built from the same bundle. */
+  groupId: z.string().uuid().optional(),
   runtimeVersion: z.string().min(1).max(40),
   nativeVersionConstraint: z.string().max(60).optional(),
   releaseNotes: z.string().max(4000).optional(),
@@ -35,7 +38,7 @@ export const Route = createFileRoute("/api/public/v1/releases")({
           const url = new URL(request.url);
           let query = ctx.db
             .from("releases")
-            .select("id, number, app_id, platform, version, runtime_version, status, rollout_percentage, published_at")
+            .select("id, number, app_id, platform, version, group_id, runtime_version, status, rollout_percentage, release_notes, published_at")
             .eq("organization_id", ctx.organizationId)
             .neq("status", "deleted")
             .order("number", { ascending: false })
@@ -59,7 +62,8 @@ export const Route = createFileRoute("/api/public/v1/releases")({
             appId: body.appId,
             channelName: body.channel,
             platform: body.platform,
-            version: body.version,
+            ...(body.version ? { version: body.version } : {}),
+            ...(body.groupId ? { groupId: body.groupId } : {}),
             runtimeVersion: body.runtimeVersion,
             ...(body.nativeVersionConstraint ? { nativeVersionConstraint: body.nativeVersionConstraint } : {}),
             ...(body.releaseNotes ? { releaseNotes: body.releaseNotes } : {}),
@@ -70,7 +74,7 @@ export const Route = createFileRoute("/api/public/v1/releases")({
             ...(idempotencyKey ? { idempotencyKey } : {}),
           });
           return jsonOk(
-            { id: release.id, number: release.number, status: release.status },
+            { id: release.id, number: release.number, status: release.status, groupId: release.group_id },
             { status: 201, headers: { "x-request-id": requestId } },
           );
         } catch (error) {

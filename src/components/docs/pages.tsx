@@ -115,12 +115,12 @@ const PUBLISH = `export FIREOTA_URL="https://ota.example.com"
 export FIREOTA_API_KEY="fota_sk_live_..."   # Settings -> API keys
 
 # from your React Native project root
-npx fireota publish --app YOUR_APP_ID --platform android \\
-  --version 1.3.1 --runtime 1.3.0 --channel beta --rollout 10 \\
-  --notes "Fix crash on the budget screen"`;
+npx fireota publish --app YOUR_APP_ID --platform all \\
+  --runtime 1.3.0 --channel beta --rollout 10 \\
+  --message "Fix crash on the budget screen"`;
 
 const MANUAL = `npx fireota bundle --platform android --out android.fota   # bundle + Hermes + assets
-npx fireota release create --app YOUR_APP_ID --platform android --version 1.3.1 --runtime 1.3.0
+npx fireota release create --app YOUR_APP_ID --platform android --runtime 1.3.0 --message "Fix crash"
 npx fireota release upload <releaseId> --file android.fota     # checksum-verified into your bucket
 npx fireota release publish <releaseId> --rollout 10`;
 
@@ -132,19 +132,39 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    strategy:
-      matrix: { platform: [android, ios] }
+    runs-on: macos-latest          # macOS builds both Android and iOS bundles
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 20, cache: npm }
       - run: npm ci
       - run: >
-          npx fireota publish --app \${{ vars.FIREOTA_APP_ID }} --platform \${{ matrix.platform }}
-          --version 1.3.\${{ github.run_number }} --runtime 1.3.0 --channel beta --rollout 100
+          npx fireota publish --app \${{ vars.FIREOTA_APP_ID }} --platform all
+          --runtime 1.3.0 --channel beta --rollout 100
+          --message "\${{ github.event.head_commit.message }}"
         env:
           FIREOTA_URL: \${{ vars.FIREOTA_URL }}
-          FIREOTA_API_KEY: \${{ secrets.FIREOTA_API_KEY }}`;
+          FIREOTA_API_KEY: \${{ secrets.FIREOTA_API_KEY }}
+          FIREOTA_SIGNING_KEY: \${{ secrets.FIREOTA_SIGNING_KEY }}   # only with code signing`;
+
+const ANY_CI = `# Works in any CI with Node 18+ (Jenkins, Bitbucket, GitLab, Azure DevOps, CircleCI, Bitrise, TeamCity…)
+export FIREOTA_URL=https://ota.example.com          # FIREOTA_API_KEY comes from the CI's secret store
+npm ci
+npx fireota publish --app "$FIREOTA_APP_ID" --platform android --runtime 1.3.0 \\
+  --channel production --rollout 10 --message "$(git log -1 --pretty=%s)" --json`;
+
+const SIGNING = `npx fireota signing generate --out ./fireota-keys
+#  fireota-keys/fireota-private.pem  -> keep secret (CI secret FIREOTA_SIGNING_KEY)
+#  fireota-keys/fireota-public.pem   -> dashboard (app -> Code signing) + the app
+
+npx fireota publish … --private-key ./fireota-keys/fireota-private.pem`;
+
+const SIGNING_APP = `FireOTA.configure({
+  appId: "YOUR_APP_ID",
+  serverUrl: "https://ota.example.com",
+  runtimeVersion: "1.3.0",
+  codeSigningCertificate: PUBLIC_KEY_PEM, // contents of fireota-public.pem
+});`;
 
 const SDK_API = `FireOTA.configure(options)        // once, at startup (required)
 FireOTA.sync()                    // check + download + install, honouring install modes
@@ -162,8 +182,10 @@ const CHECK_API = `POST /api/public/v1/updates/check
   "nativeVersion": "1.3.0", "currentReleaseId": null }
 
 200 { "success": true, "data": { "updateAvailable": true, "release": {
-        "id": "…", "version": "1.3.1", "runtimeVersion": "1.3.0", "mandatory": false, "notes": "…",
-        "bundle": { "url": "https://firebasestorage.googleapis.com/…", "hash": "<sha256>", "size": 123456 } } } }
+        "id": "<update id>", "version": "", "runtimeVersion": "1.3.0", "mandatory": false,
+        "message": "Fix crash", "groupId": "<shared by the android + ios updates>",
+        "bundle": { "url": "https://firebasestorage.googleapis.com/…", "hash": "<sha256>", "size": 123456 },
+        "signature": { "value": "<base64>", "keyId": "…", "algorithm": "rsa-v1_5-sha256" } } } }
 200 { "success": true, "data": { "updateAvailable": false, "reason": "up_to_date" } }`;
 
 const EVENTS_API = `POST /api/public/v1/updates/events
@@ -172,9 +194,12 @@ const EVENTS_API = `POST /api/public/v1/updates/events
 # event: download_started | download_completed | install_succeeded | install_failed | rollback`;
 
 const CI_API = `# Authorization: Bearer fota_sk_...
+GET  /api/public/v1/me                            workspace, key role and apps behind the key
 POST /api/public/v1/releases                      create a draft     (scope release.write, Idempotency-Key supported)
+                                                  {"appId","platform","runtimeVersion","channel","releaseNotes","version?","groupId?"}
 GET  /api/public/v1/releases?appId=…              list releases      (scope release.read)
-POST /api/public/v1/releases/:id/bundle           upload .fota       (scope release.write, multipart "bundle", x-bundle-sha256)
+POST /api/public/v1/releases/:id/bundle           upload .fota       (scope release.write, multipart "bundle", x-bundle-sha256,
+                                                                      x-fireota-signature when the app uses code signing)
 POST /api/public/v1/releases/:id/publish          {"action":"publish","rolloutPercentage":10}      (release.publish)
                                                   {"action":"pause"}                                (release.publish)
                                                   {"action":"rollback","reason":"…","targetReleaseId":"…"} (release.publish)
@@ -735,14 +760,34 @@ npx fireota release rollback <releaseId> --reason "Crash on launch on Android 14
         description: "Publish an update on every merge.",
         sections: [
           {
+            id: "any-ci",
+            title: "Any CI tool",
+            body: (
+              <>
+                <p>
+                  The CLI is the same everywhere. It detects commit, branch and build number on GitHub Actions, GitLab CI, Bitbucket
+                  Pipelines, Jenkins, Azure DevOps, CircleCI, Bitrise, Buildkite, Travis, TeamCity, Codemagic and AWS CodeBuild (or set{" "}
+                  <C>FIREOTA_GIT_SHA</C>, <C>FIREOTA_GIT_BRANCH</C>, <C>FIREOTA_BUILD_NUMBER</C>). Ready-made pipeline files for each tool
+                  are in the dashboard under <A to="/settings/ci-cd">CI/CD</A>.
+                </p>
+                <Code code={ANY_CI} />
+              </>
+            ),
+          },
+          {
             id: "github",
             title: "GitHub Actions",
             body: <Code language="yaml" code={GITHUB} />,
           },
           {
             id: "retries",
-            title: "Safe retries",
-            body: <p>The CLI sends an idempotency key derived from the release inputs, so a retried job never creates a duplicate release.</p>,
+            title: "Safe retries and output",
+            body: (
+              <p>
+                The CLI sends an idempotency key derived from the inputs, so a retried job never creates a duplicate update and skips
+                steps that already finished. It exits with code 1 on any error; <C>--json</C> prints a machine-readable result.
+              </p>
+            ),
           },
         ],
       },
@@ -787,9 +832,24 @@ npx fireota release rollback <releaseId> --reason "Crash on launch on Android 14
             title: "What a runtime version is",
             body: (
               <p>
-                A runtime version names a set of native code. A bundle runs only on binaries with <strong>exactly</strong> the same runtime
-                version — the server and the SDK both enforce it, because JavaScript that calls missing native code crashes.
+                A runtime version names a set of native code — one store build (Play Store / App Store). A bundle runs only on binaries
+                with <strong>exactly</strong> the same runtime version — the server and the SDK both enforce it, because JavaScript that
+                calls missing native code crashes.
               </p>
+            ),
+          },
+          {
+            id: "update-ids",
+            title: "Updates are identified by ID (like Expo)",
+            body: (
+              <Bullets
+                items={[
+                  <>Every OTA update gets its own unique ID and a message describing the change — there is no version number to manage.</>,
+                  <>Each update belongs to exactly one runtime version. The app page's <strong>Runtimes</strong> tab lists every store build with its updates and installed devices.</>,
+                  <>Android and iOS updates published together (<C>--platform all</C>) share a group ID.</>,
+                  <>An optional label (<C>--version 1.3.1-hotfix</C>) can be added for humans; it has no effect on delivery.</>,
+                ]}
+              />
             ),
           },
           {
@@ -837,12 +897,121 @@ npx fireota release rollback <releaseId> --reason "Crash on launch on Android 14
           },
           {
             id: "limits",
-            title: "Limits",
+            title: "Checksums vs. signatures",
             body: (
               <Callout kind="note">
-                Checksums prove a package was not corrupted or swapped after upload; they do not sign who published it. Protect your API
-                keys and limit who can publish with team roles.
+                Checksums prove a package was not corrupted or swapped after upload. To prove <strong>who</strong> built it — even if an
+                API key, your FireOTA account or the bucket were compromised — turn on <A to="/docs/code-signing">code signing</A>.
               </Callout>
+            ),
+          },
+        ],
+      },
+      {
+        slug: "code-signing",
+        title: "Code signing",
+        description: "Prove every update was built by you (optional, per app).",
+        sections: [
+          {
+            id: "how",
+            title: "How it works",
+            body: (
+              <Bullets
+                items={[
+                  "You generate an RSA key pair. The private key never leaves your machine or CI secret store.",
+                  "The CLI signs the package's SHA-256 together with its runtime version and platform (RSA-SHA256, PKCS#1 v1.5).",
+                  "FireOTA verifies the signature against the app's registered public key on upload; with “Require signed updates” on, unsigned uploads and publishes are refused.",
+                  "The app embeds the same public key and verifies the signature natively before downloading — a forged update is never installed.",
+                ]}
+              />
+            ),
+          },
+          { id: "keys", title: "Create keys and publish", body: <Code code={SIGNING} /> },
+          { id: "app", title: "Configure the app", body: <Code language="tsx" code={SIGNING_APP} /> },
+          {
+            id: "rotate",
+            title: "Rotating keys",
+            body: (
+              <p>
+                Ship a store build with the new public key first, then replace the key in the dashboard. Builds with the old certificate
+                keep accepting only updates signed with the old key, so publish to each runtime with the key its build embeds.
+              </p>
+            ),
+          },
+        ],
+      },
+      {
+        slug: "security",
+        title: "Security monitoring",
+        description: "How FireOTA detects malicious and risky activity.",
+        sections: [
+          {
+            id: "rules",
+            title: "What is detected",
+            body: (
+              <Bullets
+                items={[
+                  "Five or more destructive actions (deletions, rollbacks, revocations, removals) by one actor within 10 minutes.",
+                  "A revoked or expired API key being used; a key used from a new IP address.",
+                  "Members made owner/admin, admin invitations and full-access (*) API keys.",
+                  "Uploads with a wrong checksum or an invalid signature, and code signing being turned off.",
+                  "Production updates published straight to 100%.",
+                  "Prompt-injection attempts against agents and instruction-like text in workspace data.",
+                ]}
+              />
+            ),
+          },
+          {
+            id: "where",
+            title: "Where alerts go",
+            body: (
+              <p>
+                Alerts appear on the <A to="/security">Security</A> page and in notifications; medium and high alerts are also sent to
+                webhooks subscribed to <C>security.alert</C>. The Security sentinel agent can investigate them for you.
+              </p>
+            ),
+          },
+        ],
+      },
+      {
+        slug: "agents",
+        title: "AI agents",
+        description: "Deploy, review and investigate with your own Claude or OpenAI key.",
+        sections: [
+          {
+            id: "setup",
+            title: "Bring your own key",
+            body: (
+              <p>
+                An admin adds an Anthropic (Claude) or OpenAI API key under <A to="/agents">Agents → AI provider</A>. The key is verified,
+                stored encrypted and never returned to the browser; usage is billed to your provider account.
+              </p>
+            ),
+          },
+          {
+            id: "agents",
+            title: "Built-in agents",
+            body: (
+              <Bullets
+                items={[
+                  <><strong>Release manager</strong> — publishes, promotes and advances rollouts based on release health; rolls back when needed.</>,
+                  <><strong>Release reviewer</strong> — reviews updates (signing, runtime, failure rate) and recommends go / hold / roll back.</>,
+                  <><strong>Security sentinel</strong> — investigates security alerts, audit logs and API key use; proposes containment.</>,
+                ]}
+              />
+            ),
+          },
+          {
+            id: "safety",
+            title: "Guardrails",
+            body: (
+              <Bullets
+                items={[
+                  "An agent never has more rights than the member who asked it.",
+                  "Each tool is Allowed, Needs approval or Denied per agent; write tools need approval by default.",
+                  "Every tool call is recorded in the agent history and the audit log.",
+                ]}
+              />
             ),
           },
         ],
@@ -858,13 +1027,24 @@ npx fireota release rollback <releaseId> --reason "Crash on launch on Android 14
             body: (
               <Bullets
                 items={[
-                  <><strong>Owner</strong> — everything, including disconnecting Firebase projects and deleting the workspace.</>,
-                  <><strong>Admin</strong> — apps, channels, team, API keys, webhooks, deleting releases.</>,
+                  <><strong>Owner</strong> — everything, including deleting the workspace.</>,
+                  <><strong>Admin</strong> — apps, channels, team and custom roles, API keys (admin-only), webhooks, Firebase projects, deleting releases and apps, security alerts, workspace settings.</>,
                   <><strong>Release manager</strong> — publish, pause, roll back, archive, change rollouts, read audit logs.</>,
                   <><strong>Developer</strong> — create releases and upload bundles; cannot publish.</>,
                   <><strong>Viewer</strong> — read-only.</>,
                 ]}
               />
+            ),
+          },
+          {
+            id: "custom",
+            title: "Custom roles",
+            body: (
+              <p>
+                Owners and admins can create roles such as “QA lead” with exactly the permissions they need on the{" "}
+                <A to="/team">Team</A> page, assign them to members, suspend or reactivate members and remove them. Nobody can grant a
+                permission they do not hold themselves.
+              </p>
             ),
           },
           {
@@ -896,16 +1076,22 @@ npx fireota release rollback <releaseId> --reason "Crash on launch on Android 14
             title: "Commands",
             body: (
               <Code
-                code={`fireota bundle   --platform <android|ios> [--entry index.js] [--out update.fota] [--hermes auto|on|off]
-fireota publish  --app <appId> --platform <p> --version <x.y.z> --runtime <x.y.z>
-                 [--channel production] [--rollout 10] [--notes "…"] [--mandatory] [--native ">=1.4.0"] [--file update.fota]
-fireota release create   --app <appId> --platform <p> --version <v> --runtime <r> [--channel c]
-fireota release upload   <releaseId> --file update.fota
+                code={`fireota publish  --app <appId> --platform <android|ios|all> --runtime <x.y.z> --message "…"
+                 [--channel production] [--rollout 10] [--version <label>] [--mandatory] [--native ">=1.4.0"]
+                 [--file update.fota] [--private-key key.pem] [--json]
+fireota bundle   --platform <android|ios> [--entry index.js] [--out update.fota] [--hermes auto|on|off]
+fireota whoami
+fireota signing generate [--out ./fireota-keys]
+fireota release create   --app <appId> --platform <p> --runtime <r> [--message m] [--version v] [--channel c]
+fireota release upload   <releaseId> --file update.fota [--private-key key.pem]
 fireota release publish  <releaseId> [--rollout 100]
 fireota release rollout  <releaseId> --percentage <0-100>
 fireota release pause    <releaseId>
 fireota release rollback <releaseId> --reason "…" [--target <releaseId>]
-fireota releases [--app <appId>]`}
+fireota releases [--app <appId>] [--json]
+
+Environment: FIREOTA_URL, FIREOTA_API_KEY (required); FIREOTA_APP_ID, FIREOTA_CHANNEL, FIREOTA_RUNTIME,
+FIREOTA_SIGNING_KEY / FIREOTA_SIGNING_KEY_PATH (optional)`}
               />
             ),
           },
@@ -937,8 +1123,10 @@ fireota releases [--app <appId>]`}
             body: (
               <p>
                 <C>release.created</C>, <C>release.ready</C>, <C>release.published</C>, <C>release.paused</C>, <C>release.rolled_back</C>,{" "}
-                <C>release.failed</C>, <C>release.archived</C>, <C>rollout.updated</C>, <C>rollout.completed</C>, <C>firebase.disconnected</C>,{" "}
-                <C>firebase.expired</C>, <C>app.created</C>.
+                <C>release.failed</C>, <C>release.archived</C>, <C>release.deleted</C>, <C>rollout.updated</C>, <C>rollout.completed</C>,{" "}
+                <C>channel.created</C>, <C>channel.updated</C>, <C>channel.deleted</C>, <C>app.created</C>, <C>app.deleted</C>,{" "}
+                <C>firebase.disconnected</C>, <C>firebase.expired</C>, <C>agent.approval_requested</C>, <C>security.alert</C>. The “Send
+                test event” button sends <C>webhook.test</C> and reports the result.
               </p>
             ),
           },

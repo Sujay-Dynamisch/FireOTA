@@ -200,7 +200,7 @@ By default updates download silently and apply on the next cold start; mandatory
 ```js
 const result = await FireOTA.checkForUpdate();
 if (result.updateAvailable) {
-  // show your UI with result.release.version / result.release.notes, then:
+  // show your UI with result.release.message (what changed) and result.release.id, then:
   await FireOTA.downloadUpdate(result.release);
   await FireOTA.installUpdate(result.release, "immediate");
 }
@@ -220,14 +220,33 @@ if (result.updateAvailable) {
 | `getCurrentRelease()` | `{ releaseId, pendingReleaseId, installationId }` |
 | `getUpdateStatus()` | Current status string. |
 
-Options: `appId`, `serverUrl`, `runtimeVersion` (required), `channel`, `checkOnAppStart`, `installMode`, `mandatoryInstallMode`, `onStatusChange(status, detail)`.
+Options: `appId`, `serverUrl`, `runtimeVersion` (required), `channel`, `checkOnAppStart`, `installMode`, `mandatoryInstallMode`, `codeSigningCertificate`, `onStatusChange(status, detail)`.
+
+## Versioning
+
+Like Expo, an update is identified by its **ID**, not a version number, and belongs to exactly one **runtime version**. The runtime version describes the native code of a store build (Play Store / App Store): the app only receives updates published for the runtime it was built with, so an update can never reach a binary it is incompatible with. Bump `runtimeVersion` (and publish a new store build) whenever native code changes. Publishers may add an optional human label (`--version 1.3.1-hotfix`).
+
+## Code signing (optional)
+
+Prove every update was built by you. Generate a key pair with `npx fireota signing generate`, register the public key in the dashboard (app → Code signing) and embed it in the app:
+
+```js
+FireOTA.configure({
+  // …
+  codeSigningCertificate: `-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqh…
+-----END PUBLIC KEY-----`,
+});
+```
+
+With a certificate set, the SDK verifies the RSA-SHA256 signature natively (Android `java.security`, iOS Security framework) **before** downloading, and rejects unsigned or wrongly signed updates — even if the server or your Firebase bucket were compromised. The signature covers the package's SHA-256, the runtime version and the platform, and the download is then checked against that SHA-256.
 
 ## Publishing updates
 
 Use [`@fireota/cli`](https://www.npmjs.com/package/@fireota/cli):
 
 ```sh
-npx fireota publish --app YOUR_APP_ID --platform android --version 1.3.1 --runtime 1.3.0 --channel production --rollout 10
+npx fireota publish --app YOUR_APP_ID --platform all --runtime 1.3.0 --channel production --rollout 10 --message "Fix checkout crash"
 ```
 
 ## License

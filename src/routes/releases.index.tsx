@@ -46,7 +46,7 @@ function ReleasesPage() {
       sortValue: (row) => row.number,
       render: (row) => (
         <span>
-          <span className="font-mono">#{row.number}</span> <span className="font-mono text-faint">v{row.version}</span>
+          <span className="font-mono">#{row.number}</span> <span className="font-mono text-faint">{row.shortId ?? row.id.slice(0, 8)}{row.version ? ` · ${row.version}` : ""}</span>{row.signed ? <span className="ml-1 font-mono text-[10px] text-success">signed</span> : null}<span className="block truncate text-[11px] text-muted-foreground">{row.notes}</span>
           {row.mandatory ? <span className="ml-1.5 font-mono text-[10px] text-warning">MANDATORY</span> : null}
         </span>
       ),
@@ -108,8 +108,8 @@ function ReleasesPage() {
         isLoading={releases.isLoading}
         error={releases.error as Error | null}
         pageSize={12}
-        searchPlaceholder="Search by release, version or author…"
-        searchValue={(row) => `${row.number} ${row.version} ${row.appName} ${row.createdBy} ${row.gitCommit}`}
+        searchPlaceholder="Search by number, ID, message, label or author…"
+        searchValue={(row) => `${row.number} ${row.id} ${row.version} ${row.notes} ${row.runtimeVersion} ${row.appName} ${row.createdBy} ${row.gitCommit}`}
         onRowClick={(row) => void navigate({ to: "/releases/$releaseId", params: { releaseId: row.id } })}
         filters={
           <>

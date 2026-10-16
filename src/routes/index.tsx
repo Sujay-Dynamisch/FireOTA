@@ -40,6 +40,22 @@ export const Route = createFileRoute("/")({
           "Connect your Firebase project, upload a bundle and publish a staged rollout. Your files never leave your Firebase Storage.",
       },
     ],
+    links: [{ rel: "canonical", href: "/" }],
+    scripts: [
+      {
+        type: "application/ld+json",
+        children: JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "SoftwareApplication",
+          name: "FireOTA",
+          applicationCategory: "DeveloperApplication",
+          operatingSystem: "Android, iOS",
+          description:
+            "FireOTA manages React Native OTA releases inside your own Firebase project: channels, staged rollouts, instant rollback and audit logs.",
+          offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+        }),
+      },
+    ],
   }),
   component: Landing,
 });

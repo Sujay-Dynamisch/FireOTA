@@ -22,7 +22,10 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
+import { Route as SecurityRouteImport } from './routes/security'
 import { Route as SignupRouteImport } from './routes/signup'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as TeamRouteImport } from './routes/team'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
@@ -43,6 +46,7 @@ import { Route as SettingsApiKeysRouteImport } from './routes/settings.api-keys'
 import { Route as SettingsCiCdRouteImport } from './routes/settings.ci-cd'
 import { Route as SettingsWebhooksRouteImport } from './routes/settings.webhooks'
 import { Route as AppsAppIdIndexRouteImport } from './routes/apps.$appId.index'
+import { Route as ApiPublicV1MeRouteImport } from './routes/api.public.v1.me'
 import { Route as ApiPublicV1ReleasesRouteImport } from './routes/api.public.v1.releases'
 import { Route as AppsAppIdReleasesNewRouteImport } from './routes/apps.$appId.releases.new'
 import { Route as ApiPublicV1FirebaseCallbackRouteImport } from './routes/api.public.v1.firebase.callback'
@@ -117,9 +121,24 @@ const ResetPasswordRoute = ResetPasswordRouteImport.update({
   path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RobotsDottxtRoute = RobotsDottxtRouteImport.update({
+  id: '/robots.txt',
+  path: '/robots.txt',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SecurityRoute = SecurityRouteImport.update({
+  id: '/security',
+  path: '/security',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
   path: '/signup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TeamRoute = TeamRouteImport.update({
@@ -222,6 +241,11 @@ const AppsAppIdIndexRoute = AppsAppIdIndexRouteImport.update({
   path: '/apps/$appId/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicV1MeRoute = ApiPublicV1MeRouteImport.update({
+  id: '/api/public/v1/me',
+  path: '/api/public/v1/me',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicV1ReleasesRoute = ApiPublicV1ReleasesRouteImport.update({
   id: '/api/public/v1/releases',
   path: '/api/public/v1/releases',
@@ -282,7 +306,10 @@ export interface FileRoutesByFullPath {
   '/onboarding': typeof OnboardingRoute
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/robots.txt': typeof RobotsDottxtRoute
+  '/security': typeof SecurityRoute
   '/signup': typeof SignupRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/team': typeof TeamRoute
   '/terms': typeof TermsRoute
   '/verify-email': typeof VerifyEmailRoute
@@ -303,6 +330,7 @@ export interface FileRoutesByFullPath {
   '/rollouts/': typeof RolloutsIndexRoute
   '/settings/': typeof SettingsIndexRoute
   '/apps/$appId/': typeof AppsAppIdIndexRoute
+  '/api/public/v1/me': typeof ApiPublicV1MeRoute
   '/api/public/v1/releases': typeof ApiPublicV1ReleasesRouteWithChildren
   '/apps/$appId/releases/new': typeof AppsAppIdReleasesNewRoute
   '/api/public/v1/firebase/callback': typeof ApiPublicV1FirebaseCallbackRoute
@@ -325,7 +353,10 @@ export interface FileRoutesByTo {
   '/onboarding': typeof OnboardingRoute
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/robots.txt': typeof RobotsDottxtRoute
+  '/security': typeof SecurityRoute
   '/signup': typeof SignupRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/team': typeof TeamRoute
   '/terms': typeof TermsRoute
   '/verify-email': typeof VerifyEmailRoute
@@ -346,6 +377,7 @@ export interface FileRoutesByTo {
   '/rollouts': typeof RolloutsIndexRoute
   '/settings': typeof SettingsIndexRoute
   '/apps/$appId': typeof AppsAppIdIndexRoute
+  '/api/public/v1/me': typeof ApiPublicV1MeRoute
   '/api/public/v1/releases': typeof ApiPublicV1ReleasesRouteWithChildren
   '/apps/$appId/releases/new': typeof AppsAppIdReleasesNewRoute
   '/api/public/v1/firebase/callback': typeof ApiPublicV1FirebaseCallbackRoute
@@ -370,7 +402,10 @@ export interface FileRoutesById {
   '/onboarding': typeof OnboardingRoute
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/robots.txt': typeof RobotsDottxtRoute
+  '/security': typeof SecurityRoute
   '/signup': typeof SignupRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/team': typeof TeamRoute
   '/terms': typeof TermsRoute
   '/verify-email': typeof VerifyEmailRoute
@@ -391,6 +426,7 @@ export interface FileRoutesById {
   '/rollouts/': typeof RolloutsIndexRoute
   '/settings/': typeof SettingsIndexRoute
   '/apps/$appId/': typeof AppsAppIdIndexRoute
+  '/api/public/v1/me': typeof ApiPublicV1MeRoute
   '/api/public/v1/releases': typeof ApiPublicV1ReleasesRouteWithChildren
   '/apps/$appId/releases/new': typeof AppsAppIdReleasesNewRoute
   '/api/public/v1/firebase/callback': typeof ApiPublicV1FirebaseCallbackRoute
@@ -416,7 +452,10 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/privacy'
     | '/reset-password'
+    | '/robots.txt'
+    | '/security'
     | '/signup'
+    | '/sitemap.xml'
     | '/team'
     | '/terms'
     | '/verify-email'
@@ -437,6 +476,7 @@ export interface FileRouteTypes {
     | '/rollouts/'
     | '/settings/'
     | '/apps/$appId/'
+    | '/api/public/v1/me'
     | '/api/public/v1/releases'
     | '/apps/$appId/releases/new'
     | '/api/public/v1/firebase/callback'
@@ -459,7 +499,10 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/privacy'
     | '/reset-password'
+    | '/robots.txt'
+    | '/security'
     | '/signup'
+    | '/sitemap.xml'
     | '/team'
     | '/terms'
     | '/verify-email'
@@ -480,6 +523,7 @@ export interface FileRouteTypes {
     | '/rollouts'
     | '/settings'
     | '/apps/$appId'
+    | '/api/public/v1/me'
     | '/api/public/v1/releases'
     | '/apps/$appId/releases/new'
     | '/api/public/v1/firebase/callback'
@@ -503,7 +547,10 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/privacy'
     | '/reset-password'
+    | '/robots.txt'
+    | '/security'
     | '/signup'
+    | '/sitemap.xml'
     | '/team'
     | '/terms'
     | '/verify-email'
@@ -524,6 +571,7 @@ export interface FileRouteTypes {
     | '/rollouts/'
     | '/settings/'
     | '/apps/$appId/'
+    | '/api/public/v1/me'
     | '/api/public/v1/releases'
     | '/apps/$appId/releases/new'
     | '/api/public/v1/firebase/callback'
@@ -548,7 +596,10 @@ export interface RootRouteChildren {
   OnboardingRoute: typeof OnboardingRoute
   PrivacyRoute: typeof PrivacyRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
+  RobotsDottxtRoute: typeof RobotsDottxtRoute
+  SecurityRoute: typeof SecurityRoute
   SignupRoute: typeof SignupRoute
+  SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   TeamRoute: typeof TeamRoute
   TermsRoute: typeof TermsRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
@@ -565,6 +616,7 @@ export interface RootRouteChildren {
   RolloutsIndexRoute: typeof RolloutsIndexRoute
   SettingsIndexRoute: typeof SettingsIndexRoute
   AppsAppIdIndexRoute: typeof AppsAppIdIndexRoute
+  ApiPublicV1MeRoute: typeof ApiPublicV1MeRoute
   ApiPublicV1ReleasesRoute: typeof ApiPublicV1ReleasesRouteWithChildren
   AppsAppIdReleasesNewRoute: typeof AppsAppIdReleasesNewRoute
   ApiPublicV1FirebaseCallbackRoute: typeof ApiPublicV1FirebaseCallbackRoute
@@ -666,11 +718,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/robots.txt': {
+      id: '/robots.txt'
+      path: '/robots.txt'
+      fullPath: '/robots.txt'
+      preLoaderRoute: typeof RobotsDottxtRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/security': {
+      id: '/security'
+      path: '/security'
+      fullPath: '/security'
+      preLoaderRoute: typeof SecurityRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/signup': {
       id: '/signup'
       path: '/signup'
       fullPath: '/signup'
       preLoaderRoute: typeof SignupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/team': {
@@ -813,6 +886,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppsAppIdIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/v1/me': {
+      id: '/api/public/v1/me'
+      path: '/api/public/v1/me'
+      fullPath: '/api/public/v1/me'
+      preLoaderRoute: typeof ApiPublicV1MeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/v1/releases': {
       id: '/api/public/v1/releases'
       path: '/api/public/v1/releases'
@@ -926,7 +1006,10 @@ const rootRouteChildren: RootRouteChildren = {
   OnboardingRoute: OnboardingRoute,
   PrivacyRoute: PrivacyRoute,
   ResetPasswordRoute: ResetPasswordRoute,
+  RobotsDottxtRoute: RobotsDottxtRoute,
+  SecurityRoute: SecurityRoute,
   SignupRoute: SignupRoute,
+  SitemapDotxmlRoute: SitemapDotxmlRoute,
   TeamRoute: TeamRoute,
   TermsRoute: TermsRoute,
   VerifyEmailRoute: VerifyEmailRoute,
@@ -943,6 +1026,7 @@ const rootRouteChildren: RootRouteChildren = {
   RolloutsIndexRoute: RolloutsIndexRoute,
   SettingsIndexRoute: SettingsIndexRoute,
   AppsAppIdIndexRoute: AppsAppIdIndexRoute,
+  ApiPublicV1MeRoute: ApiPublicV1MeRoute,
   ApiPublicV1ReleasesRoute: ApiPublicV1ReleasesRouteWithChildren,
   AppsAppIdReleasesNewRoute: AppsAppIdReleasesNewRoute,
   ApiPublicV1FirebaseCallbackRoute: ApiPublicV1FirebaseCallbackRoute,

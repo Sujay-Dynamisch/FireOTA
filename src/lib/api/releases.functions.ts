@@ -102,7 +102,9 @@ async function shapeReleases(
     releases = releases.filter(
       (r) =>
         String(r.number).includes(term) ||
-        (r.version as string).toLowerCase().includes(term) ||
+        (r.id as string).startsWith(term) ||
+        ((r.version as string) ?? "").toLowerCase().includes(term) ||
+        ((r.release_notes as string) ?? "").toLowerCase().includes(term) ||
         appName(r.app_id as string).includes(term) ||
         ((r.created_by_label as string) ?? "").toLowerCase().includes(term),
     );
@@ -122,7 +124,11 @@ async function shapeReleases(
       channelId: (r.channel_id as string) ?? "",
       channelName,
       environment: r.environment as "production" | "beta" | "staging" | "development",
-      version: r.version as string,
+      version: (r.version as string) ?? "",
+      shortId: (r.id as string).slice(0, 8),
+      groupId: (r.group_id as string | null) ?? null,
+      signed: Boolean(r.signature),
+      signatureKeyId: (r.signature_key_id as string | null) ?? null,
       runtimeVersion: r.runtime_version as string,
       nativeCompatibility: (r.native_version_constraint as string) ?? "*",
       status: r.status as never,
@@ -218,7 +224,7 @@ export const createReleaseFn = createServerFn({ method: "POST" })
       appId: string;
       channelName: string;
       platform: "android" | "ios";
-      version: string;
+      version?: string;
       runtimeVersion: string;
       nativeVersionConstraint?: string;
       releaseNotes?: string;
@@ -232,7 +238,7 @@ export const createReleaseFn = createServerFn({ method: "POST" })
           appId: z.string().uuid(),
           channelName: z.string().min(1).max(40),
           platform: z.enum(["android", "ios"]),
-          version: z.string().min(1).max(40),
+          version: z.string().max(40).optional(),
           runtimeVersion: z.string().min(1).max(40),
           nativeVersionConstraint: z.string().max(60).optional(),
           releaseNotes: z.string().max(4000).optional(),
@@ -315,12 +321,16 @@ async function shapeRollouts(ctx: OrgContext, id?: string) {
     query.order("started_at", { ascending: false }),
     ctx.db.from("apps").select("id, name").eq("organization_id", ctx.organizationId),
     ctx.db.from("channels").select("id, name, environment").eq("organization_id", ctx.organizationId),
-    ctx.db.from("releases").select("id, number, version, platform").eq("organization_id", ctx.organizationId),
+    ctx.db.from("releases").select("id, number, version, platform, status").eq("organization_id", ctx.organizationId),
   ]);
 
-  const metrics = await metricsFor(ctx, (rollouts ?? []).map((r) => r.release_id as string));
+  // Hide rollouts whose release was deleted (legacy soft-deleted rows).
+  const visible = (rollouts ?? []).filter((r) =>
+    (releases ?? []).some((x) => x.id === r.release_id && x.status !== "deleted"),
+  );
+  const metrics = await metricsFor(ctx, visible.map((r) => r.release_id as string));
 
-  return (rollouts ?? []).map((r) => {
+  return visible.map((r) => {
     const release = (releases ?? []).find((x) => x.id === r.release_id);
     const channel = (channels ?? []).find((c) => c.id === r.channel_id);
     const m = metrics.get(r.release_id as string);
@@ -328,7 +338,7 @@ async function shapeRollouts(ctx: OrgContext, id?: string) {
       id: r.id as string,
       appName: (apps ?? []).find((a) => a.id === r.app_id)?.name ?? "",
       releaseId: r.release_id as string,
-      releaseLabel: release ? `#${release.number} (${release.version})` : "—",
+      releaseLabel: release ? `#${release.number}${release.version ? ` (${release.version})` : ""}` : "—",
       channelName: channel?.name ?? "",
       environment: (channel?.environment ?? "production") as "production" | "beta" | "staging" | "development",
       platform: (release?.platform ?? "android") as "android" | "ios",
@@ -493,4 +503,12 @@ export const getAnalytics = createServerFn({ method: "GET" })
         devices: (devices ?? []).filter((d) => d.platform === platform).length,
       })),
     };
+  });
+
+export const resumeReleaseFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { releaseId: string }) => z.object({ releaseId: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const { resumeRelease } = await import("@/lib/backend/releases.server");
+    return resumeRelease(await orgContextForUser(context.userId), data);
   });

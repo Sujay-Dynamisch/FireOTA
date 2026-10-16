@@ -10,15 +10,25 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   changeMemberRole,
   createOrganization,
+  deleteOrganization,
+  deleteRole,
   getDashboard,
+  getNotificationPrefs,
   inviteMember,
   listActivity,
   listAudit,
   listNotifications,
+  listRoles,
+  listSecurityEvents,
   listTeam,
   markNotificationsRead,
   removeMember,
+  resendInvite,
+  resolveSecurityEvent,
+  saveRole,
+  setMemberStatus,
   getSession,
+  updateNotificationPrefs,
   updateOrganization,
 } from "@/lib/api/core.functions";
 import {
@@ -26,10 +36,24 @@ import {
   disconnectFirebaseProject,
   listFirebaseProjects,
   listSelectableProjects,
+  removeFirebaseProject,
   startFirebaseAuthorization,
   verifyFirebaseProject,
 } from "@/lib/api/firebase.functions";
-import { createApp, getApp, getChannel, listApps, listChannels, updateApp } from "@/lib/api/apps.functions";
+import {
+  createApp,
+  createChannel,
+  deleteApp,
+  deleteChannel,
+  getApp,
+  getChannel,
+  listApps,
+  listChannels,
+  listRuntimes,
+  setAppSigning,
+  updateApp,
+  updateChannel,
+} from "@/lib/api/apps.functions";
 import {
   archiveReleaseFn,
   createReleaseFn,
@@ -42,6 +66,7 @@ import {
   pauseReleaseFn,
   promoteReleaseFn,
   publishReleaseFn,
+  resumeReleaseFn,
   rollbackReleaseFn,
   setReleaseRollout,
   setRolloutState,
@@ -51,15 +76,23 @@ import {
   createApiKey,
   createWebhook,
   decideAgentApproval,
+  deleteApiKey,
   deleteWebhook,
+  getAgentSettings,
   listAgentApprovals,
   listAgentExecutions,
   listAgents,
   listApiKeys,
   listDeployments,
   listWebhooks,
+  removeAgentSettings,
+  runAgentFn,
+  saveAgentSettings,
   sendWebhookTest,
   revokeApiKey,
+  setAgentEnabled,
+  setAgentToolMode,
+  updateWebhook,
 } from "@/lib/api/integrations.functions";
 import type {
   Agent,
@@ -71,6 +104,7 @@ import type {
   AppRecord,
   AuditEvent,
   ChannelRecord,
+  CustomRole,
   DashboardSummary,
   FirebaseProject,
   NotificationItem,
@@ -78,6 +112,8 @@ import type {
   ReleaseRecord,
   Role,
   RolloutRecord,
+  RuntimeGroup,
+  SecurityEvent,
   User,
   Webhook,
 } from "@/lib/types";
@@ -195,11 +231,20 @@ export const organizationService = {
     updateOrganization({
       data: {
         ...(patch.name !== undefined ? { name: patch.name } : {}),
+        ...(patch.slug !== undefined ? { slug: patch.slug } : {}),
         ...(patch.timezone !== undefined ? { timezone: patch.timezone } : {}),
         ...(patch.defaultChannel !== undefined ? { defaultChannel: patch.defaultChannel } : {}),
+        ...(patch.requirePublishConfirmation !== undefined ? { requirePublishConfirmation: patch.requirePublishConfirmation } : {}),
       },
     }),
   create: (name: string, slug: string) => createOrganization({ data: { name, slug } }),
+  remove: (confirmSlug: string) => deleteOrganization({ data: { confirmSlug } }),
+};
+
+export const securityService = {
+  list: (status: "open" | "resolved" | "all" = "open"): Promise<SecurityEvent[]> =>
+    listSecurityEvents({ data: { status } }) as Promise<SecurityEvent[]>,
+  setStatus: (id: string, status: "open" | "resolved") => resolveSecurityEvent({ data: { id, status } }),
 };
 
 export const firebaseService = {
@@ -243,6 +288,7 @@ export const firebaseService = {
     return { status: "connected" as const };
   },
   disconnect: (id: string) => disconnectFirebaseProject({ data: { id } }),
+  remove: (id: string) => removeFirebaseProject({ data: { id } }),
 };
 
 export const appsService = {
@@ -271,6 +317,10 @@ export const appsService = {
     }),
   update: (id: string, patch: { name?: string; status?: "active" | "paused"; runtimeVersion?: string }) =>
     updateApp({ data: { id, ...patch } }),
+  remove: (id: string, confirmSlug: string) => deleteApp({ data: { id, confirmSlug } }),
+  setSigning: (id: string, input: { publicKeyPem?: string | null; required: boolean }) =>
+    setAppSigning({ data: { id, ...input } }),
+  runtimes: (appId: string): Promise<RuntimeGroup[]> => listRuntimes({ data: { appId } }) as Promise<RuntimeGroup[]>,
 };
 
 /** Bundles staged by the wizard's upload step, keyed by the checksum shown in the UI. */
@@ -329,7 +379,7 @@ export const releasesService = {
     appId: string;
     platform: "android" | "ios";
     channel: string;
-    version: string;
+    version?: string;
     runtimeVersion: string;
     notes?: string;
     mandatory?: boolean;
@@ -345,7 +395,7 @@ export const releasesService = {
         appId: input.appId,
         channelName: input.channel,
         platform: input.platform,
-        version: input.version,
+        ...(input.version ? { version: input.version } : {}),
         runtimeVersion: input.runtimeVersion,
         ...(input.nativeCompatibility ? { nativeVersionConstraint: input.nativeCompatibility } : {}),
         ...(input.notes ? { releaseNotes: input.notes } : {}),
@@ -363,6 +413,7 @@ export const releasesService = {
   },
   publish: (id: string, rollout: number) => publishReleaseFn({ data: { releaseId: id, rolloutPercentage: rollout } }),
   pause: (id: string) => pauseReleaseFn({ data: { releaseId: id } }),
+  resume: (id: string) => resumeReleaseFn({ data: { releaseId: id } }),
   rollback: (id: string, reason: string) => rollbackReleaseFn({ data: { releaseId: id, reason } }),
   archive: (id: string) => archiveReleaseFn({ data: { releaseId: id } }),
   remove: (id: string) => deleteReleaseFn({ data: { releaseId: id } }),
@@ -397,8 +448,15 @@ export const channelsService = {
     listChannels({ data: appId ? { appId } : undefined }) as Promise<ChannelRecord[]>,
   get: (id: string): Promise<ChannelRecord> => getChannel({ data: { id } }) as Promise<ChannelRecord>,
   /** Promotes a release onto the named channel (production promotion included). */
-  promote: (channelName: string, releaseId: string) =>
-    promoteReleaseFn({ data: { releaseId, channelName } }),
+  promote: (channelName: string, releaseId: string, rolloutPercentage?: number) =>
+    promoteReleaseFn({ data: { releaseId, channelName, ...(rolloutPercentage !== undefined ? { rolloutPercentage } : {}) } }),
+  create: (input: { appId: string; name: string; environment: string; description?: string; updatePolicy?: "immediate" | "staged" }) =>
+    createChannel({ data: input }),
+  update: (
+    id: string,
+    patch: { name?: string; environment?: string; description?: string; status?: "active" | "paused"; updatePolicy?: "immediate" | "staged" },
+  ) => updateChannel({ data: { id, ...patch } }),
+  remove: (id: string) => deleteChannel({ data: { id } }),
 };
 
 export const rolloutsService = {
@@ -428,9 +486,16 @@ export const teamService = {
     if (!member) throw new ServiceError("Team member not found", "not_found");
     return member;
   },
-  invite: (email: string, role: Role) => inviteMember({ data: { email, role } }),
-  changeRole: (id: string, role: Role) => changeMemberRole({ data: { id, role } }),
+  invite: (email: string, role: Role, customRoleId?: string | null) =>
+    inviteMember({ data: { email, role, customRoleId: customRoleId ?? null } }),
+  changeRole: (id: string, role: Role, customRoleId?: string | null) =>
+    changeMemberRole({ data: { id, role, customRoleId: customRoleId ?? null } }),
   remove: (id: string) => removeMember({ data: { id } }),
+  resendInvite: (id: string) => resendInvite({ data: { id } }),
+  setStatus: (id: string, status: "active" | "suspended") => setMemberStatus({ data: { id, status } }),
+  roles: (): Promise<CustomRole[]> => listRoles() as Promise<CustomRole[]>,
+  saveRole: (input: { id?: string; name: string; description?: string; permissions: string[] }) => saveRole({ data: input }),
+  deleteRole: (id: string) => deleteRole({ data: { id } }),
 };
 
 export const auditService = {
@@ -443,6 +508,7 @@ export const apiKeysService = {
   create: (input: { name: string; environment: string; scopes: string[] }) =>
     createApiKey({ data: input as never }),
   revoke: (id: string) => revokeApiKey({ data: { id } }),
+  remove: (id: string) => deleteApiKey({ data: { id } }),
 };
 
 export const ciCdService = {
@@ -461,6 +527,8 @@ export const webhooksService = {
   },
   create: (input: { endpoint: string; events: string[] }) => createWebhook({ data: input }),
   remove: (id: string) => deleteWebhook({ data: { id } }),
+  update: (id: string, patch: { events?: string[]; status?: "active" | "paused"; rotateSecret?: boolean }) =>
+    updateWebhook({ data: { id, ...patch } }),
   /** Sends a signed test event to this endpoint only; the attempt appears in its delivery log. */
   test: (id: string) => sendWebhookTest({ data: { id } }),
 };
@@ -478,11 +546,21 @@ export const agentsService = {
   approvals: (): Promise<AgentApproval[]> => listAgentApprovals() as Promise<AgentApproval[]>,
   decide: (id: string, decision: "approve" | "reject") => decideAgentApproval({ data: { id, decision } }),
   ask: (question: string) => askAgent({ data: { question } }),
+  settings: () => getAgentSettings(),
+  saveSettings: (input: { provider: "anthropic" | "openai"; model: string; apiKey?: string; enabled: boolean }) =>
+    saveAgentSettings({ data: input }),
+  removeSettings: () => removeAgentSettings(),
+  setToolMode: (agentId: string, tool: string, mode: "allowed" | "requires_approval" | "denied") =>
+    setAgentToolMode({ data: { agentId, tool, mode } }),
+  setEnabled: (agentId: string, enabled: boolean) => setAgentEnabled({ data: { agentId, enabled } }),
+  run: (agentId: string, prompt: string) => runAgentFn({ data: { agentId, prompt } }),
 };
 
 export const notificationsService = {
   list: (): Promise<NotificationItem[]> => listNotifications() as Promise<NotificationItem[]>,
   markAllRead: () => markNotificationsRead(),
+  prefs: () => getNotificationPrefs(),
+  savePrefs: (prefs: Record<string, boolean>) => updateNotificationPrefs({ data: { prefs } }),
 };
 
 export const activityService = {
@@ -503,8 +581,13 @@ export const permissionsMatrix = {
     { label: "Rollback", allow: ["owner", "admin", "release_manager"] },
     { label: "Delete", allow: ["owner", "admin"] },
     { label: "Audit read", allow: ["owner", "admin", "release_manager"] },
-    { label: "Manage team", allow: ["owner", "admin"] },
-    { label: "Manage Firebase", allow: ["owner"] },
+    { label: "Manage team & roles", allow: ["owner", "admin"] },
+    { label: "API keys", allow: ["owner", "admin"] },
+    { label: "Channels: create / edit", allow: ["owner", "admin", "release_manager"] },
+    { label: "Channels & apps: delete", allow: ["owner", "admin"] },
+    { label: "Connect / remove Firebase", allow: ["owner", "admin"] },
+    { label: "Security alerts", allow: ["owner", "admin", "release_manager"] },
+    { label: "Delete workspace", allow: ["owner"] },
   ],
 };
 

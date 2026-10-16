@@ -7,7 +7,7 @@ import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { audit, notify, orgContextForUser, requirePermission } from "@/lib/backend/context.server";
+import { audit, orgContextForUser, requirePermission } from "@/lib/backend/context.server";
 import { ApiError, fail } from "@/lib/backend/errors";
 import { pkcePair, randomToken } from "@/lib/backend/crypto.server";
 import {
@@ -115,9 +115,8 @@ export const connectProject = createServerFn({ method: "POST" })
       action: "firebase.project_connected",
       resourceType: "firebase_project",
       resourceId: row.id,
-      after: { projectId: data.firebaseProjectId, storage: health.storage },
+      after: { projectId: data.firebaseProjectId, displayName: health.displayName, storage: health.storage },
     });
-    await notify(ctx, { title: `Firebase project ${health.displayName} connected`, tone: "success" });
 
     return { id: row.id, firebaseProjectId: row.firebase_project_id, name: row.display_name, status: health.status };
   });
@@ -228,4 +227,41 @@ export const disconnectFirebaseProject = createServerFn({ method: "POST" })
     await audit(ctx, { action: "firebase.disconnected", resourceType: "firebase_project", resourceId: data.id });
     await dispatchWebhooks(ctx.db, ctx.organizationId, "firebase.disconnected", { firebaseProjectId: data.id });
     return { id: data.id, status: "disconnected" as const };
+  });
+
+/**
+ * Removes a Firebase project from the workspace entirely (admins and owners). Files already
+ * in the project's Storage bucket are left untouched — they belong to the customer.
+ */
+export const removeFirebaseProject = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { id: string }) => z.object({ id: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const ctx = await orgContextForUser(context.userId);
+    requirePermission(ctx, "project.delete");
+    const { data: project } = await ctx.db
+      .from("firebase_projects")
+      .select("id, display_name")
+      .eq("id", data.id)
+      .eq("organization_id", ctx.organizationId)
+      .maybeSingle();
+    if (!project) fail("RESOURCE_NOT_FOUND", "Firebase project not found.");
+
+    const { count } = await ctx.db
+      .from("apps")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", ctx.organizationId)
+      .eq("firebase_project_id", data.id);
+    if ((count ?? 0) > 0) fail("CONFLICT", "Move or delete the applications using this project first.");
+
+    const { error } = await ctx.db.from("firebase_projects").delete().eq("id", data.id).eq("organization_id", ctx.organizationId);
+    if (error) fail("CONFLICT", "The project could not be removed.");
+    await audit(ctx, {
+      action: "firebase.removed",
+      resourceType: "firebase_project",
+      resourceId: data.id,
+      after: { displayName: project.display_name },
+    });
+    await dispatchWebhooks(ctx.db, ctx.organizationId, "firebase.disconnected", { firebaseProjectId: data.id, removed: true });
+    return { id: data.id, removed: true };
   });

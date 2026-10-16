@@ -264,7 +264,7 @@ export function ErrorState({ title, description, action }: { title: string; desc
   );
 }
 
-export function SkeletonRows({ rows = 5, cols = 5 }: { rows?: number; cols?: number }) {
+export function SkeletonRows({ rows = 15, cols = 5 }: { rows?: number; cols?: number }) {
   return (
     <div className="divide-y divide-border">
       {Array.from({ length: rows }).map((_, r) => (
@@ -272,8 +272,8 @@ export function SkeletonRows({ rows = 5, cols = 5 }: { rows?: number; cols?: num
           {Array.from({ length: cols }).map((__, c) => (
             <div
               key={c}
-              className="h-3 animate-pulse rounded bg-surface-2"
-              style={{ width: `${c === 0 ? 18 : 12 + ((c * 7) % 14)}%` }}
+              className="h-3 min-w-0 animate-pulse rounded bg-surface-2"
+              style={{ flex: `${c === 0 ? 18 : 12 + ((c * 7) % 14)} 1 0%` }}
             />
           ))}
         </div>

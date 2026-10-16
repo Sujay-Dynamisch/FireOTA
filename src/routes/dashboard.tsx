@@ -243,7 +243,7 @@ function DashboardPage() {
                   >
                     <td className="px-4 py-2.5">
                       <span className="font-mono">#{release.number}</span>{" "}
-                      <span className="font-mono text-faint">v{release.version}</span>
+                      <span className="font-mono text-faint">{release.shortId ?? release.id.slice(0, 8)}{release.version ? ` · ${release.version}` : ""}</span>
                     </td>
                     <td className="px-3 py-2.5">{release.appName}</td>
                     <td className="px-3 py-2.5">

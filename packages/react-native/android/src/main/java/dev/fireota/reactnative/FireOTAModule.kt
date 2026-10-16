@@ -2,11 +2,15 @@ package dev.fireota.reactnative
 
 import android.content.Intent
 import android.os.Process
+import android.util.Base64
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
+import java.security.KeyFactory
+import java.security.Signature
+import java.security.spec.X509EncodedKeySpec
 import java.util.concurrent.Executors
 
 class FireOTAModule(private val reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
@@ -44,6 +48,23 @@ class FireOTAModule(private val reactContext: ReactApplicationContext) : ReactCo
       } catch (e: Throwable) {
         promise.reject("FIREOTA_DOWNLOAD", e.message, e)
       }
+    }
+  }
+
+  /**
+   * Verifies an RSA-SHA256 (PKCS#1 v1.5) update signature against the app's embedded public key
+   * (base64 X.509 SubjectPublicKeyInfo). Any parsing problem counts as an invalid signature.
+   */
+  @ReactMethod
+  fun verifySignature(message: String, signatureBase64: String, publicKeyBase64: String, promise: Promise) {
+    try {
+      val key = KeyFactory.getInstance("RSA").generatePublic(X509EncodedKeySpec(Base64.decode(publicKeyBase64, Base64.DEFAULT)))
+      val verifier = Signature.getInstance("SHA256withRSA")
+      verifier.initVerify(key)
+      verifier.update(message.toByteArray(Charsets.UTF_8))
+      promise.resolve(verifier.verify(Base64.decode(signatureBase64, Base64.DEFAULT)))
+    } catch (e: Throwable) {
+      promise.resolve(false)
     }
   }
 
