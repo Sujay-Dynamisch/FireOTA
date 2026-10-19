@@ -191,6 +191,7 @@ function RoleEditor({ role, onDone }: { role?: CustomRole; onDone: () => void })
         <Button
           size="sm"
           disabled={name.trim().length < 2 || permissions.length === 0 || save.isPending}
+          loading={save.isPending}
           onClick={() => save.mutate()}
         >
           {save.isPending ? "Saving…" : role ? "Save role" : "Create role"}
@@ -410,6 +411,7 @@ function TeamPage() {
                     <Button
                       size="sm"
                       disabled={!email || invite.isPending}
+                      loading={invite.isPending}
                       onClick={() => invite.mutate()}
                     >
                       {invite.isPending ? "Sending…" : "Send invitation"}
@@ -499,6 +501,7 @@ function TeamPage() {
                       size="sm"
                       className="h-7 text-[11px]"
                       disabled={resend.isPending}
+                      loading={resend.isPending && resend.variables === row.id}
                       onClick={() => resend.mutate(row.id)}
                     >
                       Resend invite
@@ -510,6 +513,7 @@ function TeamPage() {
                       size="sm"
                       className="h-7 text-[11px]"
                       disabled={setStatus.isPending}
+                      loading={setStatus.isPending && setStatus.variables?.id === row.id}
                       onClick={() =>
                         setStatus.mutate({
                           id: row.id,

@@ -164,6 +164,7 @@ function SecurityPage() {
                     variant={event.status === "open" ? "outline" : "ghost"}
                     className="h-7 text-[11px]"
                     disabled={update.isPending}
+                    loading={update.isPending && update.variables?.id === event.id}
                     onClick={() =>
                       update.mutate({
                         id: event.id,

@@ -32,13 +32,15 @@ export const startFirebaseAuthorization = createServerFn({ method: "POST" })
 
     const state = randomToken(24);
     const { verifier, challenge } = pkcePair();
-    await ctx.db.from("oauth_states").insert({
+    const { error: stateError } = await ctx.db.from("oauth_states").insert({
       state,
       organization_id: ctx.organizationId,
       user_id: context.userId,
       code_verifier: verifier,
       redirect_to: "/projects",
     });
+    // Without a stored state the callback can only report "expired"; fail here instead.
+    if (stateError) fail("FIREBASE_CONNECTION_ERROR", "Could not start Google authorization. Try again.");
     await audit(ctx, { action: "firebase.authorization_started", resourceType: "firebase_connection" });
     return { url: authorizationUrl({ state, challenge, origin: origin() }) };
   });

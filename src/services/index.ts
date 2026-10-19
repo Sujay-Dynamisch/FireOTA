@@ -135,6 +135,8 @@ function greeting(date = new Date()) {
   return "Good evening";
 }
 
+let googleRedirectStarted = false;
+
 /** Server errors arrive as messages; surface them verbatim to the existing UI. */
 function unwrap(error: unknown): never {
   const message = error instanceof Error ? error.message : "Something went wrong.";
@@ -165,7 +167,9 @@ export const authService = {
       options: { redirectTo: `${window.location.origin}${next}` },
     });
     if (error) throw new ServiceError("Google sign-in failed. Try again.", "unauthorized");
-    return data;
+    void data;
+    // The browser is leaving for Google; stay pending so the button keeps its loader.
+    return await new Promise<never>(() => {});
   },
   signUp: async (name: string, email: string, password: string) => {
     const { error } = await supabase.auth.signUp({
@@ -264,10 +268,17 @@ export const firebaseService = {
       const result = await listSelectableProjects();
       return result.projects;
     } catch (error) {
-      const { url } = await startFirebaseAuthorization();
-      window.location.href = url;
-      void error;
-      return [];
+      // Only a missing or lapsed Google grant needs a trip to Google; anything else is a real error.
+      const message = error instanceof Error ? error.message : "";
+      if (!/Authorize a Google account|re-authorized|authorization .*expired/i.test(message)) return unwrap(error);
+      // One redirect per page load: a second consent flow would invalidate the first one's state.
+      if (!googleRedirectStarted) {
+        googleRedirectStarted = true;
+        const { url } = await startFirebaseAuthorization();
+        window.location.href = url;
+      }
+      // Stay pending while the browser leaves for Google so the UI keeps its loader.
+      return await new Promise<never>(() => {});
     }
   },
   /**
@@ -285,7 +296,8 @@ export const firebaseService = {
   reconnect: async () => {
     const { url } = await startFirebaseAuthorization();
     window.location.href = url;
-    return { status: "connected" as const };
+    // Stay pending while the browser leaves for Google so the caller keeps its loader.
+    return await new Promise<{ status: "connected" }>(() => {});
   },
   disconnect: (id: string) => disconnectFirebaseProject({ data: { id } }),
   remove: (id: string) => removeFirebaseProject({ data: { id } }),

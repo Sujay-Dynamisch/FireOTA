@@ -78,7 +78,7 @@ function ResetPasswordPage() {
           />
           {mismatch ? <p className="text-[11px] text-danger">Passwords don't match.</p> : null}
         </div>
-        <Button type="submit" className="h-9 w-full" disabled={pending || mismatch}>
+        <Button type="submit" className="h-9 w-full" disabled={mismatch} loading={pending}>
           {pending ? "Updating…" : "Update password"}
         </Button>
       </form>

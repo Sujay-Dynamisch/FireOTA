@@ -145,6 +145,7 @@ function ProjectsPage() {
                   size="sm"
                   className="h-7 text-[11px]"
                   disabled={verify.isPending}
+                  loading={verify.isPending && verify.variables === project.id}
                   onClick={() => verify.mutate(project.id)}
                 >
                   {verify.isPending ? "Verifying…" : "Verify connection"}

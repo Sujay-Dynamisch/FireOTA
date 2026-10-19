@@ -133,11 +133,11 @@ function RolloutDetailPage() {
         }
         actions={
           data.status === "paused" ? (
-            <Button size="sm" disabled={resume.isPending} onClick={() => resume.mutate()}>
+            <Button size="sm" loading={resume.isPending} onClick={() => resume.mutate()}>
               Resume rollout
             </Button>
           ) : (
-            <Button variant="outline" size="sm" disabled={pause.isPending} onClick={() => pause.mutate()}>
+            <Button variant="outline" size="sm" loading={pause.isPending} onClick={() => pause.mutate()}>
               Pause rollout
             </Button>
           )
@@ -207,6 +207,7 @@ function RolloutDetailPage() {
               <Button
                 size="sm"
                 disabled={value === data.current || setPercentage.isPending}
+                loading={setPercentage.isPending}
                 onClick={() => {
                   setPercentage.mutate(value);
                   setTarget(null);

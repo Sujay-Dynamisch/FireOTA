@@ -42,8 +42,15 @@ function ConnectProjectPage() {
       failed: "Google sign-in failed. Please try again.",
       invalid: "The Google sign-in response was invalid. Please try again.",
     };
-    if (status === "connected") toast.success("Google account authorized. Choose a Firebase project.");
-    else if (status && messages[status]) toast.error(messages[status]);
+    // Fixed toast id so a double-run effect cannot stack duplicates.
+    if (status === "connected") toast.success("Google account authorized. Choose a Firebase project.", { id: "google-oauth" });
+    else if (status && messages[status]) toast.error(messages[status], { id: "google-oauth" });
+    // Drop ?status so a refresh or remount does not report the same result again.
+    if (status) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("status");
+      window.history.replaceState(window.history.state, "", url.toString());
+    }
   }, []);
   const [selected, setSelected] = useState("");
   const [verifying, setVerifying] = useState(false);
@@ -53,6 +60,7 @@ function ConnectProjectPage() {
     queryKey: ["firebase-selectable"],
     queryFn: () => firebaseService.listSelectable(),
     enabled: step >= 1,
+    retry: false,
   });
 
   return (

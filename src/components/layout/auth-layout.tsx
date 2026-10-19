@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
-import type { ReactNode } from "react";
+import { Loader2 } from "lucide-react";
+import { useState, type ReactNode } from "react";
 import { BrandMark } from "@/components/fireota/brand-mark";
 
 export function AuthLayout({ children }: { children: ReactNode }) {
@@ -88,14 +89,23 @@ function GoogleLogo() {
   );
 }
 
-export function GoogleButton({ onClick, label }: { onClick: () => void; label: string }) {
+export function GoogleButton({ onClick, label }: { onClick: () => void | Promise<void>; label: string }) {
+  const [busy, setBusy] = useState(false);
   return (
     <button
       type="button"
-      onClick={onClick}
-      className="flex h-9 w-full items-center justify-center gap-2 rounded-md border border-border bg-surface-2/50 text-[12px] font-medium transition-colors duration-150 hover:bg-surface-2"
+      disabled={busy}
+      aria-busy={busy || undefined}
+      onClick={() => {
+        const result = onClick();
+        if (result instanceof Promise) {
+          setBusy(true);
+          void result.finally(() => setBusy(false));
+        }
+      }}
+      className="flex h-9 w-full items-center justify-center gap-2 rounded-md border border-border bg-surface-2/50 text-[12px] font-medium transition-colors duration-150 hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-70"
     >
-      <GoogleLogo />
+      {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <GoogleLogo />}
       {label}
     </button>
   );

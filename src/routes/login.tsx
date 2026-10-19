@@ -121,7 +121,7 @@ function LoginPage() {
           </p>
         ) : null}
 
-        <Button type="submit" className="h-9 w-full" disabled={pending}>
+        <Button type="submit" className="h-9 w-full" loading={pending}>
           {pending ? "Signing in…" : "Sign in"}
         </Button>
       </form>

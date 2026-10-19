@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { BrandMark } from "@/components/fireota/brand-mark";
@@ -55,6 +56,7 @@ function OnboardingPage() {
     queryKey: ["firebase-selectable"],
     queryFn: () => firebaseService.listSelectable(),
     enabled: step === 2,
+    retry: false,
   });
 
   const next = () => setStep((s) => Math.min(s + 1, steps.length - 1));
@@ -152,17 +154,31 @@ function OnboardingPage() {
                 <Button variant="outline" size="sm" onClick={back}>
                   Back
                 </Button>
-                <Button size="sm" disabled={!project} onClick={next}>
+                <Button size="sm" disabled={!project} loading={selectable.isPending} onClick={next}>
                   Connect Firebase
                 </Button>
               </>
             }
           >
             <div className="space-y-4">
+              {selectable.isPending && (
+                <div className="flex items-center gap-2 rounded-md border border-border bg-surface-2/40 px-3 py-2.5 text-[12px] text-muted-foreground">
+                  <Loader2 className="size-4 animate-spin" aria-hidden />
+                  Connecting to Google… loading your Firebase projects
+                </div>
+              )}
+              {selectable.isError && (
+                <div className="flex items-center justify-between gap-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2.5 text-[12px]">
+                  <span>{selectable.error instanceof Error ? selectable.error.message : "Could not load Firebase projects."}</span>
+                  <Button variant="outline" size="sm" onClick={() => selectable.refetch()}>
+                    Retry
+                  </Button>
+                </div>
+              )}
               <Field label="Firebase project" hint="Choose the Firebase project that will store your OTA bundles.">
-                <Select value={project} onValueChange={setProject}>
+                <Select value={project} onValueChange={setProject} disabled={selectable.isPending}>
                   <SelectTrigger className="h-9 text-[12px]">
-                    <SelectValue placeholder="Select a Firebase project" />
+                    <SelectValue placeholder={selectable.isPending ? "Loading Firebase projects…" : "Select a Firebase project"} />
                   </SelectTrigger>
                   <SelectContent>
                     {(selectable.data ?? []).map((option) => (
