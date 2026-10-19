@@ -162,7 +162,7 @@ function DashboardPage() {
       </div>
 
       {/* Release health + activity */}
-      <div className="grid gap-3 xl:grid-cols-3">
+      <div className="grid items-start gap-3 xl:grid-cols-3">
         <SectionCard
           className="xl:col-span-2"
           title="Release health"
@@ -203,7 +203,9 @@ function DashboardPage() {
         </SectionCard>
 
         <SectionCard title="Recent activity">
-          {activity.data ? <ActivityFeed items={activity.data} /> : <SkeletonRows rows={4} cols={2} />}
+          <div className="max-h-[340px] overflow-y-auto">
+            {activity.data ? <ActivityFeed items={activity.data} /> : <SkeletonRows rows={4} cols={2} />}
+          </div>
         </SectionCard>
       </div>
 

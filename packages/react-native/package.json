@@ -1,6 +1,6 @@
 {
   "name": "@fireota/react-native",
-  "version": "0.1.1",
+  "version": "0.3.0",
   "description": "Over-the-air JavaScript updates for React Native apps, served from your own Firebase project by FireOTA.",
   "license": "MIT",
   "author": "FireOTA",
@@ -20,6 +20,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "peerDependencies": {
+    "react": ">=18",
     "react-native": ">=0.73.0"
   },
   "keywords": [

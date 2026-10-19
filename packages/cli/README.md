@@ -63,7 +63,8 @@ Paste `fireota-public.pem` into the dashboard (app → Code signing), pass the s
 ## Commands
 
 ```text
-fireota publish  --app <appId> --platform <android|ios|all> --runtime <x.y.z> --message "…"
+fireota init     [--app <appId>] [--server-url <url>] [--channel production] [--dry-run]
+fireota publish  --app <appId> --platform <android|ios|all> [--runtime <x.y.z>] --message "…"
                  [--channel production] [--rollout 10] [--version <label>] [--mandatory] [--native ">=1.4.0"]
                  [--file update.fota] [--private-key key.pem] [--json]
 fireota bundle   --platform <android|ios> [--entry index.js] [--out update.fota] [--hermes auto|on|off]

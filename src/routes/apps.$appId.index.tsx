@@ -239,7 +239,14 @@ function AppDetailPage() {
         <TabsContent value="sdk" className="mt-3">
           <SectionCard title="Install the FireOTA SDK">
             <div className="space-y-4 p-4">
-              <CodeBlock code={`npm install @fireota/react-native`} />
+              <p className="text-[12px] text-muted-foreground">
+                Two commands set everything up — config file, update prompt, Android and iOS wiring:
+              </p>
+              <CodeBlock
+                code={`npm install @fireota/react-native && npm install --save-dev @fireota/cli
+npx fireota init --app ${data.id} --server-url ${typeof window !== "undefined" ? window.location.origin : "https://your-fireota-domain"}`}
+              />
+              <p className="text-[11px] text-muted-foreground">Or configure it by hand:</p>
               <CodeBlock
                 language="tsx"
                 code={`import { FireOTA } from "@fireota/react-native";\n\nFireOTA.configure({\n  appId: "${data.id}",\n  serverUrl: "${typeof window !== "undefined" ? window.location.origin : "https://your-fireota-domain"}",\n  channel: "${data.channels[0] ?? "production"}",\n  runtimeVersion: "${data.runtimeVersion}", // must match the store build\n  checkOnAppStart: true,${data.codeSigning?.keyId ? "\n  codeSigningCertificate: PUBLIC_KEY_PEM, // required: this app verifies signatures" : ""}\n});`}
