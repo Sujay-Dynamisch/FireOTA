@@ -381,12 +381,14 @@ describe.skipIf(!configured)("FireOTA release engine against Supabase", () => {
     expect((await updateCheck(db, device())).release?.id).toBe(ids["r1"]);
   });
 
-  it("keeps a release when Firebase cleanup fails instead of claiming deletion", async () => {
+  it("deletes a release even when Firebase cleanup fails and reports the bundle as kept", async () => {
     await archiveRelease(owner, { releaseId: ids["r4"]! });
-    await expectCode(deleteRelease(owner, { releaseId: ids["r4"]! }), "STORAGE_ERROR");
-    const { data } = await db.from("releases").select("status").eq("id", ids["r4"]!).single();
-    expect(data?.status).toBe("archived");
-    await expectCode(archiveRelease(owner, { releaseId: ids["r4"]! }), "INVALID_STATE_TRANSITION");
+    const result = await deleteRelease(owner, { releaseId: ids["r4"]! });
+    expect(result).toMatchObject({ deleted: true, bundleKept: true });
+    const { data } = await db.from("releases").select("id").eq("id", ids["r4"]!).maybeSingle();
+    expect(data).toBeNull();
+    const { data: rollouts } = await db.from("rollouts").select("id").eq("release_id", ids["r4"]!);
+    expect(rollouts ?? []).toHaveLength(0);
   });
 
   it("keeps exactly one active release per channel and platform under concurrent publishes", async () => {
