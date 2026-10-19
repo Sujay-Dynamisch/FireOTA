@@ -54,7 +54,16 @@ function clientCredentials() {
 }
 
 export function redirectUri(origin: string) {
-  return process.env["GOOGLE_REDIRECT_URI"] ?? `${origin}/api/public/v1/firebase/callback`;
+  const fallback = `${origin}/api/public/v1/firebase/callback`;
+  const configured = process.env["GOOGLE_REDIRECT_URI"];
+  // A redirect for another host (e.g. a localhost value copied into production) would send Google
+  // back to the wrong site and is rejected for published OAuth apps; use this site's callback instead.
+  if (!configured) return fallback;
+  try {
+    return new URL(configured).origin === origin ? configured : fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 export function authorizationUrl(input: { state: string; challenge: string; origin: string }) {
