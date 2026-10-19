@@ -210,7 +210,7 @@ function ReleaseDetailPage() {
         actions={
           <>
             {data.status === "published" || data.status === "paused" ? (
-              <Button variant="outline" size="sm" disabled={pause.isPending} onClick={() => pause.mutate(data.status === "paused")}>
+              <Button variant="outline" size="sm" loading={pause.isPending} onClick={() => pause.mutate(data.status === "paused")}>
                 {data.status === "paused" ? "Resume rollout" : "Pause rollout"}
               </Button>
             ) : null}
@@ -426,6 +426,7 @@ function ReleaseDetailPage() {
                   <Button
                     size="sm"
                     disabled={rolloutValue === data.rollout || setRollout.isPending}
+                    loading={setRollout.isPending}
                     onClick={() => {
                       setRollout.mutate(rolloutValue);
                       setTarget(null);

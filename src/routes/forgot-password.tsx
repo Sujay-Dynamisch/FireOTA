@@ -62,7 +62,7 @@ function ForgotPasswordPage() {
               className="h-9 text-[12px]"
             />
           </div>
-          <Button type="submit" className="h-9 w-full" disabled={pending}>
+          <Button type="submit" className="h-9 w-full" loading={pending}>
             {pending ? "Sending…" : "Send reset link"}
           </Button>
         </form>

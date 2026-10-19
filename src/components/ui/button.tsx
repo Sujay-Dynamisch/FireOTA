@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
+import { Loader2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -34,13 +35,53 @@ const buttonVariants = cva(
 export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
   asChild?: boolean;
+  /** Shows a spinner and blocks clicks. Set automatically while an async `onClick` is pending. */
+  loading?: boolean;
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
-    const Comp = asChild ? Slot : "button";
+  ({ className, variant, size, asChild = false, loading = false, disabled, onClick, children, ...props }, ref) => {
+    const [running, setRunning] = React.useState(false);
+    const mounted = React.useRef(true);
+    React.useEffect(() => {
+      mounted.current = true;
+      return () => {
+        mounted.current = false;
+      };
+    }, []);
+
+    if (asChild) {
+      return (
+        <Slot className={cn(buttonVariants({ variant, size, className }))} ref={ref} onClick={onClick} {...props}>
+          {children}
+        </Slot>
+      );
+    }
+
+    const busy = loading || running;
+    const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+      if (busy) return;
+      const result = onClick?.(event) as unknown;
+      if (result instanceof Promise) {
+        setRunning(true);
+        void result.finally(() => {
+          if (mounted.current) setRunning(false);
+        });
+      }
+    };
+
     return (
-      <Comp className={cn(buttonVariants({ variant, size, className }))} ref={ref} {...props} />
+      <button
+        className={cn(buttonVariants({ variant, size, className }))}
+        ref={ref}
+        disabled={disabled || busy}
+        aria-busy={busy || undefined}
+        onClick={handleClick}
+        {...props}
+      >
+        {busy ? <Loader2 className="animate-spin" aria-hidden /> : null}
+        {busy && size === "icon" ? null : children}
+      </button>
     );
   },
 );

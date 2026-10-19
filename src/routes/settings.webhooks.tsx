@@ -208,6 +208,7 @@ function WebhooksPage() {
                 <Button
                   size="sm"
                   disabled={!endpoint.startsWith("https://") || events.length === 0 || create.isPending}
+                  loading={create.isPending}
                   onClick={() => create.mutate()}
                 >
                   {create.isPending ? "Creating…" : "Add webhook"}
@@ -234,6 +235,7 @@ function WebhooksPage() {
               <Button
                 size="sm"
                 disabled={editing.events.length === 0 || update.isPending}
+                loading={update.isPending}
                 onClick={() => update.mutate({ id: editing.id, patch: { events: editing.events } })}
               >
                 Save events
@@ -312,6 +314,7 @@ function WebhooksPage() {
                         size="sm"
                         className="h-7 text-[11px]"
                         disabled={sendTest.isPending}
+                        loading={sendTest.isPending && sendTest.variables === hook.id}
                         onClick={() => sendTest.mutate(hook.id)}
                       >
                         {sendTest.isPending && sendTest.variables === hook.id ? "Sending…" : "Send test event"}
@@ -324,6 +327,7 @@ function WebhooksPage() {
                         size="sm"
                         className="h-7 text-[11px]"
                         disabled={update.isPending}
+                        loading={update.isPending && update.variables?.id === hook.id}
                         onClick={() => update.mutate({ id: hook.id, patch: { status: hook.status === "paused" ? "active" : "paused" } })}
                       >
                         {hook.status === "paused" ? "Resume" : "Pause"}

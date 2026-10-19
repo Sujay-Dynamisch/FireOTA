@@ -257,7 +257,7 @@ function ApiKeysPage() {
                     <Button variant="outline" size="sm" onClick={() => setOpen(false)}>
                       Cancel
                     </Button>
-                    <Button size="sm" disabled={!name || scopes.length === 0 || create.isPending} onClick={() => create.mutate()}>
+                    <Button size="sm" disabled={!name || scopes.length === 0 || create.isPending} loading={create.isPending} onClick={() => create.mutate()}>
                       {create.isPending ? "Creating…" : "Create key"}
                     </Button>
                   </DialogFooter>

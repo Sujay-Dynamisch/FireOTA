@@ -122,7 +122,7 @@ function SignupPage() {
           I accept the terms of service and privacy policy.
         </label>
 
-        <Button type="submit" className="h-9 w-full" disabled={!accepted || pending}>
+        <Button type="submit" className="h-9 w-full" disabled={!accepted} loading={pending}>
           {pending ? "Creating account…" : "Create account"}
         </Button>
       </form>

@@ -190,6 +190,7 @@ export function CodeSigningPanel({ app, canEdit }: { app: AppRecord; canEdit: bo
                 <Button
                   size="sm"
                   disabled={!pem.includes("BEGIN PUBLIC KEY") || save.isPending}
+                  loading={save.isPending}
                   onClick={() => save.mutate({ publicKeyPem: pem, required: signing.required })}
                 >
                   <KeyRound /> Save public key

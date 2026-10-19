@@ -198,6 +198,7 @@ function ChannelDialog({
           <Button
             size="sm"
             disabled={form.name.length < 2 || !form.appId || save.isPending}
+            loading={save.isPending}
             onClick={() => save.mutate()}
           >
             {save.isPending ? "Saving…" : channel ? "Save changes" : "Create channel"}
@@ -276,6 +277,7 @@ function PromoteDialog({ channel, onClose }: { channel: ChannelRecord; onClose: 
           <Button
             size="sm"
             disabled={!releaseId || promote.isPending}
+            loading={promote.isPending}
             onClick={() => promote.mutate()}
           >
             {promote.isPending ? "Promoting…" : "Promote"}
@@ -500,6 +502,7 @@ function ChannelsPage() {
                                     channel.status === "paused" ? "Resume channel" : "Pause channel"
                                   }
                                   disabled={togglePause.isPending}
+                                  loading={togglePause.isPending && togglePause.variables === channel}
                                   onClick={() => togglePause.mutate(channel)}
                                 >
                                   {channel.status === "paused" ? (
