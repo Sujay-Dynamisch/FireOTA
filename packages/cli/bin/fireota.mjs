@@ -14,13 +14,18 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 import { detectCi } from "../lib/ci.mjs";
+import { runInit } from "../lib/init.mjs";
 import { packDirectory } from "../lib/package.mjs";
+import { storeVersion } from "../lib/project.mjs";
 import { generateKeys, loadPrivateKey, signUpdate } from "../lib/signing.mjs";
 
 const HELP = `FireOTA CLI
 
 Usage:
-  fireota publish  --app <appId> --platform <android|ios|all> --runtime <x.y.z> --message "What changed"
+  fireota init     [--app <appId>] [--server-url <url>] [--channel production] [--dry-run] [--force]
+                   One-time setup: creates fireota.config.js, wraps your root component with the
+                   built-in update UI, and wires MainApplication / AppDelegate for release builds.
+  fireota publish  --app <appId> --platform <android|ios|all> [--runtime <x.y.z>] --message "What changed"
                    [--channel production] [--rollout 10] [--version <label>] [--mandatory] [--native ">=1.4.0"]
                    [--file update.fota] [--private-key fireota-private.pem] [--json]
                    Builds (unless --file), uploads to your Firebase Storage and publishes.
@@ -37,7 +42,9 @@ Usage:
   fireota releases [--app <appId>] [--json]
 
 Updates are identified by their ID (like Expo): --version is only an optional label, and
---runtime must equal the runtime version of the store build the update is for.
+--runtime must equal the runtime version of the store build the update is for. Without
+--runtime, the app's store version is used (android/app/build.gradle versionName, iOS
+MARKETING_VERSION) — the same default the SDK uses.
 
 Environment: FIREOTA_URL, FIREOTA_API_KEY (required); FIREOTA_APP_ID, FIREOTA_CHANNEL,
 FIREOTA_RUNTIME, FIREOTA_SIGNING_KEY / FIREOTA_SIGNING_KEY_PATH (optional).
@@ -182,6 +189,15 @@ async function api(method, path, body, extraHeaders = {}) {
   return json.data;
 }
 
+/** --runtime / FIREOTA_RUNTIME, else the app's store version for that platform. */
+function runtimeFor(flags, platform) {
+  const explicit = flags.runtime ?? process.env.FIREOTA_RUNTIME;
+  if (explicit && explicit !== true) return String(explicit);
+  const detected = storeVersion(platform);
+  if (!detected) fail(`Could not read the ${platform} app version; pass --runtime <x.y.z>.`);
+  return detected;
+}
+
 async function createRelease(flags, platform, extra = {}) {
   const ci = detectCi();
   const message = flags.message ?? flags.notes;
@@ -189,7 +205,7 @@ async function createRelease(flags, platform, extra = {}) {
     appId: need(flags, "app", "FIREOTA_APP_ID"),
     channel: String(flags.channel ?? process.env.FIREOTA_CHANNEL ?? "production"),
     platform,
-    runtimeVersion: need(flags, "runtime", "FIREOTA_RUNTIME"),
+    runtimeVersion: runtimeFor(flags, platform),
     ...(flags.version && flags.version !== true ? { version: String(flags.version) } : {}),
     ...(message && message !== true ? { releaseNotes: String(message) } : {}),
     ...(flags.mandatory ? { mandatory: true } : {}),
@@ -231,7 +247,7 @@ async function releaseAction(releaseId, body) {
 async function publishOne(flags, platform, file, extra, privateKey) {
   const release = await createRelease(flags, platform, extra);
   if (["draft", "failed", "uploading"].includes(release.status)) {
-    await uploadRelease(release.id, file, privateKey ? { key: privateKey, runtimeVersion: need(flags, "runtime", "FIREOTA_RUNTIME"), platform } : null);
+    await uploadRelease(release.id, file, privateKey ? { key: privateKey, runtimeVersion: runtimeFor(flags, platform), platform } : null);
   } else {
     log(`Bundle already uploaded (status ${release.status}); skipping upload.`);
   }
@@ -256,6 +272,25 @@ async function main() {
   }
   if (command === "bundle") {
     bundle(parseArgs(process.argv.slice(3)).flags);
+    return;
+  }
+  if (command === "init") {
+    const all = parseArgs(process.argv.slice(3)).flags;
+    const result = await runInit(all, { api, log, fail });
+    console.log(result.dry ? "\nFireOTA init (dry run — nothing written):\n" : "\nFireOTA is set up:\n");
+    for (const [mark, text] of result.results) console.log(`  ${mark} ${text}`);
+    const versions = [
+      result.runtime.android ? `Android ${result.runtime.android}` : null,
+      result.runtime.ios ? `iOS ${result.runtime.ios}` : null,
+    ].filter(Boolean);
+    console.log(`
+Runtime version: ${versions.join(", ") || "unknown"} (your store version — bump it when native code changes).
+
+Next:
+  1. Rebuild the app once (release build / store build): npx react-native run-android --mode release${result.runtime.ios ? "\n     iOS: cd ios && pod install" : ""}
+  2. Publish an update:  FIREOTA_URL=${result.serverUrl} FIREOTA_API_KEY=… npm run ota:publish -- --message "What changed"
+  3. Optional: show <UpdateScreen /> from '@fireota/react-native' in your settings.`);
+    if (result.results.some(([mark]) => mark === "!")) console.log("\nSteps marked ! need a manual change — see https://github.com/Sujay-Dynamisch/FireOTA#readme");
     return;
   }
   if (command === "whoami") {
@@ -312,7 +347,7 @@ Next:
     // Android + iOS built from the same commit form one update group (Expo-style).
     const extra =
       platform === "all"
-        ? { groupId: groupIdFrom(platforms.map((p) => sha256(readFileSync(files[p]))).join(":") + String(all.runtime ?? process.env.FIREOTA_RUNTIME)) }
+        ? { groupId: groupIdFrom(platforms.map((p) => `${sha256(readFileSync(files[p]))}@${runtimeFor(all, p)}`).join(":")) }
         : {};
     const results = [];
     for (const p of platforms) results.push(await publishOne(all, p, files[p], extra, privateKey));

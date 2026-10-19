@@ -487,12 +487,35 @@ export const docGroups: DocGroup[] = [
         sections: [
           {
             id: "install",
-            title: "Install the packages",
+            title: "Install and set up in two commands",
             body: (
-              <Code
-                code={`npm install @fireota/react-native
-npm install --save-dev @fireota/cli
-cd ios && pod install && cd ..`}
+              <>
+                <Code
+                  code={`npm install @fireota/react-native && npm install --save-dev @fireota/cli
+npx fireota init --app YOUR_APP_ID --server-url https://ota.example.com
+cd ios && pod install && cd ..   # iOS only`}
+                />
+                <p>
+                  <C>fireota init</C> creates <C>fireota.config.js</C>, wraps your root component with <C>withFireOTA()</C>{" "}
+                  (update check on launch + a ready-made “Restart to update” prompt), wires <C>MainApplication</C> and{" "}
+                  <C>AppDelegate</C> for release builds, adds an <C>ota:publish</C> script and updates <C>.gitignore</C>. It never
+                  overwrites anything and lists every change; <C>--dry-run</C> previews them. Rebuild the app once and you are done —
+                  the Android, iOS and Configure pages are only needed for manual setups.
+                </p>
+              </>
+            ),
+          },
+          {
+            id: "ui",
+            title: "Built-in update UI",
+            body: (
+              <Bullets
+                items={[
+                  <><C>&lt;UpdatePrompt /&gt;</C> — shown automatically: “Restart to update” card, full-screen notice for mandatory updates.</>,
+                  <><C>&lt;UpdateScreen /&gt;</C> — a complete “App updates” screen (version, runtime, channel, check / download / restart).</>,
+                  <><C>useFireOTA()</C> — state plus <C>check()</C>, <C>install()</C>, <C>restart()</C> to build your own UI.</>,
+                  <>Restyle with <C>theme</C>, replace the prompt with <C>renderPrompt</C>, or hide it with <C>prompt={"{false}"}</C>.</>,
+                ]}
               />
             ),
           },

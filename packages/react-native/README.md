@@ -126,15 +126,44 @@ The cron in `vercel.json` runs the maintenance job (webhook retries, OAuth state
 
 > **Upload size on Vercel:** Vercel Functions accept request bodies up to **4.5 MB**. Larger update packages must be published against a deployment without that limit (or a direct-to-Storage upload, on the roadmap).
 
-## Install
+## Install (2 commands)
 
 ```sh
-npm install @fireota/react-native
-npm install --save-dev @fireota/cli
-cd ios && pod install
+npm install @fireota/react-native && npm install --save-dev @fireota/cli
+npx fireota init --app YOUR_APP_ID --server-url https://ota.example.com
 ```
 
-Requires a bare React Native app, 0.73 or newer (Expo: run `npx expo prebuild`).
+`fireota init` does the whole setup and tells you what it changed:
+
+| | |
+| --- | --- |
+| `fireota.config.js` | App ID, server URL and channel (no secrets — safe to commit) |
+| `index.js` | Wraps your root component: `withFireOTA(App, fireotaConfig)` — checks for updates on launch and shows the built-in update prompt |
+| `MainApplication.kt/.java` | Release builds load the latest verified OTA bundle |
+| `AppDelegate.swift/.mm` | Same for iOS (then run `cd ios && pod install`) |
+| `package.json` | `npm run ota:publish` |
+| `.gitignore` | Update packages and the code signing private key |
+
+Rebuild the app once, and you're done. The runtime version defaults to your store version (`versionName` / `CFBundleShortVersionString`) — bump it with every store build that changes native code. Every step is idempotent; `--dry-run` shows the changes without writing.
+
+Requires a bare React Native app, 0.73 or newer (Expo: run `npx expo prebuild`). Prefer to wire it by hand? Follow the Android, iOS and Configure sections below.
+
+## Built-in UI (customizable)
+
+```tsx
+import { UpdateScreen, useFireOTA, FireOTAProvider } from "@fireota/react-native";
+
+// A full "App updates" screen — add it to your settings navigator:
+<Stack.Screen name="Updates" component={UpdateScreen} />
+
+// Your own UI: state + actions
+const { status, available, pendingReleaseId, check, install, restart } = useFireOTA();
+
+// Restyle or replace the prompt
+<FireOTAProvider config={fireotaConfig} theme={{ accent: "#6D28D9" }} renderPrompt={(s) => <MyBanner {...s} />}>
+```
+
+`<UpdatePrompt />` (shown automatically) displays a "Restart to update" card when an update is downloaded and a full-screen notice while a mandatory update installs. Pass `prompt={false}` (or `withFireOTA(App, config, { prompt: false })`) to hide it.
 
 ## Android
 
@@ -219,8 +248,12 @@ if (result.updateAvailable) {
 | `clearPendingUpdate()` | Drop a downloaded update that is not applied yet. |
 | `getCurrentRelease()` | `{ releaseId, pendingReleaseId, installationId }` |
 | `getUpdateStatus()` | Current status string. |
+| `subscribe(listener)` / `getSnapshot()` | Watch / read status, available update, pending update, runtime, channel. |
+| `<FireOTAProvider config>` / `withFireOTA(App, config)` | Configure + built-in prompt. |
+| `useFireOTA()` | State plus `check()`, `install()`, `restart()` for custom UI. |
+| `<UpdateScreen />`, `<UpdatePrompt />` | Ready-made screens; theme with `theme={{ accent, background, card, text, muted }}`. |
 
-Options: `appId`, `serverUrl`, `runtimeVersion` (required), `channel`, `checkOnAppStart`, `installMode`, `mandatoryInstallMode`, `codeSigningCertificate`, `onStatusChange(status, detail)`.
+Options: `appId`, `serverUrl` (required), `runtimeVersion` (defaults to the store version), `channel`, `checkOnAppStart`, `installMode`, `mandatoryInstallMode`, `codeSigningCertificate`, `onStatusChange(status, detail)`.
 
 ## Versioning
 
