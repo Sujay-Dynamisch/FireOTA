@@ -47,20 +47,22 @@ async function googleFetch(url: string, init: RequestInit & { accessToken?: stri
 }
 
 function clientCredentials() {
-  const id = process.env["GOOGLE_CLIENT_ID"];
-  const secret = process.env["GOOGLE_CLIENT_SECRET"];
+  const id = process.env["GOOGLE_CLIENT_ID"]?.trim();
+  const secret = process.env["GOOGLE_CLIENT_SECRET"]?.trim();
   if (!id || !secret) fail("FIREBASE_CONNECTION_ERROR", "Google OAuth is not configured on this deployment.");
   return { id: id as string, secret: secret as string };
 }
 
 export function redirectUri(origin: string) {
   const fallback = `${origin}/api/public/v1/firebase/callback`;
-  const configured = process.env["GOOGLE_REDIRECT_URI"];
+  // Trim: a stray space pasted into the env var is sent verbatim and Google blocks it as insecure.
+  const configured = process.env["GOOGLE_REDIRECT_URI"]?.trim();
   // A redirect for another host (e.g. a localhost value copied into production) would send Google
   // back to the wrong site and is rejected for published OAuth apps; use this site's callback instead.
   if (!configured) return fallback;
   try {
-    return new URL(configured).origin === origin ? configured : fallback;
+    const parsed = new URL(configured);
+    return parsed.origin === origin ? parsed.href : fallback;
   } catch {
     return fallback;
   }
