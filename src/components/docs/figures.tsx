@@ -554,42 +554,112 @@ function AppContent() {
   );
 }
 
-export function UpdatePromptMocks() {
+/** Mirrors FireOTATheme in @fireota/react-native; the defaults are the SDK's defaultTheme. */
+interface PromptTheme {
+  accent: string;
+  background: string;
+  card: string;
+  text: string;
+  muted: string;
+}
+
+const SDK_DEFAULT_THEME: PromptTheme = {
+  accent: "#FF5A1F",
+  background: "#0E1013",
+  card: "#171A1F",
+  text: "#F4F5F7",
+  muted: "#9AA1AC",
+};
+
+const EXAMPLE_CUSTOM_THEME: PromptTheme = {
+  accent: "#6D28D9",
+  background: "#FFFFFF",
+  card: "#F4F1FB",
+  text: "#1F1235",
+  muted: "#6B6280",
+};
+
+function PromptBanner({
+  theme,
+  title = "Update ready",
+  message = "Fix checkout crash",
+}: {
+  theme: PromptTheme;
+  title?: string;
+  message?: string;
+}) {
+  return (
+    <div
+      className="absolute inset-x-2 bottom-3 flex items-center gap-1.5 rounded-lg p-2 shadow-lg"
+      style={{ background: theme.card }}
+    >
+      <div className="min-w-0 flex-1">
+        <p className="text-[9px] font-semibold" style={{ color: theme.text }}>
+          {title}
+        </p>
+        <p className="truncate text-[8px]" style={{ color: theme.muted }}>
+          {message}
+        </p>
+      </div>
+      <span className="text-[8px]" style={{ color: theme.muted }}>
+        Later
+      </span>
+      <span
+        className="rounded px-1.5 py-0.5 text-[8px] font-medium text-white"
+        style={{ background: theme.accent }}
+      >
+        Restart
+      </span>
+    </div>
+  );
+}
+
+function PhoneCaption({ children }: { children: ReactNode }) {
+  return <p className="text-[11px] text-muted-foreground">{children}</p>;
+}
+
+export function UpdatePromptMocks({ theme = SDK_DEFAULT_THEME }: { theme?: PromptTheme }) {
   return (
     <div className="flex flex-wrap items-start justify-center gap-6">
       <div className="space-y-2 text-center">
         <PhoneFrame>
           <AppContent />
-          <div className="absolute inset-x-2 bottom-3 flex items-center gap-1.5 rounded-lg bg-neutral-900 p-2 text-white shadow-lg">
-            <div className="min-w-0 flex-1">
-              <p className="text-[9px] font-semibold">Update ready</p>
-              <p className="truncate text-[8px] text-white/70">Fix checkout crash</p>
-            </div>
-            <span className="text-[8px] text-white/70">Later</span>
-            <span className="rounded bg-[#ea580c] px-1.5 py-0.5 text-[8px] font-medium">
-              Restart
-            </span>
-          </div>
+          <PromptBanner theme={theme} />
         </PhoneFrame>
-        <p className="text-[11px] text-muted-foreground">Normal update — downloaded</p>
+        <PhoneCaption>Normal update — downloaded</PhoneCaption>
       </div>
       <div className="space-y-2 text-center">
         <PhoneFrame>
-          <div className="absolute inset-0 grid place-items-center bg-white/95 px-3 text-center">
+          <div
+            className="absolute inset-0 grid place-items-center px-3 text-center"
+            style={{ background: theme.background }}
+          >
             <div className="space-y-1.5">
-              <div className="mx-auto size-5 animate-spin rounded-full border-2 border-neutral-300 border-t-[#ea580c]" />
-              <p className="text-[10px] font-semibold">Installing an important update</p>
-              <p className="text-[8px] text-neutral-500">This only takes a moment.</p>
+              <div
+                className="mx-auto size-5 animate-spin rounded-full border-2"
+                style={{ borderColor: theme.muted, borderTopColor: theme.accent }}
+              />
+              <p className="text-[10px] font-semibold" style={{ color: theme.text }}>
+                Installing an important update
+              </p>
+              <p className="text-[8px]" style={{ color: theme.muted }}>
+                This only takes a moment.
+              </p>
             </div>
           </div>
         </PhoneFrame>
-        <p className="text-[11px] text-muted-foreground">Mandatory update</p>
+        <PhoneCaption>Mandatory update</PhoneCaption>
       </div>
       <div className="space-y-2 text-center">
         <PhoneFrame>
-          <div className="space-y-1.5 px-2.5">
-            <p className="text-[11px] font-semibold">App updates</p>
-            <div className="divide-y divide-neutral-200 rounded border border-neutral-200 text-[8px]">
+          <div
+            className="absolute inset-0 space-y-1.5 px-2.5 pt-5"
+            style={{ background: theme.background }}
+          >
+            <p className="text-[11px] font-semibold" style={{ color: theme.text }}>
+              App updates
+            </p>
+            <div className="rounded text-[8px]" style={{ background: theme.card }}>
               {[
                 ["App version", "1.0.0"],
                 ["Runtime", "1.0.0"],
@@ -598,17 +668,93 @@ export function UpdatePromptMocks() {
                 ["Status", "Up to date"],
               ].map(([k, v]) => (
                 <p key={k} className="flex justify-between px-1.5 py-1">
-                  <span className="text-neutral-500">{k}</span>
-                  <span className="font-mono">{v}</span>
+                  <span style={{ color: theme.muted }}>{k}</span>
+                  <span className="font-mono" style={{ color: theme.text }}>
+                    {v}
+                  </span>
                 </p>
               ))}
             </div>
-            <span className="block rounded bg-[#ea580c] py-1 text-center text-[8px] font-medium text-white">
+            <span
+              className="block rounded py-1 text-center text-[8px] font-medium text-white"
+              style={{ background: theme.accent }}
+            >
               Check for updates
             </span>
           </div>
         </PhoneFrame>
-        <p className="text-[11px] text-muted-foreground">&lt;UpdateScreen /&gt;</p>
+        <PhoneCaption>&lt;UpdateScreen /&gt;</PhoneCaption>
+      </div>
+    </div>
+  );
+}
+
+/** Default prompt next to the same prompt with a custom theme and custom text. */
+export function ThemeCompareMock() {
+  return (
+    <div className="flex flex-wrap items-start justify-center gap-6">
+      <div className="space-y-2 text-center">
+        <PhoneFrame>
+          <AppContent />
+          <PromptBanner theme={SDK_DEFAULT_THEME} />
+        </PhoneFrame>
+        <PhoneCaption>Default theme</PhoneCaption>
+      </div>
+      <div className="space-y-2 text-center">
+        <PhoneFrame>
+          <AppContent />
+          <PromptBanner theme={EXAMPLE_CUSTOM_THEME} />
+        </PhoneFrame>
+        <PhoneCaption>theme: accent #6D28D9, light card</PhoneCaption>
+      </div>
+      <div className="space-y-2 text-center">
+        <PhoneFrame>
+          <AppContent />
+          <PromptBanner
+            theme={EXAMPLE_CUSTOM_THEME}
+            title="New version available"
+            message="Restart to get the latest fixes."
+          />
+        </PhoneFrame>
+        <PhoneCaption>Custom title and message</PhoneCaption>
+      </div>
+    </div>
+  );
+}
+
+/** Examples of prompts built with renderPrompt / useFireOTA: a top bar and a centred dialog. */
+export function CustomPromptMock() {
+  return (
+    <div className="flex flex-wrap items-start justify-center gap-6">
+      <div className="space-y-2 text-center">
+        <PhoneFrame>
+          <div className="mx-1.5 mb-1.5 flex items-center gap-1.5 rounded-md bg-emerald-600 px-2 py-1.5 text-white">
+            <span className="flex-1 text-[8px] font-medium">A new version is ready</span>
+            <span className="rounded bg-white px-1.5 py-0.5 text-[8px] font-semibold text-emerald-700">
+              Update
+            </span>
+          </div>
+          <AppContent />
+        </PhoneFrame>
+        <PhoneCaption>Top bar (renderPrompt)</PhoneCaption>
+      </div>
+      <div className="space-y-2 text-center">
+        <PhoneFrame>
+          <AppContent />
+          <div className="absolute inset-0 grid place-items-center bg-black/45 px-3">
+            <div className="w-full space-y-1.5 rounded-xl bg-white p-3 text-center shadow-xl">
+              <p className="text-[10px] font-semibold text-neutral-900">What's new</p>
+              <p className="text-[8px] text-neutral-500">
+                • Faster checkout{"\n"}• Fixed a crash on login
+              </p>
+              <span className="block rounded-md bg-sky-600 py-1 text-[8px] font-medium text-white">
+                Restart now
+              </span>
+              <span className="block text-[8px] text-neutral-500">Not now</span>
+            </div>
+          </div>
+        </PhoneFrame>
+        <PhoneCaption>Dialog with release notes</PhoneCaption>
       </div>
     </div>
   );

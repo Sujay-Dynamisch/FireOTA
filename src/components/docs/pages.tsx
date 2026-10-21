@@ -15,6 +15,7 @@ import {
   AppIdMock,
   ChannelsMock,
   ConnectFirebaseMock,
+  CustomPromptMock,
   Figure,
   FirebaseStorageMock,
   LaunchLifecycleDiagram,
@@ -23,6 +24,7 @@ import {
   RuntimeMatchDiagram,
   RuntimesMock,
   TerminalFrame,
+  ThemeCompareMock,
   UpdateFlowDiagram,
   UpdatePromptMocks,
   XcodeBridgingMock,
@@ -185,6 +187,153 @@ export default fireotaConfig;
 import { withFireOTA } from "@fireota/react-native";
 import fireotaConfig from "./fireota.config";
 AppRegistry.registerComponent(appName, () => withFireOTA(App, fireotaConfig));`;
+
+const UI_THEME = `// index.js
+import { AppRegistry } from "react-native";
+import { withFireOTA } from "@fireota/react-native";
+import App from "./App";
+import { name as appName } from "./app.json";
+import fireotaConfig from "./fireota.config";
+
+AppRegistry.registerComponent(appName, () =>
+  withFireOTA(App, fireotaConfig, {
+    theme: {
+      accent: "#6D28D9",     // Restart button, spinner, primary buttons
+      background: "#FFFFFF", // mandatory-update screen and <UpdateScreen /> background
+      card: "#F4F1FB",       // the prompt card and <UpdateScreen /> cards
+      text: "#1F1235",       // titles and values
+      muted: "#6B6280",      // message, "Later", labels
+      danger: "#DC2626",     // error text
+    },
+  }),
+);`;
+
+const UI_TEXT = `// index.js — turn the built-in prompt off…
+AppRegistry.registerComponent(appName, () => withFireOTA(App, fireotaConfig, { prompt: false }));
+
+// App.tsx — …and render it yourself with your own text
+import { UpdatePrompt } from "@fireota/react-native";
+
+export default function App() {
+  return (
+    <>
+      <RootNavigator />
+      <UpdatePrompt title="New version available" message="Restart to get the latest fixes." />
+    </>
+  );
+}`;
+
+const UI_RENDER_PROMPT = `// index.js — use FireOTAProvider instead of withFireOTA to pass renderPrompt
+import { AppRegistry } from "react-native";
+import { FireOTAProvider } from "@fireota/react-native";
+import App from "./App";
+import { name as appName } from "./app.json";
+import fireotaConfig from "./fireota.config";
+import { UpdateBanner } from "./src/UpdateBanner";
+
+function Root() {
+  return (
+    <FireOTAProvider
+      config={fireotaConfig}
+      theme={{ accent: "#059669" }}          // optional, also used by <UpdateScreen />
+      renderPrompt={(ota) => <UpdateBanner ota={ota} />}
+    >
+      <App />
+    </FireOTAProvider>
+  );
+}
+
+AppRegistry.registerComponent(appName, () => Root);`;
+
+const UI_BANNER = `// src/UpdateBanner.tsx
+import { useState } from "react";
+import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import type { FireOTAContextValue } from "@fireota/react-native";
+
+export function UpdateBanner({ ota }: { ota: FireOTAContextValue }) {
+  const [hiddenFor, setHiddenFor] = useState<string | null>(null);
+  const { status, available, pendingReleaseId, currentReleaseId, restart, busy } = ota;
+
+  // 1. Mandatory update downloading: block the app until it restarts.
+  if (available?.mandatory && (status === "downloading" || status === "downloaded")) {
+    return (
+      <Modal visible transparent animationType="fade">
+        <View style={styles.blocker}>
+          <ActivityIndicator color="#fff" size="large" />
+          <Text style={styles.blockerText}>Installing an important update…</Text>
+        </View>
+      </Modal>
+    );
+  }
+
+  // 2. Normal update downloaded and waiting for a restart.
+  const ready = status === "installed" && pendingReleaseId && pendingReleaseId !== currentReleaseId;
+  if (!ready || hiddenFor === pendingReleaseId) return null;
+
+  return (
+    <View style={styles.bar}>
+      <Text style={styles.text} numberOfLines={1}>
+        {available?.message || "A new version is ready"}
+      </Text>
+      <Pressable onPress={() => setHiddenFor(pendingReleaseId)}>
+        <Text style={styles.later}>Later</Text>
+      </Pressable>
+      <Pressable style={styles.button} disabled={busy} onPress={restart}>
+        <Text style={styles.buttonText}>Update</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  bar: { position: "absolute", top: 48, left: 12, right: 12, flexDirection: "row", alignItems: "center",
+         gap: 12, padding: 12, borderRadius: 12, backgroundColor: "#059669" },
+  text: { flex: 1, color: "#fff", fontWeight: "600" },
+  later: { color: "#D1FAE5" },
+  button: { backgroundColor: "#fff", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 },
+  buttonText: { color: "#047857", fontWeight: "700" },
+  blocker: { flex: 1, alignItems: "center", justifyContent: "center", gap: 16, backgroundColor: "rgba(0,0,0,0.85)" },
+  blockerText: { color: "#fff", fontSize: 16, fontWeight: "600" },
+});`;
+
+const UI_HOOK = `// Any screen, e.g. Settings → "About this app"
+import { Button, Text, View } from "react-native";
+import { useFireOTA } from "@fireota/react-native";
+
+export function AboutUpdates() {
+  const { status, available, currentReleaseId, runtimeVersion, channel, error, busy, check, install, restart } = useFireOTA();
+
+  return (
+    <View>
+      <Text>Runtime {runtimeVersion} · {channel}</Text>
+      <Text>Running {currentReleaseId ? \`update \${currentReleaseId.slice(0, 8)}\` : "the store build"}</Text>
+      {error ? <Text style={{ color: "red" }}>{error}</Text> : null}
+
+      {status === "installed" ? (
+        <Button title="Restart to apply the update" onPress={restart} />
+      ) : available ? (
+        <>
+          <Text>{available.message || "Improvements and fixes."}</Text>
+          <Button title="Download update" disabled={busy} onPress={install} />
+        </>
+      ) : (
+        <Button title={status === "checking" ? "Checking…" : "Check for updates"} disabled={busy} onPress={check} />
+      )}
+    </View>
+  );
+}`;
+
+const UI_MANUAL_FLOW = `// fireota.config.js — stop the automatic check
+const fireotaConfig = { /* appId, serverUrl, channel… */ checkOnAppStart: false };
+
+// Later, when it suits your app (e.g. after login):
+import FireOTA from "@fireota/react-native";
+
+const result = await FireOTA.checkForUpdate();
+if (result.updateAvailable && result.release) {
+  await FireOTA.downloadUpdate(result.release);
+  await FireOTA.installUpdate(result.release, "nextRestart"); // or "immediate"
+}`;
 
 const PUBLISH = `export FIREOTA_URL="https://ota.example.com"
 export FIREOTA_API_KEY="fota_sk_live_..."   # Settings -> API keys
@@ -788,7 +937,7 @@ npx react-native run-ios --mode Release`}
                   <><C>&lt;UpdatePrompt /&gt;</C> — shown automatically: “Restart to update” card, full-screen notice for mandatory updates.</>,
                   <><C>&lt;UpdateScreen /&gt;</C> — a complete “App updates” screen (version, runtime, channel, check / download / restart).</>,
                   <><C>useFireOTA()</C> — state plus <C>check()</C>, <C>install()</C>, <C>restart()</C> to build your own UI.</>,
-                  <>Restyle with <C>theme</C>, replace the prompt with <C>renderPrompt</C>, or hide it with <C>prompt={"{false}"}</C>.</>,
+                  <>Restyle with <C>theme</C>, replace the prompt with <C>renderPrompt</C>, or hide it with <C>prompt={"{false}"}</C> — step by step in <D to="customize-ui">Customize the update prompt</D>.</>,
                 ]}
               />
               <Code
@@ -817,6 +966,208 @@ function UpdateBadge() {
                 The SDK is autolinked. On Android it adds the INTERNET permission and a small restart activity to your manifest. On iOS it
                 links only system libraries (CommonCrypto, zlib) — no third-party dependencies.
               </p>
+            ),
+          },
+        ],
+      },
+      {
+        slug: "customize-ui",
+        title: "Customize the update prompt",
+        description: "Change the colours and text of the built-in prompt, replace it with your own design, or build a fully custom update flow.",
+        sections: [
+          {
+            id: "choose",
+            title: "Pick the level of control you need",
+            body: (
+              <>
+                <p>
+                  The prompt is ordinary React Native UI from <C>@fireota/react-native</C>. Customizing it never touches native code, so
+                  every change below can itself ship as an OTA update — no store build needed.
+                </p>
+                <Bullets
+                  items={[
+                    <><a href="#theme" className="text-brand underline-offset-2 hover:underline">Colours only</a> — pass a <C>theme</C>. One line, keeps the built-in layout.</>,
+                    <><a href="#text" className="text-brand underline-offset-2 hover:underline">Colours and wording</a> — render <C>&lt;UpdatePrompt title message /&gt;</C> yourself.</>,
+                    <><a href="#render-prompt" className="text-brand underline-offset-2 hover:underline">Your own design</a> — <C>renderPrompt</C> on <C>FireOTAProvider</C>. Full control over the look; FireOTA still decides when it shows.</>,
+                    <><a href="#hook" className="text-brand underline-offset-2 hover:underline">Your own screens</a> — <C>useFireOTA()</C> anywhere in the app, e.g. a Settings row.</>,
+                    <><a href="#manual" className="text-brand underline-offset-2 hover:underline">Your own timing</a> — <C>checkOnAppStart: false</C> and the imperative API.</>,
+                  ]}
+                />
+              </>
+            ),
+          },
+          {
+            id: "default",
+            title: "What the built-in prompt does",
+            body: (
+              <>
+                <Figure caption="The built-in UI with the default theme: the prompt after a download, the mandatory-update screen, and <UpdateScreen />.">
+                  <UpdatePromptMocks />
+                </Figure>
+                <Bullets
+                  items={[
+                    <>A card appears at the bottom once a normal update is <strong>downloaded</strong> (status <C>installed</C>). It shows the update's <C>--message</C>.</>,
+                    <><strong>Restart</strong> applies it now; <strong>Later</strong> hides the card for that update — it still applies on the next cold start.</>,
+                    <>For a <strong>mandatory</strong> update a full-screen “Installing an important update” notice blocks the app while it downloads, then the app restarts.</>,
+                    <>Nothing is shown when there is no update, while checking, or after an error.</>,
+                  ]}
+                />
+              </>
+            ),
+          },
+          {
+            id: "theme",
+            title: "Option 1. Change the colours",
+            body: (
+              <>
+                <p>
+                  Pass a <C>theme</C> as the third argument of <C>withFireOTA</C> in <C>index.js</C>. Every key is optional; missing keys
+                  keep the default. The same theme also styles <C>&lt;UpdateScreen /&gt;</C>.
+                </p>
+                <Code language="js" code={UI_THEME} />
+                <Figure caption="Left: default theme. Middle: the theme above. Right: the same theme with custom text (option 2).">
+                  <ThemeCompareMock />
+                </Figure>
+                <p>Default values, for reference:</p>
+                <Code
+                  language="ts"
+                  code={`accent: "#FF5A1F"   background: "#0E1013"   card: "#171A1F"
+text:   "#F4F5F7"   muted:      "#9AA1AC"   danger: "#F05252"`}
+                />
+                <Callout kind="tip">
+                  Want light and dark versions? Compute the theme from <C>Appearance.getColorScheme()</C> before calling{" "}
+                  <C>withFireOTA</C>, or use option 3 with <C>useColorScheme()</C> inside your component to follow live changes.
+                </Callout>
+              </>
+            ),
+          },
+          {
+            id: "text",
+            title: "Option 2. Change the title and message",
+            body: (
+              <>
+                <p>
+                  <C>&lt;UpdatePrompt /&gt;</C> takes <C>title</C> (default “Update ready”) and <C>message</C> (default: the update's
+                  message, or “A new version is ready. Restart to use it.”). Turn the automatic prompt off with{" "}
+                  <C>{"{ prompt: false }"}</C> and place your own instance — otherwise two prompts appear.
+                </p>
+                <Code language="tsx" code={UI_TEXT} />
+                <Callout kind="note">
+                  Render <C>&lt;UpdatePrompt /&gt;</C> after your navigator so it draws on top of the screens. It positions itself at the
+                  bottom and handles mandatory updates the same way as the built-in one.
+                </Callout>
+              </>
+            ),
+          },
+          {
+            id: "render-prompt",
+            title: "Option 3. Replace it with your own design",
+            body: (
+              <>
+                <p>
+                  <C>renderPrompt</C> replaces the built-in prompt with any component you like. FireOTA calls it on every state change
+                  with the current update state and the actions, and renders whatever you return on top of the app (return{" "}
+                  <C>null</C> to show nothing).
+                </p>
+                <Callout kind="important">
+                  <C>withFireOTA</C> only accepts <C>prompt</C> and <C>theme</C>. To use <C>renderPrompt</C>, replace{" "}
+                  <C>withFireOTA(App, fireotaConfig)</C> in <C>index.js</C> with a small <C>Root</C> component that wraps the app in{" "}
+                  <C>FireOTAProvider</C>, as below. Behaviour is otherwise identical.
+                </Callout>
+                <Steps
+                  items={[
+                    <>
+                      Change <C>index.js</C>:
+                      <Code language="tsx" code={UI_RENDER_PROMPT} />
+                    </>,
+                    <>
+                      Create the component. This example shows a green bar at the top for normal updates and keeps a blocking screen for
+                      mandatory ones:
+                      <Code language="tsx" code={UI_BANNER} />
+                    </>,
+                    <>Build a release build, publish an update and open the app twice to see the new prompt.</>,
+                  ]}
+                />
+                <Figure caption="Two prompts built with renderPrompt: a top bar, and a dialog that lists the release notes.">
+                  <CustomPromptMock />
+                </Figure>
+                <Callout kind="caution">
+                  When you replace the prompt you also replace the mandatory-update screen. Always handle{" "}
+                  <C>available?.mandatory</C> as in the example, or users may keep using the app until the forced restart happens.
+                </Callout>
+              </>
+            ),
+          },
+          {
+            id: "state",
+            title: "What renderPrompt and useFireOTA() receive",
+            body: (
+              <>
+                <Bullets
+                  items={[
+                    <><C>status</C> — <C>idle</C>, <C>checking</C>, <C>upToDate</C>, <C>downloading</C>, <C>downloaded</C>, <C>installed</C> (ready, waiting for a restart) or <C>error</C>.</>,
+                    <><C>available</C> — the update found by the last check: <C>id</C>, <C>message</C>, <C>notes</C>, <C>mandatory</C>, <C>runtimeVersion</C>, <C>version</C> (optional label). <C>null</C> when there is none.</>,
+                    <><C>pendingReleaseId</C> — downloaded and waiting for a restart. <C>currentReleaseId</C> — the update running now, <C>null</C> for the store build.</>,
+                    <><C>runtimeVersion</C>, <C>channel</C>, <C>appVersion</C>, <C>lastCheckedAt</C>, <C>error</C>, <C>configured</C>.</>,
+                    <>Actions: <C>check()</C>, <C>install()</C> (download + verify, applies on next start), <C>restart()</C>. <C>busy</C> is true while one runs; <C>actionError</C> holds its last error.</>,
+                    <><C>theme</C> — the merged theme, so your component can reuse the colours you passed.</>,
+                  ]}
+                />
+                <p>
+                  A normal update is ready to show when <C>status === "installed"</C> and <C>pendingReleaseId</C> differs from{" "}
+                  <C>currentReleaseId</C> — that is exactly the condition the built-in prompt uses.
+                </p>
+              </>
+            ),
+          },
+          {
+            id: "hook",
+            title: "Option 4. Show update state in your own screens",
+            body: (
+              <>
+                <p>
+                  <C>useFireOTA()</C> works in any component under <C>withFireOTA</C> or <C>FireOTAProvider</C>. Use it for a Settings row,
+                  a badge on a tab, or an “About” screen. Keep the built-in prompt or hide it with <C>{"{ prompt: false }"}</C>.
+                </p>
+                <Code language="tsx" code={UI_HOOK} />
+                <p>
+                  Prefer a ready-made screen? <C>&lt;UpdateScreen title footer /&gt;</C> shows version, runtime, channel, status and the
+                  right button, styled with your theme:
+                </p>
+                <Code language="tsx" code={`<Stack.Screen name="Updates" component={UpdateScreen} />`} />
+              </>
+            ),
+          },
+          {
+            id: "manual",
+            title: "Option 5. Decide when to check",
+            body: (
+              <>
+                <p>
+                  By default the SDK checks and downloads on every launch. To check at a moment you choose — after login, on a button, or
+                  only on Wi-Fi — turn that off and drive it yourself:
+                </p>
+                <Code language="js" code={UI_MANUAL_FLOW} />
+                <Callout kind="note">
+                  The launch confirmation still happens automatically: <C>configure()</C> runs at start even with{" "}
+                  <C>checkOnAppStart: false</C>, so a broken update is still rolled back.
+                </Callout>
+              </>
+            ),
+          },
+          {
+            id: "test",
+            title: "Testing your prompt",
+            body: (
+              <Steps
+                items={[
+                  <>Install a <strong>release</strong> build that contains your prompt code (or publish the prompt itself as an update first).</>,
+                  <>Publish a small change with a clear message: <C>npx fireota publish … --message "Testing the new prompt"</C>.</>,
+                  <>Open the app and wait a few seconds — your prompt should appear once the download finishes.</>,
+                  <>To test the mandatory path, publish again with <C>--mandatory</C>.</>,
+                  <>Use the <strong>beta</strong> channel for these tests so production users never see them.</>,
+                ]}
+              />
             ),
           },
         ],
