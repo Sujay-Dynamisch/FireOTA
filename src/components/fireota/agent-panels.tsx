@@ -1,11 +1,11 @@
-/** Agents page panels: bring-your-own AI key, running an agent, and per-tool permissions. */
+/** Agents page panels: bring-your-own AI key and per-tool permissions (chat lives in agent-chat). */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, KeyRound, Loader2, Send } from "lucide-react";
+import { KeyRound, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
 import { ConfirmAction } from "@/components/fireota/confirm-dialog";
-import { EmptyState, SectionCard, SkeletonRows } from "@/components/fireota/primitives";
+import { SectionCard, SkeletonRows } from "@/components/fireota/primitives";
 import { Field } from "@/components/fireota/wizard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,7 +17,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
 import { q } from "@/lib/queries";
 import type { Agent } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -214,163 +213,6 @@ export function ProviderSettings({ canManage }: { canManage: boolean }) {
         )}
       </div>
     </SectionCard>
-  );
-}
-
-const EXAMPLES: Record<string, string[]> = {
-  "release-manager": [
-    "Move the latest production update to 25% if its failure rate is under 1%.",
-    "Promote the newest beta update to production at 10%.",
-  ],
-  "release-reviewer": [
-    "Review every update published this week and tell me which ones are risky.",
-    "Is the current production update healthy?",
-  ],
-  "security-sentinel": [
-    "Investigate today's open security alerts.",
-    "Do any API keys look leaked or unused? Recommend what to revoke.",
-  ],
-};
-
-export function RunAgentPanel({ agents, configured }: { agents: Agent[]; configured: boolean }) {
-  const client = useQueryClient();
-  const usable = agents.filter((a) => a.status !== "disabled");
-  const [agentId, setAgentId] = useState<string>("");
-  const [prompt, setPrompt] = useState("");
-  const [history, setHistory] = useState<
-    {
-      prompt: string;
-      agent: string;
-      answer: string;
-      steps: { tool: string; input: string; status: string; summary: string }[];
-    }[]
-  >([]);
-  const selected = usable.find((a) => a.id === agentId) ?? usable[0];
-
-  const run = useMutation({
-    mutationFn: () => agentsService.run(selected!.id, prompt),
-    onSuccess: (result) => {
-      setHistory((h) => [
-        { prompt, agent: selected?.name ?? "", answer: result.answer, steps: result.steps },
-        ...h,
-      ]);
-      setPrompt("");
-      void client.invalidateQueries({ queryKey: ["agent-approvals"] });
-      void client.invalidateQueries({ queryKey: ["agent-executions"] });
-    },
-    onError: (error) => toast.error(error instanceof Error ? error.message : "The agent failed."),
-  });
-
-  if (!configured) {
-    return (
-      <SectionCard>
-        <EmptyState
-          icon={Bot}
-          title="Add an AI provider key first."
-          description="Open the AI provider tab and paste a Claude or OpenAI API key."
-        />
-      </SectionCard>
-    );
-  }
-
-  return (
-    <div className="space-y-3">
-      <SectionCard title="Ask an agent to do something">
-        <form
-          className="space-y-3 p-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (prompt.trim().length >= 3 && selected) run.mutate();
-          }}
-        >
-          <div className="flex flex-wrap gap-2">
-            <Select value={selected?.id ?? ""} onValueChange={setAgentId}>
-              <SelectTrigger className="h-9 w-[220px] text-[12px]" aria-label="Agent">
-                <SelectValue placeholder="Choose an agent" />
-              </SelectTrigger>
-              <SelectContent>
-                {usable.map((a) => (
-                  <SelectItem key={a.id} value={a.id}>
-                    {a.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="self-center text-[11px] text-muted-foreground">{selected?.description}</p>
-          </div>
-          <Textarea
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            rows={15}
-            placeholder="What should the agent do?"
-            className="text-[12px]"
-            aria-label="Request"
-          />
-          <div className="flex flex-wrap items-center gap-2">
-            {(EXAMPLES[selected?.key ?? ""] ?? []).map((example) => (
-              <button
-                key={example}
-                type="button"
-                onClick={() => setPrompt(example)}
-                className="rounded-full border border-border px-2.5 py-1 text-[11px] text-muted-foreground hover:border-brand/50 hover:text-foreground"
-              >
-                {example}
-              </button>
-            ))}
-            <Button
-              size="sm"
-              type="submit"
-              className="ml-auto"
-              disabled={run.isPending || prompt.trim().length < 3 || !selected}
-            >
-              {run.isPending ? <Loader2 className="animate-spin" /> : <Send />}{" "}
-              {run.isPending ? "Working…" : "Run"}
-            </Button>
-          </div>
-        </form>
-      </SectionCard>
-
-      {history.map((entry, index) => (
-        <SectionCard
-          key={`${index}-${entry.prompt}`}
-          title={entry.agent}
-          aside={
-            <span className="font-mono text-[10px] text-faint">
-              {entry.steps.length} tool calls
-            </span>
-          }
-        >
-          <div className="space-y-3 p-4 text-[12px]">
-            <p className="rounded-md bg-surface-2/50 p-2 text-muted-foreground">“{entry.prompt}”</p>
-            {entry.steps.length > 0 ? (
-              <ol className="space-y-1">
-                {entry.steps.map((step, i) => (
-                  <li key={i} className="flex flex-wrap items-center gap-2 font-mono text-[11px]">
-                    <span>{step.tool}</span>
-                    <span
-                      className={cn(
-                        "text-[10px]",
-                        step.status === "completed"
-                          ? "text-success"
-                          : step.status === "awaiting_approval"
-                            ? "text-warning"
-                            : "text-danger",
-                      )}
-                    >
-                      {step.status.replace("_", " ")}
-                    </span>
-                    <span className="truncate text-faint" title={step.input}>
-                      {step.input}
-                    </span>
-                  </li>
-                ))}
-              </ol>
-            ) : null}
-            <p className="whitespace-pre-wrap leading-relaxed">{entry.answer}</p>
-          </div>
-        </SectionCard>
-      ))}
-    </div>
   );
 }
 

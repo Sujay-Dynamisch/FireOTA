@@ -565,7 +565,19 @@ export const agentsService = {
   setToolMode: (agentId: string, tool: string, mode: "allowed" | "requires_approval" | "denied") =>
     setAgentToolMode({ data: { agentId, tool, mode } }),
   setEnabled: (agentId: string, enabled: boolean) => setAgentEnabled({ data: { agentId, enabled } }),
-  run: (agentId: string, prompt: string) => runAgentFn({ data: { agentId, prompt } }),
+  run: (
+    agentId: string,
+    prompt: string,
+    options: {
+      history?: { role: "user" | "assistant"; content: string }[];
+      attachment?: { name: string; size: number; sha256: string };
+    } = {},
+  ) => runAgentFn({ data: { agentId, prompt, ...options } }),
+  /** SHA-256 of a package picked in the chat (sent to the agent as metadata only). */
+  hashFile: (file: File) => sha256Browser(file),
+  /** Uploads a chat attachment to the draft release an agent created. */
+  uploadBundle: (releaseId: string, file: File, progress: (stage: string, percent: number) => void = () => {}) =>
+    uploadBundleToBackend(releaseId, { file, progress }),
 };
 
 export const notificationsService = {
