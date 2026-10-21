@@ -8,6 +8,27 @@ import type { ReactNode } from "react";
 import { ProductVideo } from "@/components/fireota/product-video";
 
 import { Bullets, C, Callout, Code, ExtLink, PlatformTabs, Steps } from "./docs-ui";
+import {
+  AddAppMock,
+  AnalyticsEventsMock,
+  ApiKeyMock,
+  AppIdMock,
+  ChannelsMock,
+  ConnectFirebaseMock,
+  CustomPromptMock,
+  Figure,
+  FirebaseStorageMock,
+  LaunchLifecycleDiagram,
+  ProjectTreeMock,
+  RolloutBucketsDiagram,
+  RuntimeMatchDiagram,
+  RuntimesMock,
+  TerminalFrame,
+  ThemeCompareMock,
+  UpdateFlowDiagram,
+  UpdatePromptMocks,
+  XcodeBridgingMock,
+} from "./figures";
 
 export interface DocSection {
   id: string;
@@ -109,6 +130,209 @@ override func bundleURL() -> URL? {
 #else
   return FireOTA.bundleURL() ?? Bundle.main.url(forResource: "main", withExtension: "jsbundle")
 #endif
+}`;
+
+const IOS_SCENE = `// ios/<App>/SceneDelegate.swift  (React Native 0.88+ template)
+override func bundleURL() -> URL? {
+  #if DEBUG
+  RCTBundleURLProvider.sharedSettings().jsBundleURL(forBundleRoot: "index")
+  #else
+  FireOTA.bundleURL() ?? Bundle.main.url(forResource: "main", withExtension: "jsbundle")
+  #endif
+}`;
+
+const IOS_BRIDGING = `// ios/<App>/<App>-Bridging-Header.h
+#import <FireOTA.h>`;
+
+const INIT_OUTPUT = [
+  "$ npx fireota init --app 83822cef-… --server-url https://ota.example.com",
+  "",
+  "FireOTA is set up:",
+  "",
+  "  ✓ fireota.config.js created",
+  "  ✓ index.js: root component wrapped with withFireOTA()",
+  "  ✓ android/app/src/main/java/com/myapp/MainApplication.kt: loads the OTA bundle in release builds",
+  "  ✓ ios/MyApp/AppDelegate.swift: loads the OTA bundle in release builds (run pod install)",
+  '  ✓ package.json: added "ota:publish" script',
+  "  ✓ .gitignore: ignores *.fota, fireota-keys/fireota-private.pem",
+  "",
+  "Runtime version: Android 1.0.0, iOS 1.0.0 (your store version — bump it when native code changes).",
+];
+
+const PUBLISH_OUTPUT = [
+  '$ npx fireota publish --app 83822cef-… --platform android --runtime 1.0.0 --channel beta --message "Fix checkout crash"',
+  "Bundling index.js for android…",
+  "Compiling to Hermes bytecode…",
+  "Package: android.fota",
+  "Size:    1.84 MB",
+  "SHA-256: 9b1e4c…a07d",
+  "Update #3 (3f9a12c0-…) — draft [android, local]",
+  "Uploading 1.84 MB…",
+  "Verified in your Firebase Storage. SHA-256 9b1e4c…a07d",
+  "Published update #3 (android) at 100%.",
+];
+
+const CONFIG_FILE = `// fireota.config.js — created by \`npx fireota init\`. No secrets; safe to commit.
+const fireotaConfig = {
+  appId: "83822cef-18b1-453c-b67c-3c546a5439e8",
+  serverUrl: "https://ota.example.com",
+  channel: "production",
+  checkOnAppStart: true,
+  installMode: "nextRestart",       // normal updates apply on the next launch
+  mandatoryInstallMode: "immediate",
+};
+export default fireotaConfig;
+
+// index.js
+import { withFireOTA } from "@fireota/react-native";
+import fireotaConfig from "./fireota.config";
+AppRegistry.registerComponent(appName, () => withFireOTA(App, fireotaConfig));`;
+
+const UI_THEME = `// index.js
+import { AppRegistry } from "react-native";
+import { withFireOTA } from "@fireota/react-native";
+import App from "./App";
+import { name as appName } from "./app.json";
+import fireotaConfig from "./fireota.config";
+
+AppRegistry.registerComponent(appName, () =>
+  withFireOTA(App, fireotaConfig, {
+    theme: {
+      accent: "#6D28D9",     // Restart button, spinner, primary buttons
+      background: "#FFFFFF", // mandatory-update screen and <UpdateScreen /> background
+      card: "#F4F1FB",       // the prompt card and <UpdateScreen /> cards
+      text: "#1F1235",       // titles and values
+      muted: "#6B6280",      // message, "Later", labels
+      danger: "#DC2626",     // error text
+    },
+  }),
+);`;
+
+const UI_TEXT = `// index.js — turn the built-in prompt off…
+AppRegistry.registerComponent(appName, () => withFireOTA(App, fireotaConfig, { prompt: false }));
+
+// App.tsx — …and render it yourself with your own text
+import { UpdatePrompt } from "@fireota/react-native";
+
+export default function App() {
+  return (
+    <>
+      <RootNavigator />
+      <UpdatePrompt title="New version available" message="Restart to get the latest fixes." />
+    </>
+  );
+}`;
+
+const UI_RENDER_PROMPT = `// index.js — use FireOTAProvider instead of withFireOTA to pass renderPrompt
+import { AppRegistry } from "react-native";
+import { FireOTAProvider } from "@fireota/react-native";
+import App from "./App";
+import { name as appName } from "./app.json";
+import fireotaConfig from "./fireota.config";
+import { UpdateBanner } from "./src/UpdateBanner";
+
+function Root() {
+  return (
+    <FireOTAProvider
+      config={fireotaConfig}
+      theme={{ accent: "#059669" }}          // optional, also used by <UpdateScreen />
+      renderPrompt={(ota) => <UpdateBanner ota={ota} />}
+    >
+      <App />
+    </FireOTAProvider>
+  );
+}
+
+AppRegistry.registerComponent(appName, () => Root);`;
+
+const UI_BANNER = `// src/UpdateBanner.tsx
+import { useState } from "react";
+import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import type { FireOTAContextValue } from "@fireota/react-native";
+
+export function UpdateBanner({ ota }: { ota: FireOTAContextValue }) {
+  const [hiddenFor, setHiddenFor] = useState<string | null>(null);
+  const { status, available, pendingReleaseId, currentReleaseId, restart, busy } = ota;
+
+  // 1. Mandatory update downloading: block the app until it restarts.
+  if (available?.mandatory && (status === "downloading" || status === "downloaded")) {
+    return (
+      <Modal visible transparent animationType="fade">
+        <View style={styles.blocker}>
+          <ActivityIndicator color="#fff" size="large" />
+          <Text style={styles.blockerText}>Installing an important update…</Text>
+        </View>
+      </Modal>
+    );
+  }
+
+  // 2. Normal update downloaded and waiting for a restart.
+  const ready = status === "installed" && pendingReleaseId && pendingReleaseId !== currentReleaseId;
+  if (!ready || hiddenFor === pendingReleaseId) return null;
+
+  return (
+    <View style={styles.bar}>
+      <Text style={styles.text} numberOfLines={1}>
+        {available?.message || "A new version is ready"}
+      </Text>
+      <Pressable onPress={() => setHiddenFor(pendingReleaseId)}>
+        <Text style={styles.later}>Later</Text>
+      </Pressable>
+      <Pressable style={styles.button} disabled={busy} onPress={restart}>
+        <Text style={styles.buttonText}>Update</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  bar: { position: "absolute", top: 48, left: 12, right: 12, flexDirection: "row", alignItems: "center",
+         gap: 12, padding: 12, borderRadius: 12, backgroundColor: "#059669" },
+  text: { flex: 1, color: "#fff", fontWeight: "600" },
+  later: { color: "#D1FAE5" },
+  button: { backgroundColor: "#fff", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 },
+  buttonText: { color: "#047857", fontWeight: "700" },
+  blocker: { flex: 1, alignItems: "center", justifyContent: "center", gap: 16, backgroundColor: "rgba(0,0,0,0.85)" },
+  blockerText: { color: "#fff", fontSize: 16, fontWeight: "600" },
+});`;
+
+const UI_HOOK = `// Any screen, e.g. Settings → "About this app"
+import { Button, Text, View } from "react-native";
+import { useFireOTA } from "@fireota/react-native";
+
+export function AboutUpdates() {
+  const { status, available, currentReleaseId, runtimeVersion, channel, error, busy, check, install, restart } = useFireOTA();
+
+  return (
+    <View>
+      <Text>Runtime {runtimeVersion} · {channel}</Text>
+      <Text>Running {currentReleaseId ? \`update \${currentReleaseId.slice(0, 8)}\` : "the store build"}</Text>
+      {error ? <Text style={{ color: "red" }}>{error}</Text> : null}
+
+      {status === "installed" ? (
+        <Button title="Restart to apply the update" onPress={restart} />
+      ) : available ? (
+        <>
+          <Text>{available.message || "Improvements and fixes."}</Text>
+          <Button title="Download update" disabled={busy} onPress={install} />
+        </>
+      ) : (
+        <Button title={status === "checking" ? "Checking…" : "Check for updates"} disabled={busy} onPress={check} />
+      )}
+    </View>
+  );
+}`;
+
+const UI_MANUAL_FLOW = `// fireota.config.js — stop the automatic check
+const fireotaConfig = { /* appId, serverUrl, channel… */ checkOnAppStart: false };
+
+// Later, when it suits your app (e.g. after login):
+import FireOTA from "@fireota/react-native";
+
+const result = await FireOTA.checkForUpdate();
+if (result.updateAvailable && result.release) {
+  await FireOTA.downloadUpdate(result.release);
+  await FireOTA.installUpdate(result.release, "nextRestart"); // or "immediate"
 }`;
 
 const PUBLISH = `export FIREOTA_URL="https://ota.example.com"
@@ -246,6 +470,15 @@ export const docGroups: DocGroup[] = [
             id: "flow",
             title: "The update flow",
             body: (
+              <>
+              <p>
+                A React Native app is two parts: <strong>native code</strong> (Java/Kotlin, Objective-C/Swift — compiled into the APK or
+                IPA) and a <strong>JavaScript bundle</strong> that native code loads at start. FireOTA replaces only the JavaScript bundle,
+                which is why fixes reach users in minutes instead of waiting for a store review.
+              </p>
+              <Figure caption="Who does what: you publish, FireOTA decides who gets the update, your Firebase Storage holds the file, devices download it directly.">
+                <UpdateFlowDiagram />
+              </Figure>
               <Steps
                 items={[
                   <>You build an update package (JS bundle + images) and upload it. It is stored in <strong>your own Firebase Cloud Storage</strong> bucket.</>,
@@ -253,6 +486,23 @@ export const docGroups: DocGroup[] = [
                   <>On launch, the SDK asks FireOTA whether a compatible release exists for this device.</>,
                   <>The SDK downloads it straight from your bucket, verifies the SHA-256 checksum and applies it on the next start.</>,
                   <>If the new code crashes before starting, the device returns to the previous bundle automatically and reports it.</>,
+                ]}
+              />
+              </>
+            ),
+          },
+          {
+            id: "terms",
+            title: "Key terms",
+            body: (
+              <Bullets
+                items={[
+                  <><strong>Store build</strong> — the APK/AAB or IPA you upload to Google Play or the App Store. It contains the native code and a built-in JS bundle.</>,
+                  <><strong>Update</strong> (also called release) — a new JS bundle plus images, packed as a <C>.fota</C> file. Every update has a unique ID and a message.</>,
+                  <><strong>Runtime version</strong> — the label of a store build's native code, e.g. <C>1.0.0</C>. An update only goes to builds with exactly the same runtime. See <D to="runtime-versions">Runtime versions</D>.</>,
+                  <><strong>Channel</strong> — a named stream such as <C>production</C> or <C>beta</C>. The app chooses its channel in the config; each channel serves one update per platform.</>,
+                  <><strong>Rollout</strong> — the percentage of devices on a channel that receive the update.</>,
+                  <><strong>App ID</strong> — the UUID that identifies your app in FireOTA. The SDK and the CLI both send it.</>,
                 ]}
               />
             ),
@@ -298,8 +548,30 @@ export const docGroups: DocGroup[] = [
                   <>A <strong>Firebase project</strong> you own, and a Google account with Owner or Editor access to it.</>,
                   <>Node.js 18.17+ on the machine or CI runner that publishes updates.</>,
                   <>Hermes or JSC — both work. The CLI detects Hermes and compiles bytecode automatically.</>,
+                  <>For Android builds: Android Studio (or a JDK 17+ and the Android SDK) so you can run <C>./gradlew</C>.</>,
+                  <>For iOS builds: a <strong>Mac with Xcode</strong> and CocoaPods. iOS apps cannot be built on Windows or Linux.</>,
+                  <>A real device or emulator for testing. OTA only runs in <strong>release</strong> builds; debug builds load JavaScript from Metro.</>,
                 ]}
               />
+            ),
+          },
+          {
+            id: "values",
+            title: "Values you will collect",
+            body: (
+              <>
+                <p>Keep these at hand — they are used in several steps:</p>
+                <Bullets
+                  items={[
+                    <><strong>Server URL</strong> — where your FireOTA dashboard runs, e.g. <C>https://ota.example.com</C>.</>,
+                    <><strong>App ID</strong> — shown on the app page after you <D to="register-app">register the app</D>.</>,
+                    <><strong>Android package name</strong> — <C>applicationId</C> in <C>android/app/build.gradle</C>, e.g. <C>com.fireota.test</C>.</>,
+                    <><strong>iOS bundle identifier</strong> — Xcode → target → General → Bundle Identifier.</>,
+                    <><strong>Store version</strong> — Android <C>versionName</C> / iOS Version (<C>MARKETING_VERSION</C>). This becomes the runtime version.</>,
+                    <><strong>API key</strong> — created in <A to="/settings/api-keys">Settings → API keys</A>, used to publish.</>,
+                  ]}
+                />
+              </>
             ),
           },
           {
@@ -348,6 +620,31 @@ export const docGroups: DocGroup[] = [
               />
             ),
           },
+          {
+            id: "time",
+            title: "How long it takes",
+            body: (
+              <p>
+                About 20–30 minutes for a first setup: 5 minutes in Firebase and the dashboard, 5 minutes for <C>fireota init</C>, and the
+                rest for one release build of the app. After that, every update is a single <C>npx fireota publish</C>.
+              </p>
+            ),
+          },
+          {
+            id: "first-test",
+            title: "Your first end-to-end test",
+            body: (
+              <Steps
+                items={[
+                  <>Install a <strong>release</strong> build of the app on a device and open it once — this registers the device.</>,
+                  <>Change something you can see, e.g. a text in <C>App.tsx</C>.</>,
+                  <>Run <C>npx fireota publish</C> for that platform and the device's runtime and channel.</>,
+                  <>Open the app, wait a few seconds for the “Update ready” card, tap <strong>Restart</strong> (or close and reopen the app).</>,
+                  <>Your change appears. <D to="verify">Check an update worked</D> shows how to confirm it in the dashboard.</>,
+                ]}
+              />
+            ),
+          },
         ],
       },
     ],
@@ -365,13 +662,34 @@ export const docGroups: DocGroup[] = [
             id: "storage",
             title: "Step 1. Enable Cloud Storage",
             body: (
+              <>
+              <p>FireOTA stores every update package in your project's default Cloud Storage bucket, so the bucket must exist first.</p>
               <Steps
                 items={[
                   <>Open the <ExtLink href="https://console.firebase.google.com">Firebase console</ExtLink> and create or select a project.</>,
                   <>Go to <strong>Build → Storage → Get started</strong> and create the default bucket. Choose a location close to your users.</>,
                   <>New buckets (<C>&lt;project&gt;.firebasestorage.app</C>) require the <strong>Blaze</strong> (pay-as-you-go) plan.</>,
+                  <>Pick <strong>Start in production mode</strong> when asked about rules — FireOTA does not need open rules (see step 2).</>,
                 ]}
               />
+              <Figure caption="Firebase console → Build → Storage. Click Get started; the bucket name appears once it is created.">
+                <FirebaseStorageMock />
+              </Figure>
+              <Callout kind="tip">
+                Use one Firebase project per environment if you want to keep test updates away from production, e.g.{" "}
+                <C>my-app-dev</C> and <C>my-app</C>. Each FireOTA app is linked to exactly one Firebase project.
+              </Callout>
+              </>
+            ),
+          },
+          {
+            id: "cost",
+            title: "What it costs",
+            body: (
+              <p>
+                Google bills your project for stored bytes and downloads. An update package is usually 1–5 MB; each device downloads each
+                update once. Blaze includes a free monthly quota for Cloud Storage, so test projects usually cost nothing.
+              </p>
             ),
           },
           {
@@ -387,7 +705,13 @@ export const docGroups: DocGroup[] = [
           {
             id: "sdk",
             title: "Firebase SDK in the app",
-            body: <Callout kind="tip">You do not need to add the Firebase SDK to your React Native app for OTA updates.</Callout>,
+            body: (
+              <Callout kind="tip">
+                You do not need to add the Firebase SDK, <C>google-services.json</C> or <C>GoogleService-Info.plist</C> to your React Native
+                app for OTA updates. Devices only talk to your FireOTA server, which returns a tokenised download link to the bucket. Add
+                Firebase to the app only if you use other Firebase products (Analytics, Crashlytics, …).
+              </Callout>
+            ),
           },
         ],
       },
@@ -410,13 +734,27 @@ export const docGroups: DocGroup[] = [
             id: "connect",
             title: "Step 2. Connect the Firebase project",
             body: (
-              <Steps
-                items={[
-                  <>Open <A to="/projects">Projects</A> and click <strong>Connect project</strong>.</>,
-                  <>Sign in with the Google account that owns the Firebase project and allow access.</>,
-                  <>Select the project and click <strong>Verify</strong>.</>,
-                ]}
-              />
+              <>
+                <p>
+                  FireOTA needs permission to write update packages into your bucket. It asks Google for it with OAuth — you never paste a
+                  service-account key.
+                </p>
+                <Steps
+                  items={[
+                    <>Open <A to="/projects">Projects</A> and click <strong>Connect project</strong>.</>,
+                    <><strong>Authorize a Google account</strong> — sign in with the account that owns the Firebase project and allow access. Google may warn that the app is unverified on self-hosted servers; choose <strong>Advanced → Continue</strong>.</>,
+                    <><strong>Select a project</strong> — FireOTA lists the Firebase projects that account can see, with their storage bucket.</>,
+                    <><strong>Verify the connection</strong> — FireOTA checks it can reach the project and write to Storage.</>,
+                  ]}
+                />
+                <Figure caption="Projects → Connect project. The three steps run in order; the last one must show both checks in green.">
+                  <ConnectFirebaseMock />
+                </Figure>
+                <Callout kind="note">
+                  The Google refresh token is stored encrypted on the server. You can connect several projects (one per environment is
+                  common) and disconnect any of them from the Projects page.
+                </Callout>
+              </>
             ),
           },
           {
@@ -446,31 +784,62 @@ export const docGroups: DocGroup[] = [
             id: "create",
             title: "Step 1. Add the application",
             body: (
-              <Steps
-                items={[
-                  <>Open <A to="/apps/new">Applications → Add application</A>.</>,
-                  <>Enter the name and choose the connected Firebase project.</>,
-                  <>Fill in the Android package name and/or iOS bundle identifier exactly as in your app.</>,
-                  <>Set the <D to="runtime-versions">runtime version</D> of the build that is (or will be) in the stores, e.g. <C>1.3.0</C>.</>,
-                ]}
-              />
+              <>
+                <Steps
+                  items={[
+                    <>Open <A to="/apps/new">Applications → Add application</A>.</>,
+                    <><strong>Application name</strong> — any name your team recognises. The <strong>Slug</strong> is generated from it and can be used instead of the App ID in the CLI.</>,
+                    <><strong>Destination project</strong> — the Firebase project whose bucket stores this app's updates.</>,
+                    <><strong>Android package name</strong> / <strong>iOS bundle identifier</strong> — exactly as in your app. Leave one empty if you ship only one platform.</>,
+                    <><strong>Runtime version</strong> — the <D to="runtime-versions">runtime version</D> of the build that is (or will be) in the stores, e.g. <C>1.0.0</C>.</>,
+                  ]}
+                />
+                <Figure caption="Applications → Add application. The runtime version must equal the store version of your build, character for character.">
+                  <AddAppMock />
+                </Figure>
+                <Callout kind="important">
+                  The SDK reports the store version (Android <C>versionName</C>, iOS <C>CFBundleShortVersionString</C>) as its runtime by
+                  default. A new React Native project starts at <C>1.0</C> on iOS, not <C>1.0.0</C>. If the dashboard says <C>1.0.0</C>, change
+                  the app's version to <C>1.0.0</C> too, or devices will never match.
+                </Callout>
+              </>
             ),
           },
           {
             id: "channels",
             title: "Step 2. Channels",
             body: (
-              <p>
-                Four channels are created: <C>production</C>, <C>beta</C>, <C>staging</C> and <C>development</C>. A device subscribes to one
-                channel (set in <C>configure()</C>) and receives the release currently published on it. Android and iOS releases on the
-                same channel are independent.
-              </p>
+              <>
+                <p>
+                  Four channels are created: <C>production</C>, <C>beta</C>, <C>staging</C> and <C>development</C>. A device subscribes to one
+                  channel (set in <C>configure()</C> or <C>fireota.config.js</C>) and receives the release currently published on it.
+                  Android and iOS releases on the same channel are independent.
+                </p>
+                <Figure caption="The Channels page. “Serving” shows the update each channel currently delivers; new channels show “nothing yet”.">
+                  <ChannelsMock />
+                </Figure>
+                <Bullets
+                  items={[
+                    <>A typical setup: internal testers' builds use <C>beta</C>, store builds use <C>production</C>.</>,
+                    <>Use <strong>Promote</strong> on the Channels page to move a tested update from <C>beta</C> to <C>production</C> without rebuilding it.</>,
+                    <>The workspace's <strong>default channel</strong> (Settings → Organization) is pre-selected when you create a release in the dashboard.</>,
+                    <>The default channel of an app cannot be renamed or deleted.</>,
+                  ]}
+                />
+              </>
             ),
           },
           {
             id: "app-id",
             title: "Step 3. Copy the App ID",
-            body: <p>Open the app in the dashboard and copy its <strong>App ID</strong> — the SDK and the CLI both need it.</p>,
+            body: (
+              <>
+                <p>Open the app in the dashboard and copy its <strong>App ID</strong> — the SDK and the CLI both need it.</p>
+                <Figure caption="The app page. Copy the App ID with the copy icon; it is a UUID and never changes.">
+                  <AppIdMock />
+                </Figure>
+              </>
+            ),
           },
         ],
       },
@@ -502,6 +871,56 @@ cd ios && pod install && cd ..   # iOS only`}
                   overwrites anything and lists every change; <C>--dry-run</C> previews them. Rebuild the app once and you are done —
                   the Android, iOS and Configure pages are only needed for manual setups.
                 </p>
+                <p>Run the commands from the project root (the folder with <C>package.json</C>). The output looks like this:</p>
+                <Figure caption="fireota init output. ✓ = changed, – = already done and left alone, ! = needs a manual change (follow the linked setup page).">
+                  <TerminalFrame lines={INIT_OUTPUT} />
+                </Figure>
+                <Callout kind="caution">
+                  On the React Native 0.88+ template, iOS's <C>bundleURL()</C> lives in <C>SceneDelegate.swift</C>, not{" "}
+                  <C>AppDelegate</C>. If <C>init</C> prints a <strong>!</strong> for iOS, finish it by hand on the{" "}
+                  <D to="ios-setup">iOS setup</D> page.
+                </Callout>
+              </>
+            ),
+          },
+          {
+            id: "files",
+            title: "What init changes",
+            body: (
+              <>
+                <ProjectTreeMock
+                  items={[
+                    { path: "fireota.config.js", note: "App ID, server URL, channel, install modes" },
+                    { path: "index.js", note: "registers withFireOTA(App, fireotaConfig)" },
+                    { path: "android/…/MainApplication.kt", note: "release builds load FireOTA.getJSBundleFile()" },
+                    { path: "ios/<App>/AppDelegate.swift", note: "release builds return FireOTA.bundleURL()" },
+                    { path: "package.json", note: 'adds "ota:publish": "fireota publish --platform all"' },
+                    { path: ".gitignore", note: "ignores *.fota and the signing private key" },
+                  ]}
+                />
+                <p>The generated config and entry point:</p>
+                <Code language="js" code={CONFIG_FILE} />
+                <Callout kind="note">
+                  <C>fireota.config.js</C> has no secrets and should be committed. Change <C>channel</C> there (e.g. to <C>beta</C>) for
+                  test builds. The runtime version is read from the store version unless you add <C>runtimeVersion</C> to it.
+                </Callout>
+              </>
+            ),
+          },
+          {
+            id: "rebuild",
+            title: "Rebuild the app",
+            body: (
+              <>
+                <p>The SDK contains native code, so the app must be rebuilt once (Metro reload is not enough):</p>
+                <Code
+                  code={`# Android — release build on a connected device
+npx react-native run-android --mode release
+
+# iOS (on a Mac)
+cd ios && pod install && cd ..
+npx react-native run-ios --mode Release`}
+                />
               </>
             ),
           },
@@ -509,14 +928,34 @@ cd ios && pod install && cd ..   # iOS only`}
             id: "ui",
             title: "Built-in update UI",
             body: (
+              <>
+              <Figure caption="What users see. Left: the prompt after a normal update downloads (Later hides it until the next update). Middle: a mandatory update installing. Right: the optional <UpdateScreen /> for your settings.">
+                <UpdatePromptMocks />
+              </Figure>
               <Bullets
                 items={[
                   <><C>&lt;UpdatePrompt /&gt;</C> — shown automatically: “Restart to update” card, full-screen notice for mandatory updates.</>,
                   <><C>&lt;UpdateScreen /&gt;</C> — a complete “App updates” screen (version, runtime, channel, check / download / restart).</>,
                   <><C>useFireOTA()</C> — state plus <C>check()</C>, <C>install()</C>, <C>restart()</C> to build your own UI.</>,
-                  <>Restyle with <C>theme</C>, replace the prompt with <C>renderPrompt</C>, or hide it with <C>prompt={"{false}"}</C>.</>,
+                  <>Restyle with <C>theme</C>, replace the prompt with <C>renderPrompt</C>, or hide it with <C>prompt={"{false}"}</C> — step by step in <D to="customize-ui">Customize the update prompt</D>.</>,
                 ]}
               />
+              <Code
+                language="tsx"
+                code={`import { UpdateScreen, useFireOTA } from "@fireota/react-native";
+
+// 1. A full screen in your settings stack
+<Stack.Screen name="Updates" component={UpdateScreen} />
+
+// 2. Or your own UI
+function UpdateBadge() {
+  const { status, available, check, install, restart } = useFireOTA();
+  if (status === "installed") return <Button title="Restart to update" onPress={restart} />;
+  if (available) return <Button title="Download update" onPress={install} />;
+  return <Button title="Check for updates" onPress={check} />;
+}`}
+              />
+              </>
             ),
           },
           {
@@ -532,6 +971,208 @@ cd ios && pod install && cd ..   # iOS only`}
         ],
       },
       {
+        slug: "customize-ui",
+        title: "Customize the update prompt",
+        description: "Change the colours and text of the built-in prompt, replace it with your own design, or build a fully custom update flow.",
+        sections: [
+          {
+            id: "choose",
+            title: "Pick the level of control you need",
+            body: (
+              <>
+                <p>
+                  The prompt is ordinary React Native UI from <C>@fireota/react-native</C>. Customizing it never touches native code, so
+                  every change below can itself ship as an OTA update — no store build needed.
+                </p>
+                <Bullets
+                  items={[
+                    <><a href="#theme" className="text-brand underline-offset-2 hover:underline">Colours only</a> — pass a <C>theme</C>. One line, keeps the built-in layout.</>,
+                    <><a href="#text" className="text-brand underline-offset-2 hover:underline">Colours and wording</a> — render <C>&lt;UpdatePrompt title message /&gt;</C> yourself.</>,
+                    <><a href="#render-prompt" className="text-brand underline-offset-2 hover:underline">Your own design</a> — <C>renderPrompt</C> on <C>FireOTAProvider</C>. Full control over the look; FireOTA still decides when it shows.</>,
+                    <><a href="#hook" className="text-brand underline-offset-2 hover:underline">Your own screens</a> — <C>useFireOTA()</C> anywhere in the app, e.g. a Settings row.</>,
+                    <><a href="#manual" className="text-brand underline-offset-2 hover:underline">Your own timing</a> — <C>checkOnAppStart: false</C> and the imperative API.</>,
+                  ]}
+                />
+              </>
+            ),
+          },
+          {
+            id: "default",
+            title: "What the built-in prompt does",
+            body: (
+              <>
+                <Figure caption="The built-in UI with the default theme: the prompt after a download, the mandatory-update screen, and <UpdateScreen />.">
+                  <UpdatePromptMocks />
+                </Figure>
+                <Bullets
+                  items={[
+                    <>A card appears at the bottom once a normal update is <strong>downloaded</strong> (status <C>installed</C>). It shows the update's <C>--message</C>.</>,
+                    <><strong>Restart</strong> applies it now; <strong>Later</strong> hides the card for that update — it still applies on the next cold start.</>,
+                    <>For a <strong>mandatory</strong> update a full-screen “Installing an important update” notice blocks the app while it downloads, then the app restarts.</>,
+                    <>Nothing is shown when there is no update, while checking, or after an error.</>,
+                  ]}
+                />
+              </>
+            ),
+          },
+          {
+            id: "theme",
+            title: "Option 1. Change the colours",
+            body: (
+              <>
+                <p>
+                  Pass a <C>theme</C> as the third argument of <C>withFireOTA</C> in <C>index.js</C>. Every key is optional; missing keys
+                  keep the default. The same theme also styles <C>&lt;UpdateScreen /&gt;</C>.
+                </p>
+                <Code language="js" code={UI_THEME} />
+                <Figure caption="Left: default theme. Middle: the theme above. Right: the same theme with custom text (option 2).">
+                  <ThemeCompareMock />
+                </Figure>
+                <p>Default values, for reference:</p>
+                <Code
+                  language="ts"
+                  code={`accent: "#FF5A1F"   background: "#0E1013"   card: "#171A1F"
+text:   "#F4F5F7"   muted:      "#9AA1AC"   danger: "#F05252"`}
+                />
+                <Callout kind="tip">
+                  Want light and dark versions? Compute the theme from <C>Appearance.getColorScheme()</C> before calling{" "}
+                  <C>withFireOTA</C>, or use option 3 with <C>useColorScheme()</C> inside your component to follow live changes.
+                </Callout>
+              </>
+            ),
+          },
+          {
+            id: "text",
+            title: "Option 2. Change the title and message",
+            body: (
+              <>
+                <p>
+                  <C>&lt;UpdatePrompt /&gt;</C> takes <C>title</C> (default “Update ready”) and <C>message</C> (default: the update's
+                  message, or “A new version is ready. Restart to use it.”). Turn the automatic prompt off with{" "}
+                  <C>{"{ prompt: false }"}</C> and place your own instance — otherwise two prompts appear.
+                </p>
+                <Code language="tsx" code={UI_TEXT} />
+                <Callout kind="note">
+                  Render <C>&lt;UpdatePrompt /&gt;</C> after your navigator so it draws on top of the screens. It positions itself at the
+                  bottom and handles mandatory updates the same way as the built-in one.
+                </Callout>
+              </>
+            ),
+          },
+          {
+            id: "render-prompt",
+            title: "Option 3. Replace it with your own design",
+            body: (
+              <>
+                <p>
+                  <C>renderPrompt</C> replaces the built-in prompt with any component you like. FireOTA calls it on every state change
+                  with the current update state and the actions, and renders whatever you return on top of the app (return{" "}
+                  <C>null</C> to show nothing).
+                </p>
+                <Callout kind="important">
+                  <C>withFireOTA</C> only accepts <C>prompt</C> and <C>theme</C>. To use <C>renderPrompt</C>, replace{" "}
+                  <C>withFireOTA(App, fireotaConfig)</C> in <C>index.js</C> with a small <C>Root</C> component that wraps the app in{" "}
+                  <C>FireOTAProvider</C>, as below. Behaviour is otherwise identical.
+                </Callout>
+                <Steps
+                  items={[
+                    <>
+                      Change <C>index.js</C>:
+                      <Code language="tsx" code={UI_RENDER_PROMPT} />
+                    </>,
+                    <>
+                      Create the component. This example shows a green bar at the top for normal updates and keeps a blocking screen for
+                      mandatory ones:
+                      <Code language="tsx" code={UI_BANNER} />
+                    </>,
+                    <>Build a release build, publish an update and open the app twice to see the new prompt.</>,
+                  ]}
+                />
+                <Figure caption="Two prompts built with renderPrompt: a top bar, and a dialog that lists the release notes.">
+                  <CustomPromptMock />
+                </Figure>
+                <Callout kind="caution">
+                  When you replace the prompt you also replace the mandatory-update screen. Always handle{" "}
+                  <C>available?.mandatory</C> as in the example, or users may keep using the app until the forced restart happens.
+                </Callout>
+              </>
+            ),
+          },
+          {
+            id: "state",
+            title: "What renderPrompt and useFireOTA() receive",
+            body: (
+              <>
+                <Bullets
+                  items={[
+                    <><C>status</C> — <C>idle</C>, <C>checking</C>, <C>upToDate</C>, <C>downloading</C>, <C>downloaded</C>, <C>installed</C> (ready, waiting for a restart) or <C>error</C>.</>,
+                    <><C>available</C> — the update found by the last check: <C>id</C>, <C>message</C>, <C>notes</C>, <C>mandatory</C>, <C>runtimeVersion</C>, <C>version</C> (optional label). <C>null</C> when there is none.</>,
+                    <><C>pendingReleaseId</C> — downloaded and waiting for a restart. <C>currentReleaseId</C> — the update running now, <C>null</C> for the store build.</>,
+                    <><C>runtimeVersion</C>, <C>channel</C>, <C>appVersion</C>, <C>lastCheckedAt</C>, <C>error</C>, <C>configured</C>.</>,
+                    <>Actions: <C>check()</C>, <C>install()</C> (download + verify, applies on next start), <C>restart()</C>. <C>busy</C> is true while one runs; <C>actionError</C> holds its last error.</>,
+                    <><C>theme</C> — the merged theme, so your component can reuse the colours you passed.</>,
+                  ]}
+                />
+                <p>
+                  A normal update is ready to show when <C>status === "installed"</C> and <C>pendingReleaseId</C> differs from{" "}
+                  <C>currentReleaseId</C> — that is exactly the condition the built-in prompt uses.
+                </p>
+              </>
+            ),
+          },
+          {
+            id: "hook",
+            title: "Option 4. Show update state in your own screens",
+            body: (
+              <>
+                <p>
+                  <C>useFireOTA()</C> works in any component under <C>withFireOTA</C> or <C>FireOTAProvider</C>. Use it for a Settings row,
+                  a badge on a tab, or an “About” screen. Keep the built-in prompt or hide it with <C>{"{ prompt: false }"}</C>.
+                </p>
+                <Code language="tsx" code={UI_HOOK} />
+                <p>
+                  Prefer a ready-made screen? <C>&lt;UpdateScreen title footer /&gt;</C> shows version, runtime, channel, status and the
+                  right button, styled with your theme:
+                </p>
+                <Code language="tsx" code={`<Stack.Screen name="Updates" component={UpdateScreen} />`} />
+              </>
+            ),
+          },
+          {
+            id: "manual",
+            title: "Option 5. Decide when to check",
+            body: (
+              <>
+                <p>
+                  By default the SDK checks and downloads on every launch. To check at a moment you choose — after login, on a button, or
+                  only on Wi-Fi — turn that off and drive it yourself:
+                </p>
+                <Code language="js" code={UI_MANUAL_FLOW} />
+                <Callout kind="note">
+                  The launch confirmation still happens automatically: <C>configure()</C> runs at start even with{" "}
+                  <C>checkOnAppStart: false</C>, so a broken update is still rolled back.
+                </Callout>
+              </>
+            ),
+          },
+          {
+            id: "test",
+            title: "Testing your prompt",
+            body: (
+              <Steps
+                items={[
+                  <>Install a <strong>release</strong> build that contains your prompt code (or publish the prompt itself as an update first).</>,
+                  <>Publish a small change with a clear message: <C>npx fireota publish … --message "Testing the new prompt"</C>.</>,
+                  <>Open the app and wait a few seconds — your prompt should appear once the download finishes.</>,
+                  <>To test the mandatory path, publish again with <C>--mandatory</C>.</>,
+                  <>Use the <strong>beta</strong> channel for these tests so production users never see them.</>,
+                ]}
+              />
+            ),
+          },
+        ],
+      },
+      {
         slug: "android-setup",
         title: "Android setup",
         description: "Load the latest verified OTA bundle in Android release builds.",
@@ -540,11 +1181,56 @@ cd ios && pod install && cd ..   # iOS only`}
             id: "bundle-file",
             title: "Point React Native at the OTA bundle",
             body: (
+              <>
+              <p>
+                By default a release build loads the JS bundle packed inside the APK. This change makes it load the latest verified OTA
+                bundle instead, falling back to the packed one when there is none. Debug builds are untouched and keep using Metro.
+              </p>
+              <p>
+                Open <C>android/app/src/main/java/&lt;your/package&gt;/MainApplication.kt</C> (the folder matches your package name,
+                e.g. <C>com/fireota/test/</C>) and apply the snippet that matches your file:
+              </p>
               <PlatformTabs
                 tabs={[
                   { value: "host", label: "RN 0.76+ (ReactHost)", icon: "new_releases", content: <Code language="kotlin" code={ANDROID_HOST} /> },
                   { value: "kotlin", label: "Older, Kotlin", icon: "code", content: <Code language="kotlin" code={ANDROID_KOTLIN} /> },
                   { value: "java", label: "Older, Java", icon: "code", content: <Code language="java" code={ANDROID_JAVA} /> },
+                ]}
+              />
+              </>
+            ),
+          },
+          {
+            id: "version",
+            title: "Check the version name",
+            body: (
+              <>
+                <p>
+                  The SDK uses <C>versionName</C> from <C>android/app/build.gradle</C> as the runtime version. It must equal the runtime
+                  version set in the dashboard:
+                </p>
+                <Code
+                  language="groovy"
+                  code={`android {
+    defaultConfig {
+        applicationId "com.fireota.test"
+        versionCode 1
+        versionName "1.0.0"   // = runtime version in the dashboard
+    }
+}`}
+                />
+              </>
+            ),
+          },
+          {
+            id: "build-test",
+            title: "Build and test",
+            body: (
+              <Steps
+                items={[
+                  <>Build a release APK on a device: <C>npx react-native run-android --mode release</C> (or <C>cd android && ./gradlew assembleRelease</C>).</>,
+                  <>Open the app once. An <C>update_check</C> event appears in <A to="/analytics">Analytics</A> and the runtime shows on the app's <strong>Runtimes</strong> tab.</>,
+                  <>After changing the package name or adding native libraries, run <C>cd android && ./gradlew clean</C> first.</>,
                 ]}
               />
             ),
@@ -581,13 +1267,106 @@ cd ios && pod install && cd ..   # iOS only`}
         description: "Load the latest verified OTA bundle in iOS release builds.",
         sections: [
           {
-            id: "bundle-url",
-            title: "Point React Native at the OTA bundle",
+            id: "requirements",
+            title: "Before you start",
             body: (
-              <PlatformTabs
-                tabs={[
-                  { value: "objc", label: "Objective-C", icon: "code", content: <Code language="objc" code={IOS_OBJC} /> },
-                  { value: "swift", label: "Swift", icon: "code", content: <Code language="swift" code={IOS_SWIFT} /> },
+              <Bullets
+                items={[
+                  <>A <strong>Mac with Xcode</strong> and CocoaPods (<C>sudo gem install cocoapods</C> or <C>brew install cocoapods</C>).</>,
+                  <>The SDK installed (<C>npm install @fireota/react-native</C>) and <C>fireota init</C> run — or the JS side wired by hand as in <D to="configure-sdk">Configure the SDK</D>.</>,
+                  <>Your Apple team selected under Xcode → target → <strong>Signing &amp; Capabilities</strong> to run on a real device.</>,
+                ]}
+              />
+            ),
+          },
+          {
+            id: "pods",
+            title: "Step 1. Install the pod",
+            body: (
+              <>
+                <Code code={`cd ios && pod install && cd ..`} />
+                <p>
+                  Autolinking adds the <C>fireota-react-native</C> pod. Always open <C>ios/&lt;App&gt;.xcworkspace</C> in Xcode from now on,
+                  not the <C>.xcodeproj</C>.
+                </p>
+              </>
+            ),
+          },
+          {
+            id: "bridging",
+            title: "Step 2. Swift projects: add a bridging header",
+            body: (
+              <>
+                <p>
+                  The SDK's native part is Objective-C. Swift code can only call it through a bridging header. Skip this step for
+                  Objective-C (<C>AppDelegate.mm</C>) projects.
+                </p>
+                <Steps
+                  items={[
+                    <>In Xcode choose <strong>File → New → File… → Header File</strong>, name it <C>&lt;App&gt;-Bridging-Header.h</C> and save it in the <C>ios/&lt;App&gt;/</C> folder, target ticked.</>,
+                    <>Put this line in it:<Code language="objc" code={IOS_BRIDGING} /></>,
+                    <>Select the target → <strong>Build Settings</strong> → search “bridging” → set <strong>Objective-C Bridging Header</strong> to <C>&lt;App&gt;/&lt;App&gt;-Bridging-Header.h</C> for Debug and Release.</>,
+                  ]}
+                />
+                <Figure caption="Xcode → target → Build Settings → Swift Compiler – General. The path is relative to the ios/ folder.">
+                  <XcodeBridgingMock />
+                </Figure>
+                <Callout kind="tip">
+                  If the project already has a bridging header (Xcode offers one when you add an Objective-C file), add the import to that
+                  file instead of creating a second one.
+                </Callout>
+              </>
+            ),
+          },
+          {
+            id: "bundle-url",
+            title: "Step 3. Point React Native at the OTA bundle",
+            body: (
+              <>
+                <p>
+                  Find the <C>bundleURL()</C> function of your template and make release builds return <C>FireOTA.bundleURL()</C>. It
+                  returns the latest verified OTA bundle, or <C>nil</C> when there is none — then the bundle inside the app is used.
+                </p>
+                <PlatformTabs
+                  tabs={[
+                    { value: "scene", label: "RN 0.88+ (SceneDelegate)", icon: "new_releases", content: <Code language="swift" code={IOS_SCENE} /> },
+                    { value: "swift", label: "RN 0.77–0.87 (Swift)", icon: "code", content: <Code language="swift" code={IOS_SWIFT} /> },
+                    { value: "objc", label: "Objective-C", icon: "code", content: <Code language="objc" code={IOS_OBJC} /> },
+                  ]}
+                />
+                <Callout kind="note">
+                  Not sure which file? Search the <C>ios/</C> folder for <C>bundleURL</C> — edit the one that returns{" "}
+                  <C>main.jsbundle</C>.
+                </Callout>
+              </>
+            ),
+          },
+          {
+            id: "version",
+            title: "Step 4. Check the version",
+            body: (
+              <>
+                <p>
+                  The SDK uses the app's <strong>Version</strong> (<C>CFBundleShortVersionString</C>, set by <C>MARKETING_VERSION</C>) as
+                  the runtime version. New projects start at <C>1.0</C>. In Xcode → target → <strong>General</strong> → Identity, set
+                  Version to exactly the runtime version from the dashboard, e.g. <C>1.0.0</C>.
+                </p>
+                <Figure caption="An update reaches a device only when the runtime versions match exactly.">
+                  <RuntimeMatchDiagram />
+                </Figure>
+              </>
+            ),
+          },
+          {
+            id: "build-test",
+            title: "Step 5. Build and test",
+            body: (
+              <Steps
+                items={[
+                  <>Build a release build: <C>npx react-native run-ios --mode Release</C>, or in Xcode <strong>Product → Scheme → Edit Scheme → Run → Build Configuration: Release</strong>, then Run.</>,
+                  <>Open the app once — it registers with FireOTA and appears on the app's <strong>Runtimes</strong> tab.</>,
+                  <>Publish: <C>npx fireota publish --app YOUR_APP_ID --platform ios --runtime 1.0.0 --channel production --message "iOS test"</C>.</>,
+                  <>Open the app, wait for “Update ready”, tap <strong>Restart</strong>.</>,
                 ]}
               />
             ),
@@ -612,16 +1391,43 @@ cd ios && pod install && cd ..   # iOS only`}
           {
             id: "configure",
             title: "Call configure()",
-            body: <Code language="js" code={CONFIGURE} />,
+            body: (
+              <>
+                <p>
+                  If you used <C>fireota init</C>, this is already done: <C>withFireOTA(App, fireotaConfig)</C> calls{" "}
+                  <C>configure()</C> for you. For a manual setup, call it in <C>index.js</C> before registering the root component:
+                </p>
+                <Code language="js" code={CONFIGURE} />
+              </>
+            ),
           },
           {
             id: "confirmation",
             title: "Launch confirmation",
             body: (
-              <Callout kind="important">
-                Call <C>configure()</C> early and unconditionally. Reaching it is how a new bundle proves it starts; a bundle that never
-                reaches it is rolled back on the next launch.
-              </Callout>
+              <>
+                <p>Every new bundle goes through these states on the device:</p>
+                <Figure caption="An update's life on a device. Reaching configure() is the proof that the new JavaScript starts.">
+                  <LaunchLifecycleDiagram />
+                </Figure>
+                <Callout kind="important">
+                  Call <C>configure()</C> early and unconditionally. Reaching it is how a new bundle proves it starts; a bundle that never
+                  reaches it is rolled back on the next launch. Do not put it behind a login, a feature flag or an <C>await</C> that can fail.
+                </Callout>
+              </>
+            ),
+          },
+          {
+            id: "install-modes",
+            title: "When updates are applied",
+            body: (
+              <Bullets
+                items={[
+                  <><C>nextRestart</C> (default) — the update downloads in the background and runs the next time the app starts from scratch. The built-in prompt offers <strong>Restart</strong> to apply it now.</>,
+                  <><C>immediate</C> — the app restarts as soon as the download is verified. Used by default for updates published with <C>--mandatory</C>.</>,
+                  <>A cold start means the app was swiped away (or killed by the OS). Sending it to the background and back is not a restart.</>,
+                ]}
+              />
             ),
           },
           {
@@ -656,10 +1462,23 @@ cd ios && pod install && cd ..   # iOS only`}
             id: "build",
             title: "Build and submit",
             body: (
-              <p>
-                Build a release (<C>./gradlew bundleRelease</C> / Xcode Archive) and submit it as usual. Its runtime version must match the
-                value in <C>configure()</C> and in the dashboard.
-              </p>
+              <>
+                <p>
+                  Build a release (<C>./gradlew bundleRelease</C> / Xcode Archive) and submit it as usual. Its runtime version must match the
+                  value in <C>configure()</C> and in the dashboard.
+                </p>
+                <Steps
+                  items={[
+                    <>Set the store version: Android <C>versionName</C>, iOS Version. Bump <C>versionCode</C> / Build as the stores require.</>,
+                    <>Make sure the app in the dashboard has the same runtime version (app page → settings), or set it when you register the app.</>,
+                    <>Android: <C>cd android && ./gradlew bundleRelease</C> → upload <C>app/build/outputs/bundle/release/app-release.aab</C> to Play Console.</>,
+                    <>iOS: Xcode → <strong>Product → Archive</strong> → <strong>Distribute App</strong> → App Store Connect / TestFlight.</>,
+                  ]}
+                />
+                <Callout kind="tip">
+                  Test with an internal track (Play internal testing, TestFlight) on the <C>beta</C> channel before the public release.
+                </Callout>
+              </>
             ),
           },
           {
@@ -683,10 +1502,15 @@ cd ios && pod install && cd ..   # iOS only`}
             id: "api-key",
             title: "Step 1. Create an API key",
             body: (
-              <p>
-                In <A to="/settings/api-keys">Settings → API keys</A>, create a key with <C>release.write</C> and <C>release.publish</C>.
-                The full key is shown once — store it as a secret.
-              </p>
+              <>
+                <p>
+                  In <A to="/settings/api-keys">Settings → API keys</A>, create a key with <C>release.write</C> and <C>release.publish</C>.
+                  The full key is shown once — store it as a secret. Only owners and admins can create keys.
+                </p>
+                <Figure caption="Settings → API keys → Create key. Give it a name that says where it is used, so you know which one to revoke later.">
+                  <ApiKeyMock />
+                </Figure>
+              </>
             ),
           },
           {
@@ -699,6 +1523,24 @@ cd ios && pod install && cd ..   # iOS only`}
                   <C>fireota publish</C> runs React Native's bundler, compiles Hermes bytecode when Hermes is on, packs the images next to
                   the bundle, creates the release, uploads it with a checksum, and publishes it.
                 </p>
+                <Figure caption="A successful publish. The SHA-256 printed by the CLI and the one verified in your Firebase Storage must match.">
+                  <TerminalFrame lines={PUBLISH_OUTPUT} />
+                </Figure>
+                <p>The flags you will use most:</p>
+                <Bullets
+                  items={[
+                    <><C>--platform android|ios|all</C> — <C>all</C> builds both bundles (needs a Mac for iOS) and groups them as one update.</>,
+                    <><C>--runtime</C> — must equal the store build's runtime version. Omit it and the CLI reads the store version (<C>versionName</C> / iOS Version) from the project.</>,
+                    <><C>--channel</C> — which channel gets the update (default <C>production</C>).</>,
+                    <><C>--rollout</C> — percentage of devices on that channel, default 100.</>,
+                    <><C>--message</C> — what changed; shown in the dashboard and the in-app prompt.</>,
+                    <><C>--mandatory</C> — devices install it immediately and restart.</>,
+                  ]}
+                />
+                <Callout kind="note">
+                  On Windows, set the variables with <C>$env:FIREOTA_URL="…"</C> (PowerShell) or <C>set FIREOTA_URL=…</C> (cmd) instead of{" "}
+                  <C>export</C>.
+                </Callout>
               </>
             ),
           },
@@ -733,10 +1575,19 @@ cd ios && pod install && cd ..   # iOS only`}
             id: "staged",
             title: "Staged rollout",
             body: (
-              <p>
-                Start at 1–10%. Each device gets a stable bucket from its installation ID, so raising the percentage only adds devices — no
-                device flips back and forth.
-              </p>
+              <>
+                <p>
+                  Start at 1–10%. Each device gets a stable bucket from its installation ID, so raising the percentage only adds devices — no
+                  device flips back and forth.
+                </p>
+                <Figure caption="A 10% rollout: 10 of the 100 buckets receive the update.">
+                  <RolloutBucketsDiagram percent={10} />
+                </Figure>
+                <p>
+                  A common schedule: 10% → watch failures for a few hours → 50% → 100%. Change the percentage from the release page, the
+                  Rollouts page or the CLI.
+                </p>
+              </>
             ),
           },
           {
@@ -823,13 +1674,38 @@ npx fireota release rollback <releaseId> --reason "Crash on launch on Android 14
             id: "device",
             title: "On a device",
             body: (
-              <Steps
-                items={[
-                  <>Open a release build of the app — an <C>update_check</C> event appears in <A to="/analytics">Analytics</A>.</>,
-                  <>After publishing, open the app, wait a few seconds, close it fully and reopen it.</>,
-                  <><C>download_completed</C> and <C>install_succeeded</C> events confirm the update is running.</>,
-                ]}
-              />
+              <>
+                <Steps
+                  items={[
+                    <>Open a release build of the app — an <C>update_check</C> event appears in <A to="/analytics">Analytics</A>.</>,
+                    <>After publishing, open the app, wait a few seconds, close it fully and reopen it.</>,
+                    <><C>download_completed</C> and <C>install_succeeded</C> events confirm the update is running.</>,
+                  ]}
+                />
+                <Figure caption="Analytics events of one device receiving an update, oldest first. Stuck after update_check? See Troubleshooting.">
+                  <AnalyticsEventsMock />
+                </Figure>
+              </>
+            ),
+          },
+          {
+            id: "runtimes",
+            title: "On the Runtimes tab",
+            body: (
+              <>
+                <p>
+                  The app page's <strong>Runtimes</strong> tab groups devices and updates by runtime version. If your device shows up under
+                  a different runtime than your update (e.g. <C>1.0</C> instead of <C>1.0.0</C>), the versions do not match and the
+                  device will not receive it.
+                </p>
+                <Figure caption="Runtimes tab. Here one device still runs runtime 1.0, so it cannot receive updates published for 1.0.0.">
+                  <RuntimesMock />
+                </Figure>
+                <p>
+                  The list is built from the app's runtime, its platforms, published updates and the runtimes devices report. Entries
+                  from old test builds disappear only when those device records are removed.
+                </p>
+              </>
             ),
           },
           {
@@ -854,11 +1730,24 @@ npx fireota release rollback <releaseId> --reason "Crash on launch on Android 14
             id: "what",
             title: "What a runtime version is",
             body: (
-              <p>
-                A runtime version names a set of native code — one store build (Play Store / App Store). A bundle runs only on binaries
-                with <strong>exactly</strong> the same runtime version — the server and the SDK both enforce it, because JavaScript that
-                calls missing native code crashes.
-              </p>
+              <>
+                <p>
+                  A runtime version names a set of native code — one store build (Play Store / App Store). A bundle runs only on binaries
+                  with <strong>exactly</strong> the same runtime version — the server and the SDK both enforce it, because JavaScript that
+                  calls missing native code crashes.
+                </p>
+                <Figure caption="Matching is exact text comparison, not semantic versioning.">
+                  <RuntimeMatchDiagram />
+                </Figure>
+                <p>Three places must agree on the value:</p>
+                <Bullets
+                  items={[
+                    <>The <strong>app</strong> — store version (<C>versionName</C> / <C>CFBundleShortVersionString</C>), or <C>runtimeVersion</C> in the config if you set it.</>,
+                    <>The <strong>dashboard</strong> — the app's runtime version (shown as “current store build”).</>,
+                    <>The <strong>update</strong> — <C>--runtime</C> when publishing.</>,
+                  ]}
+                />
+              </>
             ),
           },
           {
@@ -1194,7 +2083,41 @@ FIREOTA_SIGNING_KEY / FIREOTA_SIGNING_KEY_PATH (optional)`}
           {
             id: "no-update",
             title: "Devices never get the update",
-            body: <p>Runtime versions must match exactly, the release must be <strong>published</strong> on the device's channel, and the device must be inside the rollout. Debug builds load from Metro — test a release build.</p>,
+            body: (
+              <>
+                <p>Go through this list in order — the first item is by far the most common cause:</p>
+                <Steps
+                  items={[
+                    <><strong>Runtime mismatch.</strong> Open the app's <strong>Runtimes</strong> tab and find your device. Its runtime must equal the update's runtime exactly (<C>1.0</C> ≠ <C>1.0.0</C>). Fix the app version or publish with the device's runtime.</>,
+                    <><strong>Debug build.</strong> Debug builds load JavaScript from Metro and ignore OTA. Install a release build.</>,
+                    <><strong>Wrong channel.</strong> The <C>channel</C> in <C>fireota.config.js</C> must be the channel you published to.</>,
+                    <><strong>Not published / outside the rollout.</strong> The release must be <strong>published</strong> (not draft or paused) and the device inside the rollout percentage.</>,
+                    <><strong>Wrong App ID or server URL</strong> in the config — no <C>update_check</C> events appear in Analytics at all.</>,
+                    <><strong>Native wiring missing.</strong> The update downloads but never runs: <C>MainApplication</C> / <C>bundleURL()</C> was not changed — see <D to="android-setup">Android</D> / <D to="ios-setup">iOS setup</D>.</>,
+                  ]}
+                />
+              </>
+            ),
+          },
+          {
+            id: "init-ios",
+            title: "fireota init prints “! unknown template” for iOS",
+            body: (
+              <p>
+                React Native 0.88+ moved <C>bundleURL()</C> to <C>SceneDelegate.swift</C>. Edit it by hand and add the bridging header as
+                described in <D to="ios-setup">iOS setup</D>.
+              </p>
+            ),
+          },
+          {
+            id: "ios-header",
+            title: "iOS: “Cannot find 'FireOTA' in scope”",
+            body: (
+              <p>
+                Swift cannot see the SDK. Add <C>#import &lt;FireOTA.h&gt;</C> to the bridging header, set <strong>Objective-C Bridging
+                Header</strong> in Build Settings, run <C>pod install</C> and build from the <C>.xcworkspace</C>.
+              </p>
+            ),
           },
           {
             id: "old-version",
