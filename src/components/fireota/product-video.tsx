@@ -3,7 +3,7 @@ import { useState } from "react";
 
 import { cn } from "@/lib/utils";
 
-export const PRODUCT_VIDEO_ID = "W4v06Y3kYiw";
+export const PRODUCT_VIDEO_ID = "8moALwMSsuA";
 
 /**
  * Lightweight YouTube embed: shows the thumbnail and only loads the player (from the
