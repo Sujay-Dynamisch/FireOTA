@@ -3,6 +3,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { createChannel as createChannelRecord } from "@/lib/backend/channels.server";
 import { audit, orgContextForUser, ownedRow, requirePermission } from "@/lib/backend/context.server";
 import { fail } from "@/lib/backend/errors";
 import { deleteAppArtifacts } from "@/lib/backend/releases.server";
@@ -472,34 +473,8 @@ export const createChannel = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const ctx = await orgContextForUser(context.userId);
-    requirePermission(ctx, "channel.create");
-    const app = await ownedRow<{ name: string }>(ctx, "apps", data.appId, "name");
-    const { data: row, error } = await ctx.db
-      .from("channels")
-      .insert({
-        organization_id: ctx.organizationId,
-        app_id: data.appId,
-        name: data.name,
-        environment: data.environment,
-        description: data.description ?? "",
-        platform: data.platform ?? "all",
-        rollout_percentage: 100,
-        status: "empty",
-        update_policy: data.updatePolicy ?? (data.environment === "production" ? "staged" : "immediate"),
-      })
-      .select("id")
-      .single();
-    if (error) fail("CONFLICT", "This application already has a channel with that name.");
-    await audit(ctx, {
-      action: "channel.created",
-      resourceType: "channel",
-      resourceId: row.id as string,
-      appId: data.appId,
-      appName: app.name,
-      after: { name: data.name, environment: data.environment },
-    });
-    await dispatchWebhooks(ctx.db, ctx.organizationId, "channel.created", { channelId: row.id, appId: data.appId, name: data.name });
-    return { id: row.id as string };
+    const row = await createChannelRecord(ctx, data);
+    return { id: row.id };
   });
 
 export const updateChannel = createServerFn({ method: "POST" })

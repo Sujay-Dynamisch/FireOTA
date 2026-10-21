@@ -21,8 +21,17 @@ import {
   revokeKeyForAgent,
   runAgent,
   saveAiSettings,
+  syncAgentTools,
 } from "@/lib/backend/agents.server";
-import { pauseRelease, promoteRelease, publishRelease, rollbackRelease, setRolloutPercentage } from "@/lib/backend/releases.server";
+import { createChannel } from "@/lib/backend/channels.server";
+import {
+  createRelease,
+  pauseRelease,
+  promoteRelease,
+  publishRelease,
+  rollbackRelease,
+  setRolloutPercentage,
+} from "@/lib/backend/releases.server";
 
 const stamp = (v: string | null) => (v ? new Date(v).toISOString().slice(0, 16).replace("T", " ") : null);
 
@@ -318,6 +327,7 @@ export const listAgents = createServerFn({ method: "GET" })
     // Built-in agents are created once a workspace configures an AI provider.
     const { count } = await ctx.db.from("agents").select("id", { count: "exact", head: true }).eq("organization_id", ctx.organizationId);
     if (!count && (await loadAiSettings(ctx))) await ensureAgents(ctx);
+    else if (count) await syncAgentTools(ctx);
     const [{ data: agents }, { data: permissions }] = await Promise.all([
       ctx.db
         .from("agents")
@@ -454,6 +464,30 @@ export const decideAgentApproval = createServerFn({ method: "POST" })
         channelName: String(request.payload["channel"] ?? ""),
         rolloutPercentage: Number(request.payload["rolloutPercentage"] ?? 0),
       });
+    } else if (request.action === "channel.create") {
+      requirePermission(ctx, "channel.create");
+      const environment = String(request.payload["environment"] ?? "development");
+      await createChannel(ctx, {
+        appId: String(request.payload["appId"] ?? ""),
+        name: String(request.payload["name"] ?? ""),
+        environment: (["production", "beta", "staging", "development"].includes(environment)
+          ? environment
+          : "development") as "production" | "beta" | "staging" | "development",
+        platform: (["android", "ios"].includes(String(request.payload["platform"]))
+          ? request.payload["platform"]
+          : "all") as "all" | "android" | "ios",
+        description: String(request.payload["description"] ?? ""),
+      });
+    } else if (request.action === "release.create") {
+      requirePermission(ctx, "release.create");
+      await createRelease(ctx, {
+        appId: String(request.payload["appId"] ?? ""),
+        channelName: String(request.payload["channel"] ?? ""),
+        platform: request.payload["platform"] === "ios" ? "ios" : "android",
+        runtimeVersion: String(request.payload["runtimeVersion"] ?? ""),
+        releaseNotes: String(request.payload["message"] ?? ""),
+        mandatory: request.payload["mandatory"] === true,
+      });
     } else if (request.action === "api_key.revoke") {
       requirePermission(ctx, "api_key.revoke");
       await revokeKeyForAgent(ctx, String(request.payload["apiKeyId"] ?? request.resource_id ?? ""));
@@ -571,8 +605,30 @@ export const setAgentEnabled = createServerFn({ method: "POST" })
 /** Runs an agent on a request; it can only do what the asking member is allowed to do. */
 export const runAgentFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { agentId: string; prompt: string }) =>
-    z.object({ agentId: z.string().uuid(), prompt: z.string().trim().min(3).max(2000) }).parse(input),
+  .inputValidator(
+    (input: {
+      agentId: string;
+      prompt: string;
+      history?: { role: "user" | "assistant"; content: string }[];
+      attachment?: { name: string; size: number; sha256: string };
+    }) =>
+      z
+        .object({
+          agentId: z.string().uuid(),
+          prompt: z.string().trim().min(1).max(4000),
+          history: z
+            .array(z.object({ role: z.enum(["user", "assistant"]), content: z.string().max(12000) }))
+            .max(40)
+            .optional(),
+          attachment: z
+            .object({
+              name: z.string().max(200),
+              size: z.number().int().nonnegative(),
+              sha256: z.string().regex(/^[a-f0-9]{64}$/),
+            })
+            .optional(),
+        })
+        .parse(input),
   )
   .handler(async ({ data, context }) => {
     const ctx = await orgContextForUser(context.userId);
@@ -580,7 +636,14 @@ export const runAgentFn = createServerFn({ method: "POST" })
     const result = await runAgent(ctx, data);
     return {
       answer: result.answer,
-      steps: result.steps.map((s) => ({ tool: s.tool, input: JSON.stringify(s.input), status: s.status, summary: s.summary })),
+      steps: result.steps.map((s) => ({
+        tool: s.tool,
+        input: JSON.stringify(s.input),
+        status: s.status,
+        summary: s.summary,
+        approvalId: s.approvalId ?? null,
+        resultId: s.resultId ?? null,
+      })),
     };
   });
 

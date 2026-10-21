@@ -13,7 +13,8 @@ import {
   SectionCard,
   SkeletonRows,
 } from "@/components/fireota/primitives";
-import { AgentToolModes, ProviderSettings, RunAgentPanel } from "@/components/fireota/agent-panels";
+import { AgentChat } from "@/components/fireota/agent-chat";
+import { AgentToolModes, ProviderSettings } from "@/components/fireota/agent-panels";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -71,7 +72,7 @@ function AgentsPage() {
 
       <Tabs value={tab ?? (configured ? "run" : "provider")} onValueChange={setTab}>
         <TabsList>
-          <TabsTrigger value="run">Run</TabsTrigger>
+          <TabsTrigger value="run">Chat</TabsTrigger>
           <TabsTrigger value="approvals">Approvals{approvals.data?.length ? ` (${approvals.data.length})` : ""}</TabsTrigger>
           <TabsTrigger value="agents">Agents & permissions</TabsTrigger>
           <TabsTrigger value="executions">History</TabsTrigger>
@@ -79,7 +80,7 @@ function AgentsPage() {
         </TabsList>
 
         <TabsContent value="run" className="mt-3">
-          <RunAgentPanel agents={agents.data ?? []} configured={configured} />
+          <AgentChat agents={agents.data ?? []} configured={configured} />
         </TabsContent>
 
         <TabsContent value="provider" className="mt-3">
