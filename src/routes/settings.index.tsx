@@ -77,13 +77,19 @@ function SettingsPage() {
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [timezone, setTimezone] = useState("");
+  const [defaultChannel, setDefaultChannel] = useState("");
   const [autoRollback, setAutoRollback] = useState(true);
   const [saving, setSaving] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [changingPassword, setChangingPassword] = useState(false);
 
+  const channels = useQuery(q.channels());
+
   const org = organization.data?.organization ?? null;
+  const channelNames = Array.from(
+    new Set([...(channels.data ?? []).map((channel) => channel.name), ...(org?.defaultChannel ? [org.defaultChannel] : [])]),
+  );
 
   return (
     <AppShell breadcrumb={[{ label: "Helio Labs", to: "/dashboard" }, { label: "Settings" }]}>
@@ -139,8 +145,23 @@ function SettingsPage() {
                       </SelectContent>
                     </Select>
                   </Field>
-                  <Field label="Default channel" hint="Pre-selected when creating a release.">
-                    <Input value={org.defaultChannel} readOnly className="h-9 font-mono text-[12px] text-muted-foreground" />
+                  <Field label="Default channel" htmlFor="org-default-channel" hint="Pre-selected when creating a release.">
+                    <Select
+                      value={defaultChannel || org.defaultChannel}
+                      onValueChange={setDefaultChannel}
+                      disabled={!can("org.update")}
+                    >
+                      <SelectTrigger id="org-default-channel" className="h-9 font-mono text-[12px]">
+                        <SelectValue placeholder="Select a channel" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {channelNames.map((channelName) => (
+                          <SelectItem key={channelName} value={channelName} className="font-mono text-[12px]">
+                            {channelName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </Field>
                 </div>
                 {can("org.update") ? (
@@ -154,9 +175,11 @@ function SettingsPage() {
                           name: name || org.name,
                           timezone: timezone || org.timezone,
                           ...(slug && slug !== org.slug ? { slug } : {}),
+                          ...(defaultChannel && defaultChannel !== org.defaultChannel ? { defaultChannel } : {}),
                         });
                         toast.success("Organization settings saved.");
                         setSlug("");
+                        setDefaultChannel("");
                         void client.invalidateQueries({ queryKey: ["session"] });
                       } catch (error) {
                         toast.error(error instanceof Error ? error.message : "Could not save the settings.");
