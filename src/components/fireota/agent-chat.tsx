@@ -2,7 +2,7 @@
  * Chat with a FireOTA agent: multi-turn conversation, tool activity, inline approvals,
  * `/` commands and .fota attachments that are uploaded to the releases an agent creates.
  */
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowUp,
   Bot,
@@ -13,6 +13,8 @@ import {
   Copy,
   FileArchive,
   Loader2,
+  PanelLeftClose,
+  PanelLeftOpen,
   Paperclip,
   Plus,
   ShieldCheck,
@@ -23,13 +25,14 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { ChatHistory } from "@/components/fireota/chat-history";
 import { ConfirmAction } from "@/components/fireota/confirm-dialog";
 import { Markdown } from "@/components/fireota/markdown";
 import { EmptyState, SectionCard } from "@/components/fireota/primitives";
 import { Button } from "@/components/ui/button";
 import type { Agent } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { agentsService } from "@/services";
+import { agentsService, conversationsService } from "@/services";
 
 interface Step {
   tool: string;
@@ -60,7 +63,8 @@ interface Message {
   error?: boolean;
 }
 
-const STORAGE_KEY = "fireota.agent-chat";
+/** Per-browser convenience: which saved chat to reopen. The chats themselves live on the server. */
+const ACTIVE_KEY = "fireota.agent-chat.active";
 
 const COMMANDS: { name: string; hint: string; agent: string; prompt: string; attach?: boolean }[] =
   [
@@ -173,13 +177,32 @@ const THINKING = ["Thinking…", "Reading your workspace…", "Checking releases
 const uid = () => Math.random().toString(36).slice(2, 10);
 const mb = (bytes: number) => `${(bytes / 1_048_576).toFixed(2)} MB`;
 
-function loadChat(): Message[] {
+function readActive(): string | null {
   try {
-    const raw = sessionStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as Message[]) : [];
+    return localStorage.getItem(ACTIVE_KEY);
   } catch {
-    return [];
+    return null;
   }
+}
+
+function writeActive(id: string | null) {
+  try {
+    if (id) localStorage.setItem(ACTIVE_KEY, id);
+    else localStorage.removeItem(ACTIVE_KEY);
+  } catch {
+    /* storage unavailable: the last chat just isn't reopened automatically */
+  }
+}
+
+/** A chat's title before the user renames it: its first question, like ChatGPT. */
+function titleFrom(messages: Message[]) {
+  const first =
+    messages
+      .find((m) => m.role === "user")
+      ?.content.replace(/\s+/g, " ")
+      .trim() ?? "";
+  if (!first) return "New chat";
+  return first.length > 60 ? `${first.slice(0, 57).trimEnd()}…` : first;
 }
 
 /** Text the model sees for an earlier assistant turn: its answer plus what it did. */
@@ -203,7 +226,19 @@ export function AgentChat({ agents, configured }: { agents: Agent[]; configured:
   const usable = agents.filter((a) => a.status !== "disabled");
   const [agentId, setAgentId] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
-  const restored = useRef(false);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  // Set when the user renames the open chat, so auto-save keeps their title.
+  const [customTitle, setCustomTitle] = useState<string | null>(null);
+  const [opening, setOpening] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(true);
+  // What the server already has for the open chat; saves are skipped when nothing changed.
+  const savedSnapshot = useRef<string>("[]");
+  const pendingSave = useRef<{
+    id: string;
+    title: string;
+    agentId: string | null;
+    messages: Message[];
+  } | null>(null);
   const [draft, setDraft] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [menuIndex, setMenuIndex] = useState(0);
@@ -213,21 +248,115 @@ export function AgentChat({ agents, configured }: { agents: Agent[]; configured:
   const bottom = useRef<HTMLDivElement>(null);
   const selected = usable.find((a) => a.id === agentId) ?? usable[0];
 
-  // Restore after mount (sessionStorage is browser-only), then keep it in sync.
+  const conversations = useQuery({
+    queryKey: ["agent-conversations"],
+    queryFn: () => conversationsService.list(),
+  });
+
+  const flushSave = async () => {
+    const next = pendingSave.current;
+    if (!next) return;
+    pendingSave.current = null;
+    try {
+      await conversationsService.save(next);
+      savedSnapshot.current = JSON.stringify(next.messages);
+      void client.invalidateQueries({ queryKey: ["agent-conversations"] });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save this chat.");
+    }
+  };
+
+  // Auto-save the open chat shortly after it changes (new messages, tool results, uploads, approvals).
   useEffect(() => {
-    setMessages(loadChat());
-    restored.current = true;
+    bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    if (!conversationId || messages.length === 0) return;
+    if (JSON.stringify(messages) === savedSnapshot.current) return;
+    pendingSave.current = {
+      id: conversationId,
+      title: customTitle ?? titleFrom(messages),
+      agentId: selected?.id ?? null,
+      messages,
+    };
+    const timer = setTimeout(() => void flushSave(), 600);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages, conversationId, customTitle]);
+
+  // Save anything still pending if the page is closed mid-debounce.
+  useEffect(() => {
+    const onHide = () => void flushSave();
+    window.addEventListener("pagehide", onHide);
+    return () => window.removeEventListener("pagehide", onHide);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    if (!restored.current) return;
+  const resetThread = () => {
+    setMessages([]);
+    setConversationId(null);
+    setCustomTitle(null);
+    savedSnapshot.current = "[]";
+    setDraft("");
+    setFile(null);
+    writeActive(null);
+  };
+
+  const startNewChat = async () => {
+    await flushSave();
+    resetThread();
+    requestAnimationFrame(() => textarea.current?.focus());
+  };
+
+  const openConversation = async (id: string) => {
+    if (id === conversationId) return;
+    await flushSave();
+    setOpening(true);
     try {
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(messages.slice(-60)));
-    } catch {
-      /* storage unavailable: the chat just isn't kept across reloads */
+      const chat = await conversationsService.get(id);
+      const loaded = chat.messages as Message[];
+      savedSnapshot.current = JSON.stringify(loaded);
+      setMessages(loaded);
+      setConversationId(chat.id);
+      const list = conversations.data ?? [];
+      const title = list.find((c) => c.id === chat.id)?.title ?? chat.title;
+      setCustomTitle(title !== titleFrom(loaded) ? title : null);
+      if (chat.agentId && usable.some((a) => a.id === chat.agentId)) setAgentId(chat.agentId);
+      setDraft("");
+      setFile(null);
+      writeActive(chat.id);
+    } catch (error) {
+      writeActive(null);
+      toast.error(error instanceof Error ? error.message : "Could not open this chat.");
+      void client.invalidateQueries({ queryKey: ["agent-conversations"] });
+    } finally {
+      setOpening(false);
     }
-    bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages]);
+  };
+
+  // Reopen the chat this browser had open last; on phones start with the history closed.
+  useEffect(() => {
+    if (window.matchMedia("(max-width: 767px)").matches) setHistoryOpen(false);
+    const last = readActive();
+    if (last) void openConversation(last);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const renameChat = async (id: string, title: string) => {
+    try {
+      await conversationsService.rename(id, title);
+      if (id === conversationId) setCustomTitle(title);
+      await client.invalidateQueries({ queryKey: ["agent-conversations"] });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not rename this chat.");
+    }
+  };
+
+  const deleteChat = async (id: string) => {
+    if (pendingSave.current?.id === id) pendingSave.current = null;
+    await conversationsService.remove(id);
+    if (id === conversationId) resetThread();
+    toast.success("Chat deleted.");
+    await client.invalidateQueries({ queryKey: ["agent-conversations"] });
+  };
 
   useEffect(() => {
     const el = textarea.current;
@@ -366,9 +495,7 @@ export function AgentChat({ agents, configured }: { agents: Agent[]; configured:
 
   const applyCommand = (command: (typeof COMMANDS)[number]) => {
     if (command.name === "clear") {
-      setMessages([]);
-      setDraft("");
-      setFile(null);
+      void startNewChat();
       return;
     }
     const agent = usable.find((a) => a.key === command.agent);
@@ -380,7 +507,13 @@ export function AgentChat({ agents, configured }: { agents: Agent[]; configured:
 
   const send = (text = draft) => {
     const prompt = text.trim();
-    if (!prompt || !selected || run.isPending) return;
+    if (!prompt || !selected || run.isPending || opening) return;
+    // The first message turns a blank thread into a saved chat.
+    if (!conversationId) {
+      const id = crypto.randomUUID();
+      setConversationId(id);
+      writeActive(id);
+    }
     const history = messages;
     setMessages((all) => [
       ...all,
@@ -408,215 +541,278 @@ export function AgentChat({ agents, configured }: { agents: Agent[]; configured:
     );
   }
 
+  // Switching chats mid-answer or mid-upload would attach the result to the wrong thread.
+  const busy =
+    run.isPending ||
+    opening ||
+    messages.some((m) => m.uploads?.some((u) => u.state === "uploading"));
+
   return (
-    <div className="flex h-[calc(100vh-240px)] min-h-[560px] flex-col overflow-hidden rounded-xl border border-border bg-card">
-      {/* Header: agent picker */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2.5">
-        <div className="flex flex-wrap gap-1 rounded-lg bg-surface-2/60 p-1">
-          {usable.map((agent) => (
-            <button
-              key={agent.id}
-              type="button"
-              onClick={() => setAgentId(agent.id)}
-              title={agent.description}
-              className={cn(
-                "rounded-md px-3 py-1.5 text-[12px] transition-colors",
-                agent.id === selected?.id
-                  ? "bg-background font-medium text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {agent.name}
-            </button>
-          ))}
-        </div>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="ml-auto text-[12px]"
-          disabled={messages.length === 0 || run.isPending}
-          onClick={() => setMessages([])}
-        >
-          <Plus /> New chat
-        </Button>
-      </div>
-
-      {/* Thread */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto flex max-w-3xl flex-col gap-6 px-4 py-6">
-          {messages.length === 0 ? (
-            <Welcome agent={selected} onPick={applyCommand} />
-          ) : (
-            messages.map((message) =>
-              message.role === "user" ? (
-                <UserBubble key={message.id} message={message} />
-              ) : (
-                <AssistantMessage
-                  key={message.id}
-                  message={message}
-                  busy={decide.isPending || run.isPending}
-                  onDecide={(approvalId, decision) =>
-                    decide.mutate({ messageId: message.id, approvalId, decision })
-                  }
-                  onFollowUp={(text) => send(text)}
-                />
-              ),
-            )
-          )}
-          {run.isPending ? (
-            <div className="flex items-start gap-3">
-              <Avatar />
-              <div className="flex items-center gap-2 rounded-2xl bg-surface-2/60 px-4 py-2.5 text-[12px] text-muted-foreground">
-                <span className="flex gap-1">
-                  {[0, 1, 2].map((i) => (
-                    <span
-                      key={i}
-                      className="size-1.5 animate-bounce rounded-full bg-muted-foreground"
-                      style={{ animationDelay: `${i * 150}ms` }}
-                    />
-                  ))}
-                </span>
-                {THINKING[thinking]}
-              </div>
-            </div>
-          ) : null}
-          <div ref={bottom} />
-        </div>
-      </div>
-
-      {/* Composer */}
-      <div className="border-t border-border bg-background/60 px-4 py-3">
-        <div className="relative mx-auto max-w-3xl">
-          {matches.length > 0 ? (
-            <ul className="absolute bottom-full left-0 z-10 mb-2 max-h-72 w-full overflow-y-auto rounded-lg border border-border bg-popover p-1 shadow-lg">
-              {matches.map((command, i) => (
-                <li key={command.name}>
-                  <button
-                    type="button"
-                    onMouseEnter={() => setMenuIndex(i)}
-                    onClick={() => applyCommand(command)}
-                    className={cn(
-                      "flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-[12px]",
-                      i === menuIndex % matches.length ? "bg-surface-2" : "",
-                    )}
-                  >
-                    <span className="font-mono text-brand">/{command.name}</span>
-                    <span className="text-muted-foreground">{command.hint}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-
-          <div className="rounded-2xl border border-border bg-card shadow-sm focus-within:border-brand/60">
-            {file ? (
-              <div className="flex px-3 pt-3">
-                <span className="flex items-center gap-2 rounded-lg border border-border bg-surface-2/60 px-2.5 py-1.5 text-[11px]">
-                  <FileArchive className="size-3.5 text-brand" />
-                  <span className="font-mono">{file.name}</span>
-                  <span className="text-faint">{mb(file.size)}</span>
-                  <button
-                    type="button"
-                    aria-label="Remove attachment"
-                    onClick={() => setFile(null)}
-                  >
-                    <X className="size-3.5 text-muted-foreground hover:text-foreground" />
-                  </button>
-                </span>
-              </div>
-            ) : null}
-            <textarea
-              ref={textarea}
-              rows={1}
-              value={draft}
-              aria-label="Message the agent"
-              placeholder={`Message ${selected?.name ?? "an agent"} — type / for commands`}
-              onChange={(e) => {
-                setDraft(e.target.value);
-                setMenuIndex(0);
+    <div className="relative flex h-[calc(100vh-240px)] min-h-[560px] overflow-hidden rounded-xl border border-border bg-card">
+      {/* History sidebar: inline on desktop, an overlay on small screens. */}
+      {historyOpen ? (
+        <>
+          <button
+            type="button"
+            aria-label="Close chat history"
+            className="absolute inset-0 z-20 bg-background/60 md:hidden"
+            onClick={() => setHistoryOpen(false)}
+          />
+          <aside className="absolute inset-y-0 left-0 z-30 w-64 border-r border-border bg-card md:static md:z-auto md:w-60 md:shrink-0 md:bg-surface-2/30">
+            <ChatHistory
+              conversations={conversations.data ?? []}
+              loading={conversations.isPending}
+              activeId={conversationId}
+              disabled={busy}
+              onNew={() => {
+                void startNewChat();
+                if (window.matchMedia("(max-width: 767px)").matches) setHistoryOpen(false);
               }}
-              onKeyDown={(e) => {
-                if (matches.length > 0) {
-                  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-                    e.preventDefault();
-                    setMenuIndex(
-                      (i) =>
-                        (i + (e.key === "ArrowDown" ? 1 : matches.length - 1)) % matches.length,
-                    );
-                    return;
-                  }
-                  if (e.key === "Enter" || e.key === "Tab") {
-                    e.preventDefault();
-                    const command = matches[menuIndex % matches.length];
-                    if (command) applyCommand(command);
-                    return;
-                  }
-                  if (e.key === "Escape") {
-                    setDraft("");
-                    return;
-                  }
-                }
-                if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                  e.preventDefault();
-                  send();
-                }
+              onSelect={(id) => {
+                void openConversation(id);
+                if (window.matchMedia("(max-width: 767px)").matches) setHistoryOpen(false);
               }}
-              className="block max-h-[200px] w-full resize-none bg-transparent px-4 py-3 text-[13px] outline-none placeholder:text-faint"
+              onRename={renameChat}
+              onDelete={deleteChat}
             />
-            <div className="flex items-center gap-1 px-2 pb-2">
-              <input
-                ref={fileInput}
-                type="file"
-                accept=".fota"
-                className="hidden"
-                onChange={(e) => {
-                  const picked = e.target.files?.[0];
-                  if (picked) setFile(picked);
-                  e.target.value = "";
-                }}
-              />
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                className="size-8 rounded-full"
-                aria-label="Attach a .fota package"
-                title="Attach a .fota update package"
-                onClick={() => fileInput.current?.click()}
-              >
-                <Paperclip className="size-4" />
-              </Button>
+          </aside>
+        </>
+      ) : null}
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Header: agent picker */}
+        <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2.5">
+          <Button
+            size="icon"
+            variant="ghost"
+            className="size-8"
+            aria-label={historyOpen ? "Hide chat history" : "Show chat history"}
+            title={historyOpen ? "Hide chat history" : "Show chat history"}
+            onClick={() => setHistoryOpen((v) => !v)}
+          >
+            {historyOpen ? <PanelLeftClose /> : <PanelLeftOpen />}
+          </Button>
+          <div className="flex flex-wrap gap-1 rounded-lg bg-surface-2/60 p-1">
+            {usable.map((agent) => (
               <button
+                key={agent.id}
                 type="button"
-                onClick={() => {
-                  setDraft("/");
-                  textarea.current?.focus();
-                }}
-                className="rounded-full px-2 py-1 font-mono text-[11px] text-muted-foreground hover:bg-surface-2 hover:text-foreground"
-              >
-                / commands
-              </button>
-              <Button
-                type="button"
-                size="icon"
-                className="ml-auto size-8 rounded-full"
-                aria-label="Send"
-                disabled={!draft.trim() || run.isPending || !selected}
-                onClick={() => send()}
-              >
-                {run.isPending ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <ArrowUp className="size-4" />
+                onClick={() => setAgentId(agent.id)}
+                title={agent.description}
+                className={cn(
+                  "rounded-md px-3 py-1.5 text-[12px] transition-colors",
+                  agent.id === selected?.id
+                    ? "bg-background font-medium text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
                 )}
-              </Button>
-            </div>
+              >
+                {agent.name}
+              </button>
+            ))}
           </div>
-          <p className="mt-1.5 text-center text-[10px] text-faint">
-            Agents act with your permissions. Risky actions wait for approval. Enter to send ·
-            Shift+Enter for a new line
-          </p>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="ml-auto text-[12px]"
+            disabled={messages.length === 0 || busy}
+            onClick={() => void startNewChat()}
+          >
+            <Plus /> New chat
+          </Button>
         </div>
+
+        {opening ? (
+          <div className="flex flex-1 items-center justify-center gap-2 text-[12px] text-muted-foreground">
+            <Loader2 className="size-4 animate-spin" aria-hidden /> Opening chat…
+          </div>
+        ) : (
+          <>
+            {/* Thread */}
+            <div className="flex-1 overflow-y-auto">
+              <div
+                className={cn(
+                  "mx-auto flex max-w-3xl flex-col gap-6 px-4 py-6",
+                  // Empty thread: center the welcome in the available space instead of padding it past the fold.
+                  messages.length === 0 && "min-h-full justify-center",
+                )}
+              >
+                {messages.length === 0 ? (
+                  <Welcome agent={selected} onPick={applyCommand} />
+                ) : (
+                  messages.map((message) =>
+                    message.role === "user" ? (
+                      <UserBubble key={message.id} message={message} />
+                    ) : (
+                      <AssistantMessage
+                        key={message.id}
+                        message={message}
+                        busy={decide.isPending || run.isPending}
+                        onDecide={(approvalId, decision) =>
+                          decide.mutate({ messageId: message.id, approvalId, decision })
+                        }
+                        onFollowUp={(text) => send(text)}
+                      />
+                    ),
+                  )
+                )}
+                {run.isPending ? (
+                  <div className="flex items-start gap-3">
+                    <Avatar />
+                    <div className="flex items-center gap-2 rounded-2xl bg-surface-2/60 px-4 py-2.5 text-[12px] text-muted-foreground">
+                      <span className="flex gap-1">
+                        {[0, 1, 2].map((i) => (
+                          <span
+                            key={i}
+                            className="size-1.5 animate-bounce rounded-full bg-muted-foreground"
+                            style={{ animationDelay: `${i * 150}ms` }}
+                          />
+                        ))}
+                      </span>
+                      {THINKING[thinking]}
+                    </div>
+                  </div>
+                ) : null}
+                <div ref={bottom} />
+              </div>
+            </div>
+
+            {/* Composer */}
+            <div className="border-t border-border bg-background/60 px-4 py-3">
+              <div className="relative mx-auto max-w-3xl">
+                {matches.length > 0 ? (
+                  <ul className="absolute bottom-full left-0 z-10 mb-2 max-h-72 w-full overflow-y-auto rounded-lg border border-border bg-popover p-1 shadow-lg">
+                    {matches.map((command, i) => (
+                      <li key={command.name}>
+                        <button
+                          type="button"
+                          onMouseEnter={() => setMenuIndex(i)}
+                          onClick={() => applyCommand(command)}
+                          className={cn(
+                            "flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-[12px]",
+                            i === menuIndex % matches.length ? "bg-surface-2" : "",
+                          )}
+                        >
+                          <span className="font-mono text-brand">/{command.name}</span>
+                          <span className="text-muted-foreground">{command.hint}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+
+                <div className="rounded-2xl border border-border bg-card shadow-sm focus-within:border-brand/60">
+                  {file ? (
+                    <div className="flex px-3 pt-3">
+                      <span className="flex items-center gap-2 rounded-lg border border-border bg-surface-2/60 px-2.5 py-1.5 text-[11px]">
+                        <FileArchive className="size-3.5 text-brand" />
+                        <span className="font-mono">{file.name}</span>
+                        <span className="text-faint">{mb(file.size)}</span>
+                        <button
+                          type="button"
+                          aria-label="Remove attachment"
+                          onClick={() => setFile(null)}
+                        >
+                          <X className="size-3.5 text-muted-foreground hover:text-foreground" />
+                        </button>
+                      </span>
+                    </div>
+                  ) : null}
+                  <textarea
+                    ref={textarea}
+                    rows={1}
+                    value={draft}
+                    aria-label="Message the agent"
+                    placeholder={`Message ${selected?.name ?? "an agent"} — type / for commands`}
+                    onChange={(e) => {
+                      setDraft(e.target.value);
+                      setMenuIndex(0);
+                    }}
+                    onKeyDown={(e) => {
+                      if (matches.length > 0) {
+                        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                          e.preventDefault();
+                          setMenuIndex(
+                            (i) =>
+                              (i + (e.key === "ArrowDown" ? 1 : matches.length - 1)) %
+                              matches.length,
+                          );
+                          return;
+                        }
+                        if (e.key === "Enter" || e.key === "Tab") {
+                          e.preventDefault();
+                          const command = matches[menuIndex % matches.length];
+                          if (command) applyCommand(command);
+                          return;
+                        }
+                        if (e.key === "Escape") {
+                          setDraft("");
+                          return;
+                        }
+                      }
+                      if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                        e.preventDefault();
+                        send();
+                      }
+                    }}
+                    className="block max-h-[200px] w-full resize-none bg-transparent px-4 py-3 text-[13px] outline-none placeholder:text-faint"
+                  />
+                  <div className="flex items-center gap-1 px-2 pb-2">
+                    <input
+                      ref={fileInput}
+                      type="file"
+                      accept=".fota"
+                      className="hidden"
+                      onChange={(e) => {
+                        const picked = e.target.files?.[0];
+                        if (picked) setFile(picked);
+                        e.target.value = "";
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="size-8 rounded-full"
+                      aria-label="Attach a .fota package"
+                      title="Attach a .fota update package"
+                      onClick={() => fileInput.current?.click()}
+                    >
+                      <Paperclip className="size-4" />
+                    </Button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDraft("/");
+                        textarea.current?.focus();
+                      }}
+                      className="rounded-full px-2 py-1 font-mono text-[11px] text-muted-foreground hover:bg-surface-2 hover:text-foreground"
+                    >
+                      / commands
+                    </button>
+                    <Button
+                      type="button"
+                      size="icon"
+                      className="ml-auto size-8 rounded-full"
+                      aria-label="Send"
+                      disabled={!draft.trim() || run.isPending || !selected}
+                      onClick={() => send()}
+                    >
+                      {run.isPending ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <ArrowUp className="size-4" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+                <p className="mt-1.5 text-center text-[10px] text-faint">
+                  Agents act with your permissions. Risky actions wait for approval. Enter to send ·
+                  Shift+Enter for a new line
+                </p>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -641,7 +837,7 @@ function Welcome({
     .map((name) => COMMANDS.find((c) => c.name === name))
     .filter((c): c is (typeof COMMANDS)[number] => Boolean(c));
   return (
-    <div className="flex flex-col items-center gap-6 py-10 text-center">
+    <div className="flex flex-col items-center gap-5 text-center">
       <span className="flex size-12 items-center justify-center rounded-2xl bg-brand/15 text-brand">
         <Sparkles className="size-6" />
       </span>
