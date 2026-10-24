@@ -26,9 +26,18 @@ import {
   TerminalFrame,
   ThemeCompareMock,
   UpdateFlowDiagram,
+  RequiredUpdateMock,
+  UpdateDialogMock,
   UpdatePromptMocks,
+  UpdateSheetMock,
+  UpdatesSettingsMock,
   XcodeBridgingMock,
 } from "./figures";
+// Ready-made screens: the docs show the exact files that type-check in packages/react-native/templates.
+import TPL_REQUIRED from "../../../packages/react-native/templates/RequiredUpdateScreen.tsx?raw";
+import TPL_DIALOG from "../../../packages/react-native/templates/UpdateDialog.tsx?raw";
+import TPL_SHEET from "../../../packages/react-native/templates/UpdateSheet.tsx?raw";
+import TPL_SETTINGS from "../../../packages/react-native/templates/UpdatesSettingsCard.tsx?raw";
 
 export interface DocSection {
   id: string;
@@ -220,6 +229,41 @@ export default function App() {
       <RootNavigator />
       <UpdatePrompt title="New version available" message="Restart to get the latest fixes." />
     </>
+  );
+}`;
+
+const TPL_WIRING = `// index.js — wrap the app in FireOTAProvider and pick a template
+import { AppRegistry } from "react-native";
+import { FireOTAProvider } from "@fireota/react-native";
+import App from "./App";
+import { name as appName } from "./app.json";
+import fireotaConfig from "./fireota.config";
+import { UpdateSheet } from "./src/UpdateSheet";       // or UpdateDialog
+
+function Root() {
+  return (
+    <FireOTAProvider
+      config={fireotaConfig}
+      theme={{ accent: "#FF5A1F" }}                   // optional: restyles every template
+      renderPrompt={(ota) => <UpdateSheet ota={ota} />}
+    >
+      <App />
+    </FireOTAProvider>
+  );
+}
+
+AppRegistry.registerComponent(appName, () => Root);`;
+
+const TPL_SETTINGS_USAGE = `// src/screens/SettingsScreen.tsx
+import { ScrollView } from "react-native";
+import { UpdatesSettingsCard } from "../UpdatesSettingsCard";
+
+export function SettingsScreen() {
+  return (
+    <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
+      {/* …your other settings… */}
+      <UpdatesSettingsCard />
+    </ScrollView>
   );
 }`;
 
@@ -986,6 +1030,7 @@ function UpdateBadge() {
                 </p>
                 <Bullets
                   items={[
+                    <><D to="update-screens">Ready-made screens</D> — copy a finished bottom sheet, dialog, required-update screen or settings card.</>,
                     <><a href="#theme" className="text-brand underline-offset-2 hover:underline">Colours only</a> — pass a <C>theme</C>. One line, keeps the built-in layout.</>,
                     <><a href="#text" className="text-brand underline-offset-2 hover:underline">Colours and wording</a> — render <C>&lt;UpdatePrompt title message /&gt;</C> yourself.</>,
                     <><a href="#render-prompt" className="text-brand underline-offset-2 hover:underline">Your own design</a> — <C>renderPrompt</C> on <C>FireOTAProvider</C>. Full control over the look; FireOTA still decides when it shows.</>,
@@ -1166,6 +1211,130 @@ text:   "#F4F5F7"   muted:      "#9AA1AC"   danger: "#F05252"`}
                   <>Open the app and wait a few seconds — your prompt should appear once the download finishes.</>,
                   <>To test the mandatory path, publish again with <C>--mandatory</C>.</>,
                   <>Use the <strong>beta</strong> channel for these tests so production users never see them.</>,
+                ]}
+              />
+            ),
+          },
+        ],
+      },
+      {
+        slug: "update-screens",
+        title: "Ready-made update screens",
+        description:
+          "Copy-paste update screens for React Native: a bottom sheet, a What's new dialog, a required-update screen and a settings card — with previews.",
+        sections: [
+          {
+            id: "how",
+            title: "How to use a template",
+            body: (
+              <>
+                <p>
+                  Each screen below is a single file that only uses <C>react</C>, <C>react-native</C> and{" "}
+                  <C>@fireota/react-native</C> — no extra packages. They take their colours from the FireOTA <C>theme</C>, so one
+                  theme restyles all of them, and since they are plain JavaScript they can themselves ship as an OTA update.
+                </p>
+                <Steps
+                  items={[
+                    <>Copy the template file into your app's <C>src/</C> folder. The prompts also need <C>RequiredUpdateScreen.tsx</C>.</>,
+                    <>
+                      Replace <C>withFireOTA(App, fireotaConfig)</C> in <C>index.js</C> with <C>FireOTAProvider</C> and pass the template
+                      as <C>renderPrompt</C>:
+                      <Code language="tsx" code={TPL_WIRING} />
+                    </>,
+                    <>Build a release build once; after that, publish changes to the screen as normal updates.</>,
+                  ]}
+                />
+                <Callout kind="note">
+                  The previews on this page use the default theme and a light custom theme. Texts, version and notes come from what you
+                  publish: <C>--message</C> becomes the notes and <C>--version</C> the version label.
+                </Callout>
+              </>
+            ),
+          },
+          {
+            id: "sheet",
+            title: "Bottom sheet with release notes",
+            body: (
+              <>
+                <Figure caption="UpdateSheet: slides up once an update is downloaded. Restart applies it now; Later hides it until the next cold start.">
+                  <UpdateSheetMock />
+                </Figure>
+                <p>
+                  Shows the version, download size and up to five lines of your release notes (one per line, leading <C>-</C> or{" "}
+                  <C>•</C> is stripped). Tapping outside the sheet or Android's back button counts as <strong>Later</strong>.
+                </p>
+                <Code language="tsx" code={TPL_SHEET} />
+              </>
+            ),
+          },
+          {
+            id: "dialog",
+            title: "What's new dialog",
+            body: (
+              <>
+                <Figure caption="UpdateDialog: a centered card with the release notes, Restart now and Not now.">
+                  <UpdateDialogMock />
+                </Figure>
+                <p>
+                  A good fit when updates carry user-facing changes. Use it instead of the sheet by passing{" "}
+                  <C>{"renderPrompt={(ota) => <UpdateDialog ota={ota} />}"}</C>.
+                </p>
+                <Code language="tsx" code={TPL_DIALOG} />
+              </>
+            ),
+          },
+          {
+            id: "required",
+            title: "Required update screen",
+            body: (
+              <>
+                <Figure caption="RequiredUpdateScreen: blocks the app while a mandatory update downloads, with a retry if the download fails.">
+                  <RequiredUpdateMock />
+                </Figure>
+                <p>
+                  Shown for updates published with <C>--mandatory</C>. It cannot be dismissed — not even with Android's back button —
+                  and the app restarts by itself once the download is verified. Both prompts above already use it, so you only copy
+                  the file.
+                </p>
+                <Callout kind="caution">
+                  If you write your own prompt, keep the <C>isRequiredUpdate(ota)</C> check from this file. Without it a mandatory
+                  update is downloaded silently and users keep using the old version until the forced restart.
+                </Callout>
+                <Code language="tsx" code={TPL_REQUIRED} />
+              </>
+            ),
+          },
+          {
+            id: "settings",
+            title: "App updates settings card",
+            body: (
+              <>
+                <Figure caption="UpdatesSettingsCard: version, channel and status, with one button that always does the next step.">
+                  <UpdatesSettingsMock />
+                </Figure>
+                <p>
+                  Drop it into a Settings or About screen. The button changes with the state: <strong>Check for updates</strong> →{" "}
+                  <strong>Download update</strong> → <strong>Restart now</strong>. It works with <C>withFireOTA</C> too — no{" "}
+                  <C>renderPrompt</C> needed.
+                </p>
+                <Code language="tsx" code={TPL_SETTINGS_USAGE} />
+                <Code language="tsx" code={TPL_SETTINGS} />
+              </>
+            ),
+          },
+          {
+            id: "test",
+            title: "Test your screen",
+            body: (
+              <Steps
+                items={[
+                  <>Install a <strong>release</strong> build that contains the template.</>,
+                  <>
+                    Publish to the beta channel with notes on separate lines:{" "}
+                    <C>npx fireota publish … --channel beta --message "Faster checkout"</C>.
+                  </>,
+                  <>Open the app and wait a few seconds — the sheet or dialog appears once the download finishes.</>,
+                  <>Publish again with <C>--mandatory</C> to see the required-update screen.</>,
                 ]}
               />
             ),

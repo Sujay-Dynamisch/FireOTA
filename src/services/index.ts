@@ -41,6 +41,13 @@ import {
   verifyFirebaseProject,
 } from "@/lib/api/firebase.functions";
 import {
+  deleteConversation,
+  getConversation,
+  listConversations,
+  renameConversation,
+  saveConversation,
+} from "@/lib/api/conversations.functions";
+import {
   createApp,
   createChannel,
   deleteApp,
@@ -578,6 +585,19 @@ export const agentsService = {
   /** Uploads a chat attachment to the draft release an agent created. */
   uploadBundle: (releaseId: string, file: File, progress: (stage: string, percent: number) => void = () => {}) =>
     uploadBundleToBackend(releaseId, { file, progress }),
+};
+
+/** Saved agent chats for the signed-in member. */
+export const conversationsService = {
+  list: () => listConversations(),
+  get: async (id: string) => {
+    const chat = await getConversation({ data: { id } });
+    return { ...chat, messages: JSON.parse(chat.messagesJson) as unknown[] };
+  },
+  save: (input: { id: string; title: string; agentId: string | null; messages: unknown[] }) =>
+    saveConversation({ data: input }),
+  rename: (id: string, title: string) => renameConversation({ data: { id, title } }),
+  remove: (id: string) => deleteConversation({ data: { id } }),
 };
 
 export const notificationsService = {

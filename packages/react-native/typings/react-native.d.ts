@@ -19,7 +19,13 @@ declare module "react-native" {
   >;
   export const ActivityIndicator: ComponentType<{ color?: string; size?: "small" | "large" }>;
   export const Modal: ComponentType<
-    Common & { visible?: boolean; transparent?: boolean; animationType?: string; statusBarTranslucent?: boolean }
+    Common & {
+      visible?: boolean;
+      transparent?: boolean;
+      animationType?: string;
+      statusBarTranslucent?: boolean;
+      onRequestClose?: () => void;
+    }
   >;
   export const StyleSheet: { create<T extends Record<string, Record<string, unknown>>>(styles: T): T };
 }

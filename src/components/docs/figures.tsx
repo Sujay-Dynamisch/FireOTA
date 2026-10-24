@@ -760,6 +760,276 @@ export function CustomPromptMock() {
   );
 }
 
+/* ------------------------- ready-made update screens ------------------------- */
+// Each mock mirrors a template in packages/react-native/templates/: same texts, order and colours.
+
+const SAMPLE_NOTES = ["Faster checkout", "Fixed a crash on login", "New dark mode icons"];
+
+function Dimmed() {
+  return <div className="absolute inset-0 bg-black/50" />;
+}
+
+function SheetScreen({ theme }: { theme: PromptTheme }) {
+  return (
+    <PhoneFrame>
+      <AppContent />
+      <Dimmed />
+      <div
+        className="absolute inset-x-0 bottom-0 space-y-1 rounded-t-2xl px-3 pb-3 pt-2"
+        style={{ background: theme.card }}
+      >
+        <div className="mx-auto mb-1.5 h-[3px] w-7 rounded-full bg-neutral-400/50" />
+        <p className="text-[7px] font-extrabold tracking-wider" style={{ color: theme.accent }}>
+          NEW UPDATE
+        </p>
+        <p className="text-[11px] font-extrabold leading-tight" style={{ color: theme.text }}>
+          Version 2.4.1 is ready
+        </p>
+        <p className="text-[7px]" style={{ color: theme.muted }}>
+          1.8 MB · downloaded
+        </p>
+        <div className="space-y-1 py-1.5">
+          {SAMPLE_NOTES.map((note) => (
+            <p
+              key={note}
+              className="flex items-center gap-1.5 text-[8px]"
+              style={{ color: theme.text }}
+            >
+              <span className="size-1 shrink-0 rounded-full" style={{ background: theme.accent }} />
+              {note}
+            </p>
+          ))}
+        </div>
+        <span
+          className="block rounded-md py-1.5 text-center text-[8px] font-bold text-white"
+          style={{ background: theme.accent }}
+        >
+          Restart to update
+        </span>
+        <span
+          className="block pt-0.5 text-center text-[8px] font-semibold"
+          style={{ color: theme.muted }}
+        >
+          Later
+        </span>
+      </div>
+    </PhoneFrame>
+  );
+}
+
+/** UpdateSheet.tsx: default theme next to a light custom theme. */
+export function UpdateSheetMock() {
+  return (
+    <div className="flex flex-wrap items-start justify-center gap-6">
+      <div className="space-y-2 text-center">
+        <SheetScreen theme={SDK_DEFAULT_THEME} />
+        <PhoneCaption>Default theme</PhoneCaption>
+      </div>
+      <div className="space-y-2 text-center">
+        <SheetScreen theme={EXAMPLE_CUSTOM_THEME} />
+        <PhoneCaption>With a custom theme</PhoneCaption>
+      </div>
+    </div>
+  );
+}
+
+function DialogScreen({ theme }: { theme: PromptTheme }) {
+  return (
+    <PhoneFrame>
+      <AppContent />
+      <div className="absolute inset-0 grid place-items-center bg-black/55 px-3">
+        <div
+          className="w-full space-y-1 rounded-xl p-3 text-center shadow-xl"
+          style={{ background: theme.card }}
+        >
+          <span
+            className="mx-auto mb-1 grid size-6 place-items-center rounded-full text-[11px] font-extrabold text-white"
+            style={{ background: theme.accent }}
+          >
+            ↑
+          </span>
+          <p className="text-[10px] font-extrabold" style={{ color: theme.text }}>
+            What's new
+          </p>
+          <p className="font-mono text-[7px]" style={{ color: theme.muted }}>
+            Version 2.4.1
+          </p>
+          <div className="space-y-0.5 py-1.5 text-left">
+            {SAMPLE_NOTES.map((note) => (
+              <p key={note} className="text-[8px]" style={{ color: theme.text }}>
+                • {note}
+              </p>
+            ))}
+          </div>
+          <span
+            className="block rounded-md py-1.5 text-[8px] font-bold text-white"
+            style={{ background: theme.accent }}
+          >
+            Restart now
+          </span>
+          <span className="block pt-0.5 text-[8px] font-semibold" style={{ color: theme.muted }}>
+            Not now
+          </span>
+        </div>
+      </div>
+    </PhoneFrame>
+  );
+}
+
+/** UpdateDialog.tsx: default theme next to a light custom theme. */
+export function UpdateDialogMock() {
+  return (
+    <div className="flex flex-wrap items-start justify-center gap-6">
+      <div className="space-y-2 text-center">
+        <DialogScreen theme={SDK_DEFAULT_THEME} />
+        <PhoneCaption>Default theme</PhoneCaption>
+      </div>
+      <div className="space-y-2 text-center">
+        <DialogScreen theme={EXAMPLE_CUSTOM_THEME} />
+        <PhoneCaption>With a custom theme</PhoneCaption>
+      </div>
+    </div>
+  );
+}
+
+function RequiredScreen({ theme, failed = false }: { theme: PromptTheme; failed?: boolean }) {
+  return (
+    <PhoneFrame>
+      <div
+        className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 px-3 text-center"
+        style={{ background: theme.background }}
+      >
+        <span
+          className="rounded-full px-2 py-0.5 text-[6px] font-extrabold tracking-wider"
+          style={{ background: theme.card, color: theme.accent }}
+        >
+          REQUIRED UPDATE
+        </span>
+        <p className="text-[12px] font-extrabold" style={{ color: theme.text }}>
+          Updating your app
+        </p>
+        <p className="text-[8px] leading-snug" style={{ color: theme.muted }}>
+          Fixes a payment issue. This only takes a moment.
+        </p>
+        {failed ? (
+          <>
+            <p className="pt-1.5 text-[7px]" style={{ color: "#F05252" }}>
+              The update could not be downloaded. Check your connection.
+            </p>
+            <span
+              className="rounded-md px-3 py-1 text-[8px] font-bold text-white"
+              style={{ background: theme.accent }}
+            >
+              Try again
+            </span>
+          </>
+        ) : (
+          <div className="space-y-1 pt-2">
+            <div
+              className="mx-auto size-5 animate-spin rounded-full border-2"
+              style={{ borderColor: theme.muted, borderTopColor: theme.accent }}
+            />
+            <p className="text-[7px]" style={{ color: theme.muted }}>
+              Downloading…
+            </p>
+          </div>
+        )}
+        <p className="absolute bottom-4 font-mono text-[7px]" style={{ color: theme.muted }}>
+          Version 2.4.1
+        </p>
+      </div>
+    </PhoneFrame>
+  );
+}
+
+/** RequiredUpdateScreen.tsx: downloading, and the retry state after a failed download. */
+export function RequiredUpdateMock() {
+  return (
+    <div className="flex flex-wrap items-start justify-center gap-6">
+      <div className="space-y-2 text-center">
+        <RequiredScreen theme={SDK_DEFAULT_THEME} />
+        <PhoneCaption>Downloading</PhoneCaption>
+      </div>
+      <div className="space-y-2 text-center">
+        <RequiredScreen theme={SDK_DEFAULT_THEME} failed />
+        <PhoneCaption>Download failed</PhoneCaption>
+      </div>
+    </div>
+  );
+}
+
+function SettingsScreen({ theme, available }: { theme: PromptTheme; available: boolean }) {
+  return (
+    <PhoneFrame>
+      <div
+        className="absolute inset-0 space-y-1.5 px-2 pt-5"
+        style={{ background: theme.background }}
+      >
+        <p className="px-0.5 text-[11px] font-extrabold" style={{ color: theme.text }}>
+          Settings
+        </p>
+        <div className="space-y-1 rounded-lg p-2" style={{ background: theme.card }}>
+          <p
+            className="flex items-center justify-between text-[9px] font-extrabold"
+            style={{ color: theme.text }}
+          >
+            App updates
+            <span
+              className="size-1.5 rounded-full"
+              style={{ background: available ? theme.accent : "#22C55E" }}
+            />
+          </p>
+          <p className="text-[8px] font-semibold" style={{ color: theme.text }}>
+            {available ? "Update available: 2.4.1" : "You're on the latest version"}
+          </p>
+          {available ? (
+            <p className="text-[7px] leading-snug" style={{ color: theme.muted }}>
+              Faster checkout and a fix for a crash on login.
+            </p>
+          ) : null}
+          <div className="border-t pt-0.5" style={{ borderColor: theme.background }}>
+            {[
+              ["App version", "2.4.0"],
+              ["Channel", "production"],
+              ["Running", available ? "store build" : "update 3f9a12c0"],
+              ["Last checked", "Today, 9:41"],
+            ].map(([k, v]) => (
+              <p key={k} className="flex justify-between py-[3px] text-[7px]">
+                <span style={{ color: theme.muted }}>{k}</span>
+                <span className="font-semibold" style={{ color: theme.text }}>
+                  {v}
+                </span>
+              </p>
+            ))}
+          </div>
+          <span
+            className="mt-1 block rounded-md py-1.5 text-center text-[8px] font-bold text-white"
+            style={{ background: theme.accent }}
+          >
+            {available ? "Download update" : "Check for updates"}
+          </span>
+        </div>
+      </div>
+    </PhoneFrame>
+  );
+}
+
+/** UpdatesSettingsCard.tsx: an update waiting, and up to date. */
+export function UpdatesSettingsMock() {
+  return (
+    <div className="flex flex-wrap items-start justify-center gap-6">
+      <div className="space-y-2 text-center">
+        <SettingsScreen theme={SDK_DEFAULT_THEME} available />
+        <PhoneCaption>Update available</PhoneCaption>
+      </div>
+      <div className="space-y-2 text-center">
+        <SettingsScreen theme={EXAMPLE_CUSTOM_THEME} available={false} />
+        <PhoneCaption>Up to date (custom theme)</PhoneCaption>
+      </div>
+    </div>
+  );
+}
+
 /** Files that `fireota init` touches, as a small tree. */
 export function ProjectTreeMock({
   items,
