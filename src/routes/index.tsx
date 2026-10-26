@@ -33,8 +33,8 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { BrandMark } from "@/components/fireota/brand-mark";
 import { CiLogo, Icons8Credit, type CiTool } from "@/components/fireota/ci-logos";
-import { ProductVideo } from "@/components/fireota/product-video";
-import { CodeBlock, CopyButton } from "@/components/fireota/primitives";
+import { ComparisonTable } from "@/components/fireota/comparison";
+import { ProductVideo } from "@/components/fireota/product-video";import { CodeBlock, CopyButton } from "@/components/fireota/primitives";
 import {
   Accordion,
   AccordionContent,
@@ -391,110 +391,6 @@ function Landing() {
               </Reveal>
             </div>
 
-            {/* Hero Showcase Display: 3D Banner or Video Walkthrough */}
-            <Reveal delay={280} className="mt-12 sm:mt-16">
-              <div className="relative mx-auto max-w-6xl">
-                {/* Decorative glowing ambient rim */}
-                <div
-                  aria-hidden
-                  className="absolute -inset-1.5 rounded-3xl sm:rounded-2xl bg-gradient-to-r from-brand/40 via-amber-500/20 to-brand/30 blur-2xl opacity-75"
-                />
-
-                <div className="relative overflow-hidden rounded-2xl sm:rounded-2xl border border-border/80 bg-surface/90 shadow-[0_30px_100px_-20px_rgba(255,90,31,0.35)]">
-                  {/* Top Bar Switcher */}
-                  <div className="flex flex-wrap items-center justify-between border-b border-border/70 bg-surface/90 px-4 py-3 sm:px-6">
-                    <div className="flex items-center gap-2">
-                      <span className="size-3 rounded-full bg-red-500/80" />
-                      <span className="size-3 rounded-full bg-amber-500/80" />
-                      <span className="size-3 rounded-full bg-emerald-500/80" />
-                      <span className="ml-2 font-mono text-[11px] text-foreground font-semibold">
-                        FireOTA System Architecture Blueprint
-                      </span>
-                      <span className="hidden sm:inline font-mono text-[10px] text-muted-foreground">
-                        · Customer-Owned Storage & Governed Delivery
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setHeroView("banner")}
-                        className={cn(
-                          "rounded-lg px-3 py-1 font-mono text-[11px] transition-all cursor-pointer",
-                          heroView === "banner"
-                            ? "bg-brand text-white font-medium shadow-sm"
-                            : "text-muted-foreground hover:bg-surface-2 hover:text-foreground",
-                        )}
-                      >
-                        System Architecture
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setHeroView("video")}
-                        className={cn(
-                          "flex items-center gap-1.5 rounded-lg px-3 py-1 font-mono text-[11px] transition-all cursor-pointer",
-                          heroView === "video"
-                            ? "bg-brand text-white font-medium shadow-sm"
-                            : "text-muted-foreground hover:bg-surface-2 hover:text-foreground",
-                        )}
-                      >
-                        <Play className="size-3 fill-current" />
-                        Video Tour
-                      </button>
-                      {heroView === "banner" && (
-                        <button
-                          type="button"
-                          onClick={() => setArchModalOpen(true)}
-                          className="ml-2 hidden sm:inline-flex items-center gap-1 rounded-md border border-border bg-surface px-2.5 py-1 font-mono text-[10px] text-muted-foreground hover:border-brand/40 hover:text-foreground cursor-pointer"
-                        >
-                          <Maximize2 className="size-3 text-brand" />
-                          <span>Expand</span>
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Main Visual Display */}
-                  {heroView === "banner" ? (
-                    <div
-                      onClick={() => setArchModalOpen(true)}
-                      className="relative cursor-pointer overflow-hidden bg-white p-3 sm:p-6 transition-all hover:opacity-98"
-                      title="Click to view full-resolution architecture blueprint"
-                    >
-                      <img
-                        src="/media/fireota-system-architecture.png"
-                        alt="FireOTA Official System Architecture Diagram: Developer Clients, Control Plane, Data & Identity, and Customer-Owned Artifact Plane"
-                        className="w-full object-contain max-h-[580px] mx-auto rounded-lg"
-                      />
-                      <div className="absolute right-5 bottom-5 hidden sm:flex items-center gap-1.5 rounded-xl border border-black/10 bg-black/85 px-3 py-1.5 font-mono text-[11px] text-white backdrop-blur shadow-xl">
-                        <Maximize2 className="size-3.5 text-brand" />
-                        <span>Click to expand</span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="p-3 sm:p-6 bg-black">
-                      <ProductVideo />
-                    </div>
-                  )}
-
-                  {/* Blueprint Bottom Subtitle */}
-                  {heroView === "banner" && (
-                    <div className="border-t border-border/80 bg-surface/90 px-4 sm:px-6 py-2.5 font-mono text-[11px] text-muted-foreground flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <ShieldCheck className="size-4 text-emerald-400 shrink-0" />
-                        <span>
-                          Design Principle: FireOTA manages metadata & policy; customer Firebase
-                          bucket serves binary artifacts directly.
-                        </span>
-                      </div>
-                      <span className="text-[10px] text-faint">
-                        04 · Customer-Owned Artifact Plane
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </Reveal>
           </div>
         </section>
 
@@ -556,17 +452,17 @@ function Landing() {
                 Seamlessly integrated with modern React Native & DevOps tooling
               </p>
               <div className="relative mt-6 overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_15%,black_85%,transparent)]">
-                <div className="flex w-max animate-marquee gap-8 py-2">
+                <div className="flex w-max animate-marquee gap-6 py-3 pr-6 hover:[animation-play-state:paused]">
                   {[...ECOSYSTEM_BRANDS, ...ECOSYSTEM_BRANDS].map((eco, idx) => (
                     <div
                       key={`${eco.id}-${idx}`}
-                      className="flex items-center gap-2.5 rounded-full border border-border/80 bg-surface/80 px-4 py-1.5 shadow-sm backdrop-blur-sm transition-all duration-200 hover:border-border hover:bg-surface-2/90"
+                      className="flex items-center gap-3 rounded-full border border-border/80 bg-surface/80 py-2.5 pl-3 pr-5 shadow-sm backdrop-blur-sm transition-all duration-200 hover:border-border hover:bg-surface-2/90"
                     >
-                      <EcosystemLogo id={eco.id} className="size-4 shrink-0" />
-                      <span className="font-display text-[13px] font-semibold text-foreground">
+                      <EcosystemLogo id={eco.id} className="size-8" />
+                      <span className="font-display text-[16px] font-semibold text-foreground">
                         {eco.name}
                       </span>
-                      <span className="font-mono text-[10px] text-muted-foreground">
+                      <span className="font-mono text-[12px] text-muted-foreground">
                         ({eco.tag})
                       </span>
                     </div>
@@ -1085,61 +981,8 @@ function Landing() {
               </h2>
             </Reveal>
 
-            <Reveal delay={100} className="mt-12 overflow-x-auto">
-              <table className="w-full min-w-[600px] border-collapse rounded-3xl border border-border/80 bg-surface/40 text-left font-mono text-[12px]">
-                <thead>
-                  <tr className="border-b border-border/80 bg-surface/80 text-foreground">
-                    <th className="p-4 sm:p-5 font-bold">Feature</th>
-                    <th className="p-4 sm:p-5 font-bold text-brand">FireOTA</th>
-                    <th className="p-4 sm:p-5 font-medium text-muted-foreground">
-                      Legacy CodePush
-                    </th>
-                    <th className="p-4 sm:p-5 font-medium text-muted-foreground">
-                      Centralized Clouds
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/50 text-muted-foreground">
-                  <tr>
-                    <td className="p-4 sm:p-5 text-foreground font-semibold">
-                      Source Code Ownership
-                    </td>
-                    <td className="p-4 sm:p-5 text-emerald-400 font-bold">100% In Your Firebase</td>
-                    <td className="p-4 sm:p-5">Microsoft Servers (Retired)</td>
-                    <td className="p-4 sm:p-5">Third-Party Cloud Storage</td>
-                  </tr>
-                  <tr>
-                    <td className="p-4 sm:p-5 text-foreground font-semibold">Platform Fee</td>
-                    <td className="p-4 sm:p-5 text-emerald-400 font-bold">$0 (Free Forever)</td>
-                    <td className="p-4 sm:p-5">Free (No longer supported)</td>
-                    <td className="p-4 sm:p-5">$99 - $500+ / mo + bandwidth</td>
-                  </tr>
-                  <tr>
-                    <td className="p-4 sm:p-5 text-foreground font-semibold">
-                      Deterministic Staged Rollout
-                    </td>
-                    <td className="p-4 sm:p-5 text-emerald-400 font-bold">
-                      Yes (FNV-1a Bucketing)
-                    </td>
-                    <td className="p-4 sm:p-5">Random % (Oscillates)</td>
-                    <td className="p-4 sm:p-5">Limited by Tier</td>
-                  </tr>
-                  <tr>
-                    <td className="p-4 sm:p-5 text-foreground font-semibold">SDK Open Source</td>
-                    <td className="p-4 sm:p-5 text-emerald-400 font-bold">100% MIT Licensed</td>
-                    <td className="p-4 sm:p-5">Archived / Deprecated</td>
-                    <td className="p-4 sm:p-5">Proprietary / Closed</td>
-                  </tr>
-                  <tr>
-                    <td className="p-4 sm:p-5 text-foreground font-semibold">
-                      AI Agent Monitoring
-                    </td>
-                    <td className="p-4 sm:p-5 text-emerald-400 font-bold">Permissioned Copilot</td>
-                    <td className="p-4 sm:p-5">None</td>
-                    <td className="p-4 sm:p-5">Rule-based alerts only</td>
-                  </tr>
-                </tbody>
-              </table>
+            <Reveal delay={100} className="mt-14">
+              <ComparisonTable />
             </Reveal>
           </div>
         </section>
