@@ -312,15 +312,13 @@ function Landing() {
                   <Button
                     size="lg"
                     variant="outline"
-                    onClick={() => {
-                      setHeroView(heroView === "video" ? "banner" : "video");
-                    }}
                     className="h-12 border-border/90 bg-surface/70 px-5 text-[14px] hover:border-brand/40 cursor-pointer"
+                    asChild
                   >
-                    <Play className="size-4 fill-current text-brand" />
-                    {heroView === "video"
-                      ? "View Architecture Blueprint"
-                      : "Watch Walkthrough (4m)"}
+                    <Link to="/docs">
+                      <Play className="size-4 fill-current text-brand" />
+                      View Docs
+                    </Link>
                   </Button>
                 </div>
               </Reveal>

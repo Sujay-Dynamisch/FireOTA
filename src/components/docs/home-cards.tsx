@@ -436,13 +436,6 @@ export function DocsHomeCards() {
               </Link>
               .
             </p>
-            <MIcon
-              name="favorite"
-              className={cn(
-                "pointer-events-none absolute -right-6 -top-6 text-[140px]",
-                tones.violet.soft,
-              )}
-            />
           </Card>
           <Card tone="green">
             <h3 className={cn("flex items-center gap-2 text-[17px] font-bold", tones.green.title)}>
@@ -464,13 +457,6 @@ export function DocsHomeCards() {
               </Link>
               .
             </p>
-            <MIcon
-              name="cloud"
-              className={cn(
-                "pointer-events-none absolute -right-8 -top-8 text-[160px]",
-                tones.green.soft,
-              )}
-            />
           </Card>
         </div>
       </section>
