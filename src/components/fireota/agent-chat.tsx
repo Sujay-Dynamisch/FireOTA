@@ -421,10 +421,10 @@ export function AgentChat({ agents, configured }: { agents: Agent[]; configured:
     }) => {
       const meta = input.attachment
         ? {
-            name: input.attachment.name,
-            size: input.attachment.size,
-            sha256: await agentsService.hashFile(input.attachment),
-          }
+          name: input.attachment.name,
+          size: input.attachment.size,
+          sha256: await agentsService.hashFile(input.attachment),
+        }
         : undefined;
       return agentsService.run(input.agent.id, input.text, {
         history: input.history
@@ -548,7 +548,7 @@ export function AgentChat({ agents, configured }: { agents: Agent[]; configured:
     messages.some((m) => m.uploads?.some((u) => u.state === "uploading"));
 
   return (
-    <div className="relative flex h-[calc(100vh-240px)] min-h-[560px] overflow-hidden rounded-xl border border-border bg-card">
+    <div className="relative flex h-[calc(100vh-240px)] min-h-[560px] overflow-hidden rounded-2xl border border-border bg-card">
       {/* History sidebar: inline on desktop, an overlay on small screens. */}
       {historyOpen ? (
         <>
@@ -680,7 +680,7 @@ export function AgentChat({ agents, configured }: { agents: Agent[]; configured:
             <div className="border-t border-border bg-background/60 px-4 py-3">
               <div className="relative mx-auto max-w-3xl">
                 {matches.length > 0 ? (
-                  <ul className="absolute bottom-full left-0 z-10 mb-2 max-h-72 w-full overflow-y-auto rounded-lg border border-border bg-popover p-1 shadow-lg">
+                  <ul className="absolute bottom-full left-0 z-10 mb-2 max-h-72 w-full overflow-y-auto rounded-2xl border border-border bg-popover p-1 shadow-lg">
                     {matches.map((command, i) => (
                       <li key={command.name}>
                         <button
@@ -851,7 +851,7 @@ function Welcome({
             key={command.name}
             type="button"
             onClick={() => onPick(command)}
-            className="rounded-xl border border-border p-3 text-left transition-colors hover:border-brand/50 hover:bg-surface-2/40"
+            className="rounded-2xl border border-border p-3 text-left transition-colors hover:border-brand/50 hover:bg-surface-2/40"
           >
             <span className="font-mono text-[11px] text-brand">/{command.name}</span>
             <span className="mt-0.5 block text-[12px] text-muted-foreground">{command.hint}</span>
@@ -908,7 +908,7 @@ function AssistantMessage({
         <p className="text-[11px] font-medium text-muted-foreground">{message.agentName}</p>
 
         {steps.length > 0 ? (
-          <div className="rounded-lg border border-border">
+          <div className="rounded-2xl border border-border">
             <button
               type="button"
               onClick={() => setOpen((v) => !v)}
@@ -974,7 +974,7 @@ function AssistantMessage({
           return (
             <div
               key={step.approvalId}
-              className="rounded-xl border border-warning/40 bg-warning/5 p-3"
+              className="rounded-2xl border border-warning/40 bg-warning/5 p-3"
             >
               <div className="flex items-center gap-2 text-[12px] font-medium">
                 <ShieldCheck className="size-4 text-warning" />
@@ -1030,7 +1030,7 @@ function AssistantMessage({
         })}
 
         {(message.uploads ?? []).map((upload) => (
-          <div key={upload.releaseId} className="rounded-xl border border-border p-3">
+          <div key={upload.releaseId} className="rounded-2xl border border-border p-3">
             <div className="flex items-center gap-2 text-[12px]">
               {upload.state === "uploading" ? (
                 <Loader2 className="size-4 animate-spin text-brand" />

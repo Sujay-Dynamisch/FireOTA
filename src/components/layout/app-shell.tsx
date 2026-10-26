@@ -31,6 +31,7 @@ import { navGroups } from "@/components/layout/nav";
 import { q } from "@/lib/queries";
 import { authService, notificationsService } from "@/services";
 import { cn } from "@/lib/utils";
+import { SDK_VERSION } from "@/lib/version";
 
 export interface Crumb {
   label: string;
@@ -49,12 +50,12 @@ function SidebarNav({ collapsed, onNavigate }: { collapsed?: boolean; onNavigate
     }))
     .filter((group) => group.items.length > 0);
   return (
-    <nav className="flex-1 overflow-y-auto py-2 text-[12px]">
+    <nav className="flex-1 overflow-y-auto py-2 text-[14px]">
       {groups.map((group, index) => (
         <div key={group.label}>
           {index > 0 ? <div className="my-2 h-px bg-border" /> : null}
           {!collapsed ? (
-            <div className="px-4 pb-1 pt-2 font-mono text-[10px] uppercase tracking-[0.12em] text-faint">
+            <div className="px-4 pb-1 pt-2 font-mono text-[11px] uppercase tracking-[0.12em] text-faint">
               {group.label}
             </div>
           ) : null}
@@ -78,7 +79,7 @@ function SidebarNav({ collapsed, onNavigate }: { collapsed?: boolean; onNavigate
                     : "border-l-2 border-transparent text-muted-foreground hover:bg-surface-2/40 hover:text-foreground",
                 )}
               >
-                <Icon aria-hidden className="size-3.5 shrink-0 text-faint" />
+                <Icon aria-hidden className="size-4 shrink-0 text-faint" />
                 {!collapsed ? item.label : null}
               </Link>
             );
@@ -256,7 +257,7 @@ export function AppShell({ breadcrumb, children }: { breadcrumb: Crumb[]; childr
       >
         <div className={cn("flex h-14 items-center gap-2 border-b border-border px-4", collapsed && "justify-center px-0")}>
           <Logo compact={collapsed} />
-          {!collapsed ? <span className="ml-auto font-mono text-[10px] text-faint">v2.4</span> : null}
+          {!collapsed ? <span className="ml-auto font-mono text-[10px] text-faint" title="@fireota/react-native version">v{SDK_VERSION}</span> : null}
         </div>
         <SidebarNav collapsed={collapsed} />
         <div className="border-t border-border p-2">

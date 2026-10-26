@@ -115,7 +115,7 @@ function DashboardPage() {
 
       {/* Firebase connection banner */}
       {summary.data && firebase && firebaseConnected ? (
-        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-surface/50 px-4 py-2.5">
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-surface/50 px-4 py-2.5">
           <span aria-hidden className={`size-1.5 shrink-0 rounded-full ${firebaseHealthy ? "bg-success" : "bg-warning"}`} />
           <span className="font-mono text-[11px] text-muted-foreground">FIREBASE</span>
           <span className="text-[12px] font-medium">{firebase.name}</span>

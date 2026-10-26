@@ -11,12 +11,13 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { createRequire } from "node:module";
+import { join, relative, resolve } from "node:path";
 
 import { detectCi } from "../lib/ci.mjs";
 import { runInit } from "../lib/init.mjs";
 import { packDirectory } from "../lib/package.mjs";
-import { storeVersion } from "../lib/project.mjs";
+import { isExpoProject, readExpoAppJson, storeVersion } from "../lib/project.mjs";
 import { generateKeys, loadPrivateKey, signUpdate } from "../lib/signing.mjs";
 
 const HELP = `FireOTA CLI
@@ -101,6 +102,11 @@ function groupIdFrom(seed) {
 function hermesEnabled(platform, mode) {
   if (mode === "on") return true;
   if (mode === "off") return false;
+  // Expo without android/ or ios/ yet: the engine is set in app.json (Hermes unless "jsEngine": "jsc").
+  if (isExpoProject() && !existsSync(platform === "android" ? "android" : "ios")) {
+    const expo = readExpoAppJson() ?? {};
+    return (expo[platform]?.jsEngine ?? expo.jsEngine ?? "hermes") !== "jsc";
+  }
   if (platform === "android") {
     const props = existsSync("android/gradle.properties") ? readFileSync("android/gradle.properties", "utf8") : "";
     return !/^\s*hermesEnabled\s*=\s*false/m.test(props);
@@ -127,17 +133,29 @@ function bundle(flags, platformOverride) {
   if (!existsSync("package.json") || !existsSync(join("node_modules", "react-native"))) {
     fail("Run this from your React Native project root (react-native must be installed).");
   }
-  const entry = flags.entry ? String(flags.entry) : existsSync("index.js") ? "index.js" : "index.ts";
+  const expo = isExpoProject();
+  // Expo apps bundle exactly like their native build does: Expo's entry resolver (expo-router/entry,
+  // registerRootComponent in index.ts, …) and `expo export:embed` instead of `react-native bundle`.
+  const entry = flags.entry
+    ? String(flags.entry)
+    : expo
+      ? execFileSync(process.execPath, ["-e", "require('expo/scripts/resolveAppEntry')", process.cwd(), platform, "absolute"]).toString().trim()
+      : existsSync("index.js")
+        ? "index.js"
+        : "index.ts";
+  const bundler = expo
+    ? [createRequire(resolve("package.json")).resolve("@expo/cli", { paths: [createRequire(resolve("package.json")).resolve("expo/package.json")] }), "export:embed"]
+    : [join("node_modules", "react-native", "cli.js"), "bundle"];
   const bundleName = platform === "android" ? "index.android.bundle" : "main.jsbundle";
   const work = mkdtempSync(join(tmpdir(), "fireota-"));
   const out = join(work, "package");
   try {
     const jsOut = join(work, "bundle.js");
-    log(`Bundling ${entry} for ${platform}…`);
+    log(`Bundling ${relative(".", entry) || entry} for ${platform}${expo ? " (Expo)" : ""}…`);
     // Run the project's own React Native CLI through Node: no shell, same on every OS.
     execFileSync(
       process.execPath,
-      [join("node_modules", "react-native", "cli.js"), "bundle", "--platform", platform, "--dev", "false", "--minify", "false", "--entry-file", entry, "--bundle-output", jsOut, "--assets-dest", out],
+      [...bundler, "--platform", platform, "--dev", "false", "--minify", "false", "--entry-file", entry, "--bundle-output", jsOut, "--assets-dest", out],
       { stdio: jsonMode ? ["ignore", "ignore", "inherit"] : "inherit" },
     );
     // The bundler only creates the assets folder when the app has images.
@@ -287,7 +305,7 @@ async function main() {
 Runtime version: ${versions.join(", ") || "unknown"} (your store version — bump it when native code changes).
 
 Next:
-  1. Rebuild the app once (release build / store build): npx react-native run-android --mode release${result.runtime.ios ? "\n     iOS: cd ios && pod install" : ""}
+  1. Rebuild the app once (release build / store build): ${result.expo ? "npx expo run:android --variant release  (or EAS Build) — prebuild applies the FireOTA plugin" : `npx react-native run-android --mode release${result.runtime.ios ? "\n     iOS: cd ios && pod install" : ""}`}
   2. Publish an update:  FIREOTA_URL=${result.serverUrl} FIREOTA_API_KEY=… npm run ota:publish -- --message "What changed"
   3. Optional: show <UpdateScreen /> from '@fireota/react-native' in your settings.`);
     if (result.results.some(([mark]) => mark === "!")) console.log("\nSteps marked ! need a manual change — see https://github.com/Sujay-Dynamisch/FireOTA#readme");

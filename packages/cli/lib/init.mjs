@@ -9,10 +9,10 @@
  * Every step is idempotent and skipped when already done; nothing is overwritten.
  */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { join, relative } from "node:path";
+import { dirname, join, relative, sep } from "node:path";
 import { createInterface } from "node:readline/promises";
 
-import { androidVersionName, findFile, iosMarketingVersion } from "./project.mjs";
+import { findFile, isExpoProject, storeVersion } from "./project.mjs";
 
 const IMPORT_SDK = "dev.fireota.reactnative.FireOTA";
 
@@ -39,9 +39,31 @@ function addKotlinImport(source) {
 }
 
 /** Returns the patched MainApplication source, or null when no known template matched. */
+function addHostOverride(source) {
+  const host = /object\s*:\s*DefaultReactNativeHost\(this\)\s*\{/.exec(source);
+  if (!host) return null;
+  const at = host.index + host[0].length;
+  const method =
+    "\n        // FireOTA: release builds load the latest verified OTA bundle.\n" +
+    "        override fun getJSBundleFile(): String? =\n" +
+    "          if (BuildConfig.DEBUG) super.getJSBundleFile()\n" +
+    "          else FireOTA.getJSBundleFile(applicationContext) ?: super.getJSBundleFile()\n";
+  return addKotlinImport(source.slice(0, at) + method + source.slice(at));
+}
+
+// Keep in sync with packages/react-native/plugin/patches.js (the Expo config plugin);
+// tests/sdk/expo-plugin.test.ts checks both produce the same output.
 export function patchMainApplication(source, isKotlin) {
   if (source.includes("FireOTA.getJSBundleFile")) return { source, status: "already" };
   if (isKotlin) {
+    // Expo SDK 50–55: ReactNativeHostWrapper(this, object : DefaultReactNativeHost(this) { … }), and the host
+    // factory of those SDKs takes no jsBundleFilePath — override getJSBundleFile() on the wrapped host.
+    // Expo SDK 56+ calls ExpoReactHostFactory.getDefaultReactHost(context = …, packageList = …), which accepts
+    // jsBundleFilePath like React Native's own factory, so it falls through to the branch below.
+    if (source.includes("ReactNativeHostWrapper")) {
+      const patched = addHostOverride(source);
+      if (patched) return { source: patched, status: "patched" };
+    }
     // React Native 0.76+: getDefaultReactHost(context = …, packageList = …)
     const call = source.indexOf("getDefaultReactHost(");
     if (call !== -1) {
@@ -58,17 +80,8 @@ export function patchMainApplication(source, isKotlin) {
       }
     }
     // Older templates: object : DefaultReactNativeHost(this) { … }
-    const host = /object\s*:\s*DefaultReactNativeHost\(this\)\s*\{/.exec(source);
-    if (host) {
-      const at = host.index + host[0].length;
-      const method =
-        "\n        // FireOTA: release builds load the latest verified OTA bundle.\n" +
-        "        override fun getJSBundleFile(): String? =\n" +
-        "          if (BuildConfig.DEBUG) super.getJSBundleFile()\n" +
-        "          else FireOTA.getJSBundleFile(applicationContext) ?: super.getJSBundleFile()\n";
-      return { source: addKotlinImport(source.slice(0, at) + method + source.slice(at)), status: "patched" };
-    }
-    return { source, status: "unknown" };
+    const patched = addHostOverride(source);
+    return patched ? { source: patched, status: "patched" } : { source, status: "unknown" };
   }
   const host = /new\s+DefaultReactNativeHost\(this\)\s*\{/.exec(source);
   if (!host) return { source, status: "unknown" };
@@ -120,6 +133,50 @@ export function patchEntry(source, configImport) {
   const lines = `import { withFireOTA } from '@fireota/react-native';\nimport fireotaConfig from '${configImport}';`;
   patched = last ? `${patched.slice(0, last.index + last[0].length)}\n${lines}${patched.slice(last.index + last[0].length)}` : `${lines}\n${patched}`;
   return { source: patched, status: "patched" };
+}
+
+function addEntryImports(source, configImport) {
+  const lines = `import { withFireOTA } from '@fireota/react-native';\nimport fireotaConfig from '${configImport}';`;
+  const imports = [...source.matchAll(/^import .+$/gm)];
+  const last = imports.at(-1);
+  return last ? `${source.slice(0, last.index + last[0].length)}\n${lines}${source.slice(last.index + last[0].length)}` : `${lines}\n${source}`;
+}
+
+/** Expo (no router): registerRootComponent(App) -> registerRootComponent(withFireOTA(App, fireotaConfig)). */
+export function patchRegisterRootComponent(source, configImport) {
+  if (source.includes("withFireOTA")) return { source, status: "already" };
+  const re = /registerRootComponent\(\s*([A-Za-z_$][\w$]*)\s*\)/;
+  if (!re.test(source)) return { source, status: "unknown" };
+  const patched = source.replace(re, "registerRootComponent(withFireOTA($1, fireotaConfig))");
+  return { source: addEntryImports(patched, configImport), status: "patched" };
+}
+
+/** expo-router: wrap the root layout (app/_layout.tsx) — it is the root component of the app. */
+export function patchExpoRouterLayout(source, configImport) {
+  if (source.includes("withFireOTA")) return { source, status: "already" };
+  const named = /export\s+default\s+function\s+([A-Za-z_$][\w$]*)\s*\(/.exec(source);
+  if (named) {
+    const name = named[1];
+    const patched = `${source.replace(named[0], `function ${name}(`).replace(/\s*$/, "")}\n\nexport default withFireOTA(${name}, fireotaConfig);\n`;
+    return { source: addEntryImports(patched, configImport), status: "patched" };
+  }
+  const reexport = /export\s+default\s+([A-Za-z_$][\w$]*)\s*;?\s*$/m.exec(source);
+  if (reexport) {
+    const patched = source.replace(reexport[0], `export default withFireOTA(${reexport[1]}, fireotaConfig);`);
+    return { source: addEntryImports(patched, configImport), status: "patched" };
+  }
+  return { source, status: "unknown" };
+}
+
+/** Adds "@fireota/react-native" to expo.plugins in app.json. */
+export function addExpoPlugin(appJsonText) {
+  const json = JSON.parse(appJsonText);
+  const expo = json.expo ?? json;
+  const plugins = Array.isArray(expo.plugins) ? expo.plugins : [];
+  const has = plugins.some((p) => (Array.isArray(p) ? p[0] : p) === "@fireota/react-native");
+  if (has) return { source: appJsonText, status: "already" };
+  expo.plugins = [...plugins, "@fireota/react-native"];
+  return { source: `${JSON.stringify(json, null, 2)}\n`, status: "patched" };
 }
 
 function configFile({ appId, serverUrl, channel, certificate }) {
@@ -188,9 +245,30 @@ export async function runInit(flags, { api, log, fail }) {
   else write(configPath, configFile({ appId, serverUrl, channel, certificate }), `${configPath} created${certificate ? " (with code signing certificate)" : ""}`);
 
   // 2. JS entry ------------------------------------------------------------
+  const expo = isExpoProject();
+  const pkgMain = JSON.parse(readFileSync("package.json", "utf8")).main ?? "";
   const entry = ["index.js", "index.ts", "index.tsx"].find((f) => existsSync(f));
-  if (!entry) results.push(["!", "No index.js found — wrap your root component: withFireOTA(App, fireotaConfig)"]);
-  else {
+  if (expo && /expo-router\/entry/.test(pkgMain)) {
+    // expo-router: the root layout is the app's root component.
+    const layout = ["app", join("src", "app")]
+      .flatMap((dir) => ["_layout.tsx", "_layout.jsx", "_layout.ts", "_layout.js"].map((f) => join(dir, f)))
+      .find((f) => existsSync(f));
+    if (!layout) results.push(["!", "expo-router: no app/_layout.tsx found — wrap your root layout: export default withFireOTA(RootLayout, fireotaConfig)"]);
+    else {
+      const configImport = relative(dirname(layout), "fireota.config").split(sep).join("/");
+      const res = patchExpoRouterLayout(readFileSync(layout, "utf8"), configImport.startsWith(".") ? configImport : `./${configImport}`);
+      const rel = relative(".", layout);
+      if (res.status === "patched") write(layout, res.source, `${rel}: root layout wrapped with withFireOTA()`);
+      else if (res.status === "already") results.push(["–", `${rel} already uses withFireOTA`]);
+      else results.push(["!", `${rel}: wrap your root layout manually: export default withFireOTA(RootLayout, fireotaConfig)`]);
+    }
+  } else if (!entry) results.push(["!", "No index.js found — wrap your root component: withFireOTA(App, fireotaConfig)"]);
+  else if (expo && /registerRootComponent\(/.test(readFileSync(entry, "utf8"))) {
+    const res = patchRegisterRootComponent(readFileSync(entry, "utf8"), "./fireota.config");
+    if (res.status === "patched") write(entry, res.source, `${entry}: root component wrapped with withFireOTA()`);
+    else if (res.status === "already") results.push(["–", `${entry} already uses withFireOTA`]);
+    else results.push(["!", `${entry}: wrap your root component manually: registerRootComponent(withFireOTA(App, fireotaConfig))`]);
+  } else {
     const res = patchEntry(readFileSync(entry, "utf8"), "./fireota.config");
     if (res.status === "patched") write(entry, res.source, `${entry}: root component wrapped with withFireOTA()`);
     else if (res.status === "already") results.push(["–", `${entry} already uses withFireOTA`]);
@@ -198,9 +276,26 @@ export async function runInit(flags, { api, log, fail }) {
     else results.push(["!", `${entry}: wrap your root component manually: withFireOTA(App, fireotaConfig)`]);
   }
 
-  // 3. Android -------------------------------------------------------------
+  // 3. Expo config plugin --------------------------------------------------
+  // `expo prebuild` / EAS Build regenerate android/ and ios/, so the plugin re-applies the native changes.
+  if (expo) {
+    if (existsSync("app.json")) {
+      const res = addExpoPlugin(readFileSync("app.json", "utf8"));
+      if (res.status === "patched") write("app.json", res.source, 'app.json: added the "@fireota/react-native" config plugin');
+      else results.push(["–", "app.json already uses the FireOTA config plugin"]);
+    } else {
+      results.push(["!", 'app.config.js/ts: add "@fireota/react-native" to plugins (dynamic configs are not edited)']);
+    }
+    const deps = JSON.parse(readFileSync("package.json", "utf8"));
+    if (deps.dependencies?.["expo-updates"] || deps.devDependencies?.["expo-updates"]) {
+      results.push(["!", "expo-updates is installed — remove it (npm uninstall expo-updates); it cannot run alongside FireOTA"]);
+    }
+  }
+
+  // 4. Android -------------------------------------------------------------
   const mainApp = findFile(join("android", "app", "src", "main"), (n) => n === "MainApplication.kt" || n === "MainApplication.java");
-  if (!mainApp) results.push(["!", "Android: MainApplication not found — see the Android setup docs"]);
+  if (!mainApp && expo) results.push(["–", "Android: no android/ folder yet — the config plugin wires it on expo prebuild / EAS Build"]);
+  else if (!mainApp) results.push(["!", "Android: MainApplication not found — see the Android setup docs"]);
   else {
     const res = patchMainApplication(readFileSync(mainApp, "utf8"), mainApp.endsWith(".kt"));
     const rel = relative(".", mainApp);
@@ -209,9 +304,10 @@ export async function runInit(flags, { api, log, fail }) {
     else results.push(["!", `${rel}: unknown template — add FireOTA.getJSBundleFile() as in the Android setup docs`]);
   }
 
-  // 4. iOS -----------------------------------------------------------------
+  // 5. iOS -----------------------------------------------------------------
   const delegate = findFile("ios", (n) => n === "AppDelegate.swift" || n === "AppDelegate.mm" || n === "AppDelegate.m", 3);
-  if (!delegate) results.push(["–", "iOS: no AppDelegate found (skipped)"]);
+  if (!delegate && expo) results.push(["–", "iOS: no ios/ folder yet — the config plugin wires it on expo prebuild / EAS Build"]);
+  else if (!delegate) results.push(["–", "iOS: no AppDelegate found (skipped)"]);
   else {
     const res = patchAppDelegate(readFileSync(delegate, "utf8"), delegate.endsWith(".swift"));
     const rel = relative(".", delegate);
@@ -220,7 +316,7 @@ export async function runInit(flags, { api, log, fail }) {
     else results.push(["!", `${rel}: unknown template — return [FireOTA bundleURL] in bundleURL (see iOS setup docs)`]);
   }
 
-  // 5. package.json script + .gitignore ------------------------------------
+  // 6. package.json script + .gitignore ------------------------------------
   const pkg = JSON.parse(readFileSync("package.json", "utf8"));
   pkg.scripts ??= {};
   if (pkg.scripts["ota:publish"]) results.push(["–", 'package.json already has "ota:publish"']);
@@ -233,6 +329,6 @@ export async function runInit(flags, { api, log, fail }) {
   if (missing.length === 0) results.push(["–", ".gitignore already covers FireOTA files"]);
   else write(".gitignore", `${ignore.replace(/\s*$/, "\n")}\n# FireOTA\n${missing.join("\n")}\n`, `.gitignore: ignores ${missing.join(", ")}`);
 
-  const runtime = { android: androidVersionName(), ios: iosMarketingVersion() };
-  return { results, dry, appId, serverUrl, channel, runtime };
+  const runtime = { android: storeVersion("android"), ios: storeVersion("ios") };
+  return { results, dry, appId, serverUrl, channel, runtime, expo };
 }

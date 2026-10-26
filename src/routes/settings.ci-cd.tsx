@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, createFileRoute } from "@tanstack/react-router";
+import { Terminal } from "lucide-react";
 import { useState } from "react";
 
 import { AppShell } from "@/components/layout/app-shell";
@@ -10,6 +11,7 @@ import {
   SectionCard,
   SkeletonRows,
 } from "@/components/fireota/primitives";
+import { CI_TOOLS, CiLogo, Icons8Credit, ciToolTitle, type CiTool } from "@/components/fireota/ci-logos";
 import { Field } from "@/components/fireota/wizard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -407,11 +409,32 @@ function CiCdPage() {
                     : "border-border text-muted-foreground hover:text-foreground",
                 )}
               >
-                {p.label}
+                <span className="inline-flex items-center gap-1.5">
+                  {CI_TOOLS.includes(p.id as CiTool) ? (
+                    <CiLogo tool={p.id as CiTool} className="size-3.5" />
+                  ) : (
+                    <Terminal className="size-3.5" aria-hidden />
+                  )}
+                  {p.label}
+                </span>
               </button>
             ))}
           </div>
-          <p className="mt-3 font-mono text-[11px] text-faint">{current.file}</p>
+          <Icons8Credit className="mt-1.5 inline-block" />
+          <p className="mt-2 font-mono text-[11px] text-faint">{current.file}</p>
+          {current.id === "shell" ? (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {(["buildkite", "teamcity", "codemagic", "travis", "drone"] as CiTool[]).map((tool) => (
+                <span
+                  key={tool}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-0.5 text-[11px] text-muted-foreground"
+                >
+                  <CiLogo tool={tool} className="size-3" />
+                  {ciToolTitle(tool)}
+                </span>
+              ))}
+            </div>
+          ) : null}
           <div className="mt-1.5">
             <CodeBlock code={current.snippet(options)} language={current.language} />
           </div>

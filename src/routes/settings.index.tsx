@@ -4,6 +4,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/layout/app-shell";
+import { CiLogo, Icons8Credit } from "@/components/fireota/ci-logos";
 import { ConfirmAction } from "@/components/fireota/confirm-dialog";
 import { PageHeader, SectionCard, SkeletonRows } from "@/components/fireota/primitives";
 import { Field } from "@/components/fireota/wizard";
@@ -339,8 +340,16 @@ function SettingsPage() {
               ].map(([label, description, to]) => (
                 <li key={label} className="flex flex-wrap items-center justify-between gap-3 p-4">
                   <div>
-                    <p className="text-[12px] font-medium">{label}</p>
+                    <p className="flex items-center gap-2 text-[12px] font-medium">
+                      {label}
+                      {label === "CI/CD"
+                        ? (["github", "gitlab", "bitrise"] as const).map((tool) => (
+                            <CiLogo key={tool} tool={tool} className="size-3.5" />
+                          ))
+                        : null}
+                    </p>
                     <p className="text-[11px] text-muted-foreground">{description}</p>
+                    {label === "CI/CD" ? <Icons8Credit /> : null}
                   </div>
                   <Button variant="outline" size="sm" className="h-7 text-[11px]" asChild>
                     <Link to={to as never}>Open</Link>

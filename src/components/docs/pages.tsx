@@ -5,6 +5,7 @@
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
+import { CI_TOOLS, CiLogo, Icons8Credit, ciToolTitle } from "@/components/fireota/ci-logos";
 import { ProductVideo } from "@/components/fireota/product-video";
 
 import { Bullets, C, Callout, Code, ExtLink, PlatformTabs, Steps } from "./docs-ui";
@@ -266,6 +267,53 @@ export function SettingsScreen() {
     </ScrollView>
   );
 }`;
+
+const EXPO_INSTALL = `npx expo install @fireota/react-native
+npm install --save-dev @fireota/cli
+npx fireota init --app YOUR_APP_ID --server-url https://fireota.example.com`;
+
+const EXPO_APP_JSON = `{
+  "expo": {
+    "version": "1.0.0",
+    "plugins": [
+      "expo-router",
+      "@fireota/react-native"
+    ]
+  }
+}`;
+
+const EXPO_ROUTER_LAYOUT = `// src/app/_layout.tsx (or app/_layout.tsx)
+import { Stack } from "expo-router";
+import { withFireOTA } from "@fireota/react-native";
+import fireotaConfig from "../../fireota.config";
+
+function RootLayout() {
+  return <Stack />;
+}
+
+export default withFireOTA(RootLayout, fireotaConfig);`;
+
+const EXPO_REGISTER_ROOT = `// index.ts (apps without expo-router)
+import { registerRootComponent } from "expo";
+import { withFireOTA } from "@fireota/react-native";
+import fireotaConfig from "./fireota.config";
+import App from "./App";
+
+registerRootComponent(withFireOTA(App, fireotaConfig));`;
+
+const EXPO_BUILD = `# Local release build (Android): prebuild runs the FireOTA plugin
+npx expo run:android --variant release
+
+# Or EAS Build: the plugin runs on EAS's servers too
+eas build --platform all --profile production`;
+
+const EXPO_PUBLISH = `# Bundles with Expo (expo export:embed + Hermes), exactly like the store build
+FIREOTA_URL=https://fireota.example.com FIREOTA_API_KEY=fota_sk_... \\
+  npm run ota:publish -- --message "Fix checkout crash"`;
+
+const EXPO_MIGRATE = `npm uninstall expo-updates
+# remove "updates" and "runtimeVersion" from app.json, then rebuild
+npx expo prebuild --clean`;
 
 const UI_RENDER_PROMPT = `// index.js — use FireOTAProvider instead of withFireOTA to pass renderPrompt
 import { AppRegistry } from "react-native";
@@ -623,8 +671,8 @@ export const docGroups: DocGroup[] = [
             title: "Expo projects",
             body: (
               <Callout kind="note">
-                Expo Go is not supported. Run <C>npx expo prebuild</C> to generate the native folders, then follow the bare React Native
-                steps. Do not use FireOTA together with <C>expo-updates</C> — two update systems would fight over the bundle.
+                Expo is supported through a config plugin (Expo SDK 50+, development and release builds — not Expo Go). Follow the{" "}
+                <D to="expo">Expo guide</D> instead of the Android and iOS setup pages.
               </Callout>
             ),
           },
@@ -1010,6 +1058,118 @@ function UpdateBadge() {
                 The SDK is autolinked. On Android it adds the INTERNET permission and a small restart activity to your manifest. On iOS it
                 links only system libraries (CommonCrypto, zlib) — no third-party dependencies.
               </p>
+            ),
+          },
+        ],
+      },
+      {
+        slug: "expo",
+        title: "Expo",
+        description: "Use FireOTA in an Expo app: one config plugin, works with expo prebuild, EAS Build and expo-router.",
+        sections: [
+          {
+            id: "requirements",
+            title: "Requirements",
+            body: (
+              <Bullets
+                items={[
+                  <>Expo SDK 50 or newer, with <strong>development or release builds</strong> (<C>npx expo run:android</C>, EAS Build). <strong>Expo Go</strong> cannot load native modules, so it can't run FireOTA.</>,
+                  <>Works with Continuous Native Generation: you don't need to commit <C>android/</C> and <C>ios/</C>. The config plugin re-applies FireOTA's native change on every <C>expo prebuild</C> and EAS Build.</>,
+                  <><strong>No <C>expo-updates</C>.</strong> Both replace the JavaScript bundle at launch; the plugin stops the build if it is installed. See <a href="#migrate" className="text-brand underline-offset-2 hover:underline">migrating from EAS Update</a>.</>,
+                  <>Tested with Expo SDK 58 (React Native 0.88, expo-router): prebuild, OTA bundling and the Android release compile are verified. On-device OTA runs and iOS (same plugin) are still being tested.</>,
+                ]}
+              />
+            ),
+          },
+          {
+            id: "install",
+            title: "Install",
+            body: (
+              <>
+                <p>Run this in your Expo project. <C>fireota init</C> detects Expo and wires everything for you:</p>
+                <Code code={EXPO_INSTALL} />
+                <Bullets
+                  items={[
+                    <><C>fireota.config.js</C> — app ID, server URL and channel (no secrets).</>,
+                    <><C>app.json</C> — adds the <C>"@fireota/react-native"</C> config plugin.</>,
+                    <>Your root component — with expo-router the root layout (<C>app/_layout.tsx</C>), otherwise <C>registerRootComponent(App)</C> — is wrapped with <C>withFireOTA</C>, which checks for updates and shows the update prompt.</>,
+                    <><C>package.json</C> — an <C>ota:publish</C> script; <C>.gitignore</C> — update packages and the signing key.</>,
+                  ]}
+                />
+                <Callout kind="note">
+                  Using <C>app.config.js</C> or <C>app.config.ts</C>? <C>init</C> doesn't edit dynamic configs — add{" "}
+                  <C>"@fireota/react-native"</C> to <C>plugins</C> yourself.
+                </Callout>
+              </>
+            ),
+          },
+          {
+            id: "manual",
+            title: "Set it up by hand",
+            body: (
+              <>
+                <p>Prefer to see every change? These are the only two edits FireOTA needs in an Expo app.</p>
+                <Steps
+                  items={[
+                    <>Add the plugin to <C>app.json</C>. The runtime version is your <C>expo.version</C> (Expo writes it into the native project), so bump it whenever native code changes:<Code language="json" code={EXPO_APP_JSON} /></>,
+                    <>Wrap your root component. With expo-router:<Code language="tsx" code={EXPO_ROUTER_LAYOUT} />Without expo-router:<Code language="tsx" code={EXPO_REGISTER_ROOT} /></>,
+                  ]}
+                />
+                <p>
+                  On prebuild, the plugin makes release builds load the latest verified OTA bundle: on Android it passes{" "}
+                  <C>jsBundleFilePath</C> to <C>ExpoReactHostFactory</C> (older SDKs: overrides <C>getJSBundleFile()</C>); on iOS{" "}
+                  <C>bundleURL()</C> returns FireOTA's bundle. Debug builds keep using Metro.
+                </p>
+              </>
+            ),
+          },
+          {
+            id: "build",
+            title: "Build and publish",
+            body: (
+              <>
+                <p>Make one release build so the app contains the SDK and the plugin's change:</p>
+                <Code code={EXPO_BUILD} />
+                <p>
+                  After that, ship JavaScript changes as updates. The CLI bundles Expo apps with <C>expo export:embed</C> and the
+                  same entry point your native build uses (expo-router included), then compiles Hermes bytecode unless{" "}
+                  <C>"jsEngine": "jsc"</C>:
+                </p>
+                <Code code={EXPO_PUBLISH} />
+              </>
+            ),
+          },
+          {
+            id: "migrate",
+            title: "Migrating from EAS Update (expo-updates)",
+            body: (
+              <>
+                <Steps
+                  items={[
+                    <>Remove <C>expo-updates</C> and its config:<Code code={EXPO_MIGRATE} /></>,
+                    <>Run <C>npx fireota init …</C> as above and ship a new store build. Users on old builds keep receiving EAS updates until they install it.</>,
+                    <>Map EAS channels to FireOTA channels (production, beta, …). Keep FireOTA runtime versions equal to <C>expo.version</C>.</>,
+                  ]}
+                />
+                <Callout kind="caution">
+                  Need both during a migration? Pass <C>{'["@fireota/react-native", { "allowExpoUpdates": true }]'}</C> and set{" "}
+                  <C>{'"updates": { "enabled": false }'}</C>, or the two systems will fight over which bundle launches.
+                </Callout>
+              </>
+            ),
+          },
+          {
+            id: "troubleshooting",
+            title: "Troubleshooting",
+            body: (
+              <Bullets
+                items={[
+                  <><strong>Build fails with “expo-updates is installed”</strong> — remove it (see above); FireOTA cannot run next to it.</>,
+                  <><strong>Prebuild warns “could not find the expected code”</strong> — your <C>MainApplication</C> or <C>AppDelegate</C> was customised. Apply the change from <D to="android-setup">Android setup</D> / <D to="ios-setup">iOS setup</D> in your own config plugin.</>,
+                  <><strong>Update downloads but never applies</strong> — you're running a debug build or Expo Go; test with <C>npx expo run:android --variant release</C>.</>,
+                  <><strong>“No compatible update”</strong> — <C>expo.version</C> of the installed build must equal the update's runtime version.</>,
+                ]}
+              />
             ),
           },
         ],
@@ -1813,6 +1973,18 @@ npx fireota release rollback <releaseId> --reason "Crash on launch on Android 14
                   <C>FIREOTA_GIT_SHA</C>, <C>FIREOTA_GIT_BRANCH</C>, <C>FIREOTA_BUILD_NUMBER</C>). Ready-made pipeline files for each tool
                   are in the dashboard under <A to="/settings/ci-cd">CI/CD</A>.
                 </p>
+                <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3" aria-label="Supported CI/CD tools">
+                  {CI_TOOLS.filter((tool) => tool !== "drone").map((tool) => (
+                    <li key={tool} className="flex items-center gap-2 rounded-md border border-border bg-surface-2/40 px-3 py-2 text-[12px]">
+                      <CiLogo tool={tool} className="size-4" />
+                      {ciToolTitle(tool)}
+                    </li>
+                  ))}
+                  <li className="flex items-center gap-2 rounded-md border border-dashed border-border px-3 py-2 text-[12px] text-muted-foreground">
+                    + AWS CodeBuild and any CI with Node 18+
+                  </li>
+                </ul>
+                <Icons8Credit />
                 <Code code={ANY_CI} />
               </>
             ),

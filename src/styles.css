@@ -195,6 +195,31 @@
   }
 }
 
+@keyframes marquee {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+@utility animate-marquee {
+  animation: marquee 35s linear infinite;
+}
+
+@utility bg-grid-dev {
+  background-size: 32px 32px;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+}
+
+@utility bg-dots-dev {
+  background-size: 24px 24px;
+  background-image: radial-gradient(rgba(255, 106, 43, 0.15) 1px, transparent 1px);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

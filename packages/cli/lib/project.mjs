@@ -33,9 +33,33 @@ export function iosMarketingVersion(root = ".") {
   return undefined;
 }
 
+/** True for Expo projects (the `expo` package is a dependency). */
+export function isExpoProject(root = ".") {
+  const path = join(root, "package.json");
+  if (!existsSync(path)) return false;
+  const pkg = JSON.parse(readFileSync(path, "utf8"));
+  return Boolean(pkg.dependencies?.expo ?? pkg.devDependencies?.expo);
+}
+
+/** The `expo` object of app.json, or null (no app.json, or a dynamic app.config.js / .ts). */
+export function readExpoAppJson(root = ".") {
+  const path = join(root, "app.json");
+  if (!existsSync(path)) return null;
+  const json = JSON.parse(readFileSync(path, "utf8"));
+  return json.expo ?? json;
+}
+
+/** Expo writes `expo.version` into versionName / CFBundleShortVersionString at prebuild. */
+export function expoVersion(root = ".") {
+  const version = readExpoAppJson(root)?.version;
+  return typeof version === "string" && version ? version : undefined;
+}
+
 /** The app's store version for a platform — FireOTA's default runtime version. */
 export function storeVersion(platform, root = ".") {
-  return platform === "ios" ? iosMarketingVersion(root) : androidVersionName(root);
+  const native = platform === "ios" ? iosMarketingVersion(root) : androidVersionName(root);
+  // Expo projects without android/ or ios/ yet (Continuous Native Generation): use app.json.
+  return native ?? (isExpoProject(root) ? expoVersion(root) : undefined);
 }
 
 /** Recursively finds the first file matching a name test below a directory. */

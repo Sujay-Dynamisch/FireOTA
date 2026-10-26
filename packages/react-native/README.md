@@ -146,7 +146,21 @@ npx fireota init --app YOUR_APP_ID --server-url https://ota.example.com
 
 Rebuild the app once, and you're done. The runtime version defaults to your store version (`versionName` / `CFBundleShortVersionString`) — bump it with every store build that changes native code. Every step is idempotent; `--dry-run` shows the changes without writing.
 
-Requires a bare React Native app, 0.73 or newer (Expo: run `npx expo prebuild`). Prefer to wire it by hand? Follow the Android, iOS and Configure sections below.
+Requires React Native 0.73 or newer. Prefer to wire it by hand? Follow the Android, iOS and Configure sections below.
+
+## Expo
+
+Expo SDK 50+ is supported with development and release builds (`npx expo run:android`, EAS Build) — not Expo Go. Run the same two commands (use `npx expo install @fireota/react-native`); `fireota init` detects Expo and:
+
+- adds the config plugin to `app.json` — every `expo prebuild` / EAS Build re-applies the native change, so `android/` and `ios/` don't need to be committed:
+
+  ```json
+  { "expo": { "plugins": ["@fireota/react-native"] } }
+  ```
+
+- wraps your root component with `withFireOTA` — the root layout (`app/_layout.tsx`) with expo-router, otherwise `registerRootComponent(App)`.
+
+The runtime version is `expo.version`. `fireota publish` bundles Expo apps with `expo export:embed` and the same entry point as the native build (expo-router included). `expo-updates` must not be installed — both replace the bundle at launch; the plugin stops the build if it finds it (`{ "allowExpoUpdates": true }` while migrating).
 
 ## Built-in UI (customizable)
 

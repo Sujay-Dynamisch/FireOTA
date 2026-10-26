@@ -43,7 +43,7 @@ export function LegalPage({
         <p className="mt-2 text-[13px] text-faint">Last updated: {LEGAL_UPDATED}</p>
         <div className="mt-6 text-[15px] leading-relaxed text-muted-foreground">{intro}</div>
 
-        <nav aria-label="Contents" className="mt-8 rounded-lg border border-border bg-surface/40 p-4">
+        <nav aria-label="Contents" className="mt-8 rounded-2xl border border-border bg-surface/40 p-4">
           <p className="mb-2 text-[12px] font-semibold">Contents</p>
           <ol className="grid list-decimal gap-1 pl-5 text-[13px] text-muted-foreground sm:grid-cols-2">
             {sections.map((s) => (
