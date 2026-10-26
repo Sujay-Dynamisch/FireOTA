@@ -271,21 +271,6 @@ function Landing() {
 
           <div className="mx-auto max-w-7xl px-4 sm:px-6">
             <div className="mx-auto max-w-4xl text-center">
-              <Reveal>
-                <div className="inline-flex items-center gap-2.5 rounded-full border border-brand/30 bg-surface/80 px-3.5 py-1.5 backdrop-blur-md shadow-[0_0_24px_rgba(255,90,31,0.15)]">
-                  <span className="relative flex size-2">
-                    <span className="absolute inline-flex size-full animate-ping rounded-full bg-brand opacity-75" />
-                    <span className="relative inline-flex size-2 rounded-full bg-brand" />
-                  </span>
-                  <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-foreground">
-                    FireOTA 1.4 · Sovereign React Native Updates
-                  </span>
-                  <span className="rounded-full bg-brand/15 px-2 py-0.5 font-mono text-[10px] font-bold text-brand">
-                    Firebase Native
-                  </span>
-                </div>
-              </Reveal>
-
               <Reveal delay={80}>
                 <h1 className="mt-6 font-display text-[42px] font-extrabold leading-[1.08] tracking-tight sm:text-[62px] lg:text-[70px]">
                   Ship React Native updates{" "}
