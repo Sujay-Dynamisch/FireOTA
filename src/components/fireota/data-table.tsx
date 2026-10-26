@@ -90,7 +90,7 @@ export function DataTable<T>({
   const selectedRows = rows.filter((row) => selected.includes(rowKey(row)));
 
   return (
-    <div className="overflow-hidden rounded-lg border border-border bg-surface/50">
+    <div className="overflow-hidden rounded-2xl border border-border bg-surface/50">
       <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2.5">
         {searchValue ? (
           <div className="relative min-w-[200px] flex-1 sm:max-w-xs">

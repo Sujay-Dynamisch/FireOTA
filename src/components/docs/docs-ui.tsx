@@ -7,12 +7,19 @@ import { cn } from "@/lib/utils";
 /** Google Material Symbols (Outlined). The font is loaded by the /docs layout. */
 export function MIcon({ name, className, filled = false }: { name: string; className?: string; filled?: boolean }) {
   return (
-    <span
-      aria-hidden
-      className={cn("material-symbols-outlined select-none leading-none", className)}
-      style={{ fontVariationSettings: `'FILL' ${filled ? 1 : 0}, 'wght' 400, 'GRAD' 0, 'opsz' 20` }}
-    >
-      {name}
+    // Size/colour/position classes go on the wrapper: Google's icon CSS fixes font-size at 24px
+    // and outranks Tailwind utilities, so the glyph inherits the size from here instead.
+    <span aria-hidden className={cn("select-none leading-none", className)}>
+      <span
+        className="material-symbols-outlined"
+        style={{
+          fontSize: "inherit",
+          lineHeight: "inherit",
+          fontVariationSettings: `'FILL' ${filled ? 1 : 0}, 'wght' 400, 'GRAD' 0, 'opsz' 20`,
+        }}
+      >
+        {name}
+      </span>
     </span>
   );
 }
@@ -27,7 +34,7 @@ const CALLOUTS = {
 export function Callout({ kind = "note", children }: { kind?: keyof typeof CALLOUTS; children: ReactNode }) {
   const c = CALLOUTS[kind];
   return (
-    <div className={cn("flex gap-3 rounded-lg border px-4 py-3 text-[13px] leading-relaxed", c.box)}>
+    <div className={cn("flex gap-3 rounded-2xl border px-4 py-3 text-[13px] leading-relaxed", c.box)}>
       <MIcon name={c.icon} filled className={cn("mt-0.5 text-[20px]", c.text)} />
       <div className="min-w-0 text-foreground/90">
         <strong className={cn("font-semibold", c.text)}>{c.label}: </strong>

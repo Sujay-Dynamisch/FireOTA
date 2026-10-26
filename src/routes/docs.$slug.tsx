@@ -14,11 +14,11 @@ export const Route = createFileRoute("/docs/$slug")({
   head: ({ loaderData }) => ({
     meta: loaderData
       ? [
-          { title: `${loaderData.title} — FireOTA Docs` },
-          { name: "description", content: loaderData.description },
-          { property: "og:title", content: `${loaderData.title} — FireOTA Docs` },
-          { property: "og:description", content: loaderData.description },
-        ]
+        { title: `${loaderData.title} — FireOTA Docs` },
+        { name: "description", content: loaderData.description },
+        { property: "og:title", content: `${loaderData.title} — FireOTA Docs` },
+        { property: "og:description", content: loaderData.description },
+      ]
       : [],
   }),
   component: DocPageView,
@@ -106,7 +106,7 @@ function DocPageView() {
               <Link
                 to="/docs/$slug"
                 params={{ slug: prev.slug }}
-                className="flex items-center gap-3 rounded-lg border border-border p-4 hover:border-brand/50"
+                className="flex items-center gap-3 rounded-2xl border border-border p-4 hover:border-brand/50"
               >
                 <MIcon name="arrow_back" className="text-[20px] text-faint" />
                 <span>
@@ -121,7 +121,7 @@ function DocPageView() {
               <Link
                 to="/docs/$slug"
                 params={{ slug: next.slug }}
-                className="flex items-center justify-end gap-3 rounded-lg border border-border p-4 text-right hover:border-brand/50"
+                className="flex items-center justify-end gap-3 rounded-2xl border border-border p-4 text-right hover:border-brand/50"
               >
                 <span>
                   <span className="block text-[11px] text-faint">Next</span>

@@ -1,9 +1,11 @@
 import { Link, Outlet, createFileRoute, useRouterState } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
+import { DocsSearch } from "@/components/docs/docs-search";
 import { MIcon } from "@/components/docs/docs-ui";
 import { docGroups } from "@/components/docs/pages";
 import { BrandMark } from "@/components/fireota/brand-mark";
+import { ChangelogLink, GitHubStarButton, ThemeSelect } from "@/components/site/header-actions";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
@@ -36,57 +38,42 @@ function useActiveSlug() {
 
 function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const active = useActiveSlug();
-  const [filter, setFilter] = useState("");
   const [closed, setClosed] = useState<Record<string, boolean>>({});
-  const needle = filter.trim().toLowerCase();
-
-  const groups = useMemo(
-    () =>
-      docGroups
-        .map((g) => ({
-          ...g,
-          pages: needle
-            ? g.pages.filter((p) => `${p.title} ${p.description} ${g.title}`.toLowerCase().includes(needle))
-            : g.pages,
-        }))
-        .filter((g) => g.pages.length > 0),
-    [needle],
-  );
+  const groups = docGroups;
 
   return (
     <nav aria-label="Documentation" className="flex h-full flex-col">
       <div className="p-3">
-        <label className="flex items-center gap-2 rounded-md border border-border bg-surface-2/60 px-2.5 py-1.5 text-faint focus-within:border-brand/50">
-          <MIcon name="filter_list" className="text-[18px]" />
-          <input
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            placeholder="Filter"
-            aria-label="Filter documentation"
-            className="w-full bg-transparent text-[13px] text-foreground outline-none placeholder:text-faint"
-          />
-        </label>
+        <DocsSearch {...(onNavigate ? { onNavigate } : {})} />
       </div>
       <div className="flex-1 overflow-y-auto pb-6">
         <Link
           to="/docs"
           onClick={onNavigate}
           className={cn(
-            "mx-2 flex items-center gap-2 rounded-md px-3 py-1.5 text-[13px] text-muted-foreground hover:bg-surface-2 hover:text-foreground",
-            active === "" && "bg-brand/10 font-medium text-brand",
+            "mx-2 flex items-center gap-2 rounded-md px-3 py-1.5 text-[13px] text-muted-foreground hover:bg-surface-2 hover:text-foreground dark:text-white",
+            active === "" && "bg-brand/10 font-medium text-brand dark:text-brand",
           )}
         >
           <MIcon name="home" className="text-[18px]" />
           Documentation home
         </Link>
+        <Link
+          to="/changelog"
+          onClick={onNavigate}
+          className="mx-2 flex items-center gap-2 rounded-md px-3 py-1.5 text-[13px] text-muted-foreground hover:bg-surface-2 hover:text-foreground dark:text-white"
+        >
+          <MIcon name="history" className="text-[18px]" />
+          Changelog
+        </Link>
         {groups.map((group) => {
-          const isClosed = !needle && closed[group.title];
+          const isClosed = closed[group.title];
           return (
             <div key={group.title} className="mt-3 border-t border-border pt-3">
               <button
                 type="button"
                 onClick={() => setClosed((c) => ({ ...c, [group.title]: !c[group.title] }))}
-                className="flex w-full items-center gap-2 px-5 py-1 text-left font-mono text-[10px] uppercase tracking-[0.12em] text-faint hover:text-foreground"
+                className="flex w-full items-center gap-2 px-5 py-1 text-left font-mono text-[10px] uppercase tracking-[0.12em] text-faint hover:text-foreground dark:text-white/70 dark:hover:text-white"
                 aria-expanded={!isClosed}
               >
                 <MIcon name={group.icon} className="text-[16px]" />
@@ -102,8 +89,8 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                         params={{ slug: page.slug }}
                         onClick={onNavigate}
                         className={cn(
-                          "mx-2 block rounded-md py-1.5 pl-9 pr-3 text-[13px] text-muted-foreground hover:bg-surface-2 hover:text-foreground",
-                          active === page.slug && "bg-brand/10 font-medium text-brand hover:bg-brand/15 hover:text-brand",
+                          "mx-2 block rounded-md py-1.5 pl-9 pr-3 text-[13px] text-muted-foreground hover:bg-surface-2 hover:text-foreground dark:text-white",
+                          active === page.slug && "bg-brand/10 font-medium text-brand hover:bg-brand/15 hover:text-brand dark:text-brand",
                         )}
                       >
                         {page.title}
@@ -115,7 +102,6 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             </div>
           );
         })}
-        {groups.length === 0 ? <p className="px-5 pt-4 text-[12px] text-faint">No pages match “{filter}”.</p> : null}
       </div>
     </nav>
   );
@@ -145,16 +131,20 @@ function DocsLayout() {
             <span className="font-display text-[19px] font-bold tracking-tight">FireOTA</span>
           </Link>
           <span className="hidden h-5 w-px bg-border sm:block" />
-          <Link to="/docs" className="hidden text-[14px] font-medium text-brand sm:block">
+          <Link to="/docs" className="hidden items-center gap-2 text-[17px] font-semibold text-brand sm:flex">
+            <img src="/media/docs-icon.png" alt="" aria-hidden width={32} height={32} className="size-8" />
             Docs
           </Link>
-          <div className="ml-auto flex items-center gap-2">
-            <Button variant="ghost" size="sm" className="hidden gap-1.5 sm:flex" asChild>
+          <div className="ml-auto flex items-center gap-1.5">
+            <ChangelogLink />
+            <GitHubStarButton />
+            <ThemeSelect className="mr-1" />
+            <Button variant="ghost" size="sm" className="hidden gap-1.5 xl:flex" asChild>
               <Link to="/docs/$slug" params={{ slug: "quickstart" }}>
                 <MIcon name="bolt" className="text-[18px]" /> Quickstart
               </Link>
             </Button>
-            <Button size="sm" className="gap-1.5" asChild>
+            <Button size="sm" className="hidden gap-1.5 sm:inline-flex" asChild>
               <Link to="/dashboard">
                 Go to console <MIcon name="arrow_forward" className="text-[16px]" />
               </Link>

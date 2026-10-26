@@ -145,7 +145,7 @@ function RolloutDetailPage() {
       />
 
       {breached ? (
-        <div className="rounded-lg border border-danger/30 bg-danger/10 px-4 py-3">
+        <div className="rounded-2xl border border-danger/30 bg-danger/10 px-4 py-3">
           <p className="text-[12px] font-medium text-danger">
             Failure rate is above the {data.rollbackThreshold}% threshold for this rollout.
           </p>

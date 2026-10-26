@@ -22,7 +22,7 @@ export function Figure({
 }) {
   return (
     <figure className="my-1 space-y-2">
-      <div className="overflow-hidden rounded-lg border border-border bg-surface-2 p-3 sm:p-5">
+      <div className="overflow-hidden rounded-2xl border border-border bg-surface-2 p-3 sm:p-5">
         {src ? (
           <img
             src={src}

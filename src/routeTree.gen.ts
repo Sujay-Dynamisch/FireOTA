@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AgentsRouteImport } from './routes/agents'
 import { Route as AnalyticsRouteImport } from './routes/analytics'
 import { Route as AuditLogsRouteImport } from './routes/audit-logs'
+import { Route as ChangelogDotxmlRouteImport } from './routes/changelog[.]xml'
 import { Route as ChannelsRouteImport } from './routes/channels'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as DocsRouteImport } from './routes/docs'
@@ -31,6 +32,8 @@ import { Route as TermsRouteImport } from './routes/terms'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as AppsIndexRouteImport } from './routes/apps.index'
 import { Route as AppsNewRouteImport } from './routes/apps.new'
+import { Route as ChangelogIndexRouteImport } from './routes/changelog.index'
+import { Route as ChangelogSlugRouteImport } from './routes/changelog.$slug'
 import { Route as DocsIndexRouteImport } from './routes/docs.index'
 import { Route as DocsSlugRouteImport } from './routes/docs.$slug'
 import { Route as HealthLiveRouteImport } from './routes/health.live'
@@ -74,6 +77,11 @@ const AnalyticsRoute = AnalyticsRouteImport.update({
 const AuditLogsRoute = AuditLogsRouteImport.update({
   id: '/audit-logs',
   path: '/audit-logs',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ChangelogDotxmlRoute = ChangelogDotxmlRouteImport.update({
+  id: '/changelog.xml',
+  path: '/changelog.xml',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ChannelsRoute = ChannelsRouteImport.update({
@@ -164,6 +172,16 @@ const AppsIndexRoute = AppsIndexRouteImport.update({
 const AppsNewRoute = AppsNewRouteImport.update({
   id: '/apps/new',
   path: '/apps/new',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ChangelogIndexRoute = ChangelogIndexRouteImport.update({
+  id: '/changelog/',
+  path: '/changelog/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ChangelogSlugRoute = ChangelogSlugRouteImport.update({
+  id: '/changelog/$slug',
+  path: '/changelog/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DocsIndexRoute = DocsIndexRouteImport.update({
@@ -297,6 +315,7 @@ export interface FileRoutesByFullPath {
   '/agents': typeof AgentsRoute
   '/analytics': typeof AnalyticsRoute
   '/audit-logs': typeof AuditLogsRoute
+  '/changelog.xml': typeof ChangelogDotxmlRoute
   '/channels': typeof ChannelsRoute
   '/dashboard': typeof DashboardRoute
   '/docs': typeof DocsRouteWithChildren
@@ -314,6 +333,7 @@ export interface FileRoutesByFullPath {
   '/terms': typeof TermsRoute
   '/verify-email': typeof VerifyEmailRoute
   '/apps/new': typeof AppsNewRoute
+  '/changelog/$slug': typeof ChangelogSlugRoute
   '/docs/$slug': typeof DocsSlugRoute
   '/health/live': typeof HealthLiveRoute
   '/health/ready': typeof HealthReadyRoute
@@ -324,6 +344,7 @@ export interface FileRoutesByFullPath {
   '/settings/ci-cd': typeof SettingsCiCdRoute
   '/settings/webhooks': typeof SettingsWebhooksRoute
   '/apps/': typeof AppsIndexRoute
+  '/changelog/': typeof ChangelogIndexRoute
   '/docs/': typeof DocsIndexRoute
   '/projects/': typeof ProjectsIndexRoute
   '/releases/': typeof ReleasesIndexRoute
@@ -345,6 +366,7 @@ export interface FileRoutesByTo {
   '/agents': typeof AgentsRoute
   '/analytics': typeof AnalyticsRoute
   '/audit-logs': typeof AuditLogsRoute
+  '/changelog.xml': typeof ChangelogDotxmlRoute
   '/channels': typeof ChannelsRoute
   '/dashboard': typeof DashboardRoute
   '/forgot-password': typeof ForgotPasswordRoute
@@ -361,6 +383,7 @@ export interface FileRoutesByTo {
   '/terms': typeof TermsRoute
   '/verify-email': typeof VerifyEmailRoute
   '/apps/new': typeof AppsNewRoute
+  '/changelog/$slug': typeof ChangelogSlugRoute
   '/docs/$slug': typeof DocsSlugRoute
   '/health/live': typeof HealthLiveRoute
   '/health/ready': typeof HealthReadyRoute
@@ -371,6 +394,7 @@ export interface FileRoutesByTo {
   '/settings/ci-cd': typeof SettingsCiCdRoute
   '/settings/webhooks': typeof SettingsWebhooksRoute
   '/apps': typeof AppsIndexRoute
+  '/changelog': typeof ChangelogIndexRoute
   '/docs': typeof DocsIndexRoute
   '/projects': typeof ProjectsIndexRoute
   '/releases': typeof ReleasesIndexRoute
@@ -393,6 +417,7 @@ export interface FileRoutesById {
   '/agents': typeof AgentsRoute
   '/analytics': typeof AnalyticsRoute
   '/audit-logs': typeof AuditLogsRoute
+  '/changelog.xml': typeof ChangelogDotxmlRoute
   '/channels': typeof ChannelsRoute
   '/dashboard': typeof DashboardRoute
   '/docs': typeof DocsRouteWithChildren
@@ -410,6 +435,7 @@ export interface FileRoutesById {
   '/terms': typeof TermsRoute
   '/verify-email': typeof VerifyEmailRoute
   '/apps/new': typeof AppsNewRoute
+  '/changelog/$slug': typeof ChangelogSlugRoute
   '/docs/$slug': typeof DocsSlugRoute
   '/health/live': typeof HealthLiveRoute
   '/health/ready': typeof HealthReadyRoute
@@ -420,6 +446,7 @@ export interface FileRoutesById {
   '/settings/ci-cd': typeof SettingsCiCdRoute
   '/settings/webhooks': typeof SettingsWebhooksRoute
   '/apps/': typeof AppsIndexRoute
+  '/changelog/': typeof ChangelogIndexRoute
   '/docs/': typeof DocsIndexRoute
   '/projects/': typeof ProjectsIndexRoute
   '/releases/': typeof ReleasesIndexRoute
@@ -443,6 +470,7 @@ export interface FileRouteTypes {
     | '/agents'
     | '/analytics'
     | '/audit-logs'
+    | '/changelog.xml'
     | '/channels'
     | '/dashboard'
     | '/docs'
@@ -460,6 +488,7 @@ export interface FileRouteTypes {
     | '/terms'
     | '/verify-email'
     | '/apps/new'
+    | '/changelog/$slug'
     | '/docs/$slug'
     | '/health/live'
     | '/health/ready'
@@ -470,6 +499,7 @@ export interface FileRouteTypes {
     | '/settings/ci-cd'
     | '/settings/webhooks'
     | '/apps/'
+    | '/changelog/'
     | '/docs/'
     | '/projects/'
     | '/releases/'
@@ -491,6 +521,7 @@ export interface FileRouteTypes {
     | '/agents'
     | '/analytics'
     | '/audit-logs'
+    | '/changelog.xml'
     | '/channels'
     | '/dashboard'
     | '/forgot-password'
@@ -507,6 +538,7 @@ export interface FileRouteTypes {
     | '/terms'
     | '/verify-email'
     | '/apps/new'
+    | '/changelog/$slug'
     | '/docs/$slug'
     | '/health/live'
     | '/health/ready'
@@ -517,6 +549,7 @@ export interface FileRouteTypes {
     | '/settings/ci-cd'
     | '/settings/webhooks'
     | '/apps'
+    | '/changelog'
     | '/docs'
     | '/projects'
     | '/releases'
@@ -538,6 +571,7 @@ export interface FileRouteTypes {
     | '/agents'
     | '/analytics'
     | '/audit-logs'
+    | '/changelog.xml'
     | '/channels'
     | '/dashboard'
     | '/docs'
@@ -555,6 +589,7 @@ export interface FileRouteTypes {
     | '/terms'
     | '/verify-email'
     | '/apps/new'
+    | '/changelog/$slug'
     | '/docs/$slug'
     | '/health/live'
     | '/health/ready'
@@ -565,6 +600,7 @@ export interface FileRouteTypes {
     | '/settings/ci-cd'
     | '/settings/webhooks'
     | '/apps/'
+    | '/changelog/'
     | '/docs/'
     | '/projects/'
     | '/releases/'
@@ -587,6 +623,7 @@ export interface RootRouteChildren {
   AgentsRoute: typeof AgentsRoute
   AnalyticsRoute: typeof AnalyticsRoute
   AuditLogsRoute: typeof AuditLogsRoute
+  ChangelogDotxmlRoute: typeof ChangelogDotxmlRoute
   ChannelsRoute: typeof ChannelsRoute
   DashboardRoute: typeof DashboardRoute
   DocsRoute: typeof DocsRouteWithChildren
@@ -604,6 +641,7 @@ export interface RootRouteChildren {
   TermsRoute: typeof TermsRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
   AppsNewRoute: typeof AppsNewRoute
+  ChangelogSlugRoute: typeof ChangelogSlugRoute
   ProjectsConnectRoute: typeof ProjectsConnectRoute
   ReleasesReleaseIdRoute: typeof ReleasesReleaseIdRoute
   RolloutsRolloutIdRoute: typeof RolloutsRolloutIdRoute
@@ -611,6 +649,7 @@ export interface RootRouteChildren {
   SettingsCiCdRoute: typeof SettingsCiCdRoute
   SettingsWebhooksRoute: typeof SettingsWebhooksRoute
   AppsIndexRoute: typeof AppsIndexRoute
+  ChangelogIndexRoute: typeof ChangelogIndexRoute
   ProjectsIndexRoute: typeof ProjectsIndexRoute
   ReleasesIndexRoute: typeof ReleasesIndexRoute
   RolloutsIndexRoute: typeof RolloutsIndexRoute
@@ -653,6 +692,13 @@ declare module '@tanstack/react-router' {
       path: '/audit-logs'
       fullPath: '/audit-logs'
       preLoaderRoute: typeof AuditLogsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/changelog.xml': {
+      id: '/changelog.xml'
+      path: '/changelog.xml'
+      fullPath: '/changelog.xml'
+      preLoaderRoute: typeof ChangelogDotxmlRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/channels': {
@@ -779,6 +825,20 @@ declare module '@tanstack/react-router' {
       path: '/apps/new'
       fullPath: '/apps/new'
       preLoaderRoute: typeof AppsNewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/changelog/': {
+      id: '/changelog/'
+      path: '/changelog'
+      fullPath: '/changelog/'
+      preLoaderRoute: typeof ChangelogIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/changelog/$slug': {
+      id: '/changelog/$slug'
+      path: '/changelog/$slug'
+      fullPath: '/changelog/$slug'
+      preLoaderRoute: typeof ChangelogSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/docs/': {
@@ -997,6 +1057,7 @@ const rootRouteChildren: RootRouteChildren = {
   AgentsRoute: AgentsRoute,
   AnalyticsRoute: AnalyticsRoute,
   AuditLogsRoute: AuditLogsRoute,
+  ChangelogDotxmlRoute: ChangelogDotxmlRoute,
   ChannelsRoute: ChannelsRoute,
   DashboardRoute: DashboardRoute,
   DocsRoute: DocsRouteWithChildren,
@@ -1014,6 +1075,7 @@ const rootRouteChildren: RootRouteChildren = {
   TermsRoute: TermsRoute,
   VerifyEmailRoute: VerifyEmailRoute,
   AppsNewRoute: AppsNewRoute,
+  ChangelogSlugRoute: ChangelogSlugRoute,
   ProjectsConnectRoute: ProjectsConnectRoute,
   ReleasesReleaseIdRoute: ReleasesReleaseIdRoute,
   RolloutsRolloutIdRoute: RolloutsRolloutIdRoute,
@@ -1021,6 +1083,7 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsCiCdRoute: SettingsCiCdRoute,
   SettingsWebhooksRoute: SettingsWebhooksRoute,
   AppsIndexRoute: AppsIndexRoute,
+  ChangelogIndexRoute: ChangelogIndexRoute,
   ProjectsIndexRoute: ProjectsIndexRoute,
   ReleasesIndexRoute: ReleasesIndexRoute,
   RolloutsIndexRoute: RolloutsIndexRoute,

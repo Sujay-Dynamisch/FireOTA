@@ -133,7 +133,7 @@ export function SectionCard({
   bodyClassName?: string;
 }) {
   return (
-    <section className={cn("overflow-hidden rounded-lg border border-border bg-surface/50", className)}>
+    <section className={cn("overflow-hidden rounded-2xl border border-border bg-surface/50", className)}>
       {title ? (
         <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-2.5">
           <h2 className="text-[12px] font-medium">{title}</h2>
@@ -164,7 +164,7 @@ export function StatCard({
   return (
     <div
       className={cn(
-        "rounded-lg border p-3",
+        "rounded-2xl border p-3",
         accent ? "border-brand/20 bg-brand/[0.04]" : "border-border bg-surface/50",
       )}
     >
@@ -283,7 +283,7 @@ export function SkeletonRows({ rows = 15, cols = 5 }: { rows?: number; cols?: nu
 }
 
 export function SkeletonBlock({ className }: { className?: string }) {
-  return <div className={cn("animate-pulse rounded-lg border border-border bg-surface-2/40", className)} />;
+  return <div className={cn("animate-pulse rounded-2xl border border-border bg-surface-2/40", className)} />;
 }
 
 export function HelpHint({ children }: { children: ReactNode }) {

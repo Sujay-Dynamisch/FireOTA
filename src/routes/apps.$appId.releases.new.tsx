@@ -157,7 +157,7 @@ function NewReleasePage() {
             <button
               type="button"
               onClick={() => bundleInput.current?.click()}
-              className="flex w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-surface-2/40 px-6 py-10 text-center transition-colors hover:border-brand/40 hover:bg-brand/[0.03]"
+              className="flex w-full flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border bg-surface-2/40 px-6 py-10 text-center transition-colors hover:border-brand/40 hover:bg-brand/[0.03]"
             >
               <UploadCloud aria-hidden className="size-5 text-muted-foreground" />
               <span className="text-[12px] font-medium">
@@ -231,15 +231,15 @@ function NewReleasePage() {
                 <SelectContent>
                   {(channels.data ?? []).length > 0
                     ? (channels.data ?? []).map((item) => (
-                        <SelectItem key={item.id} value={item.name}>
-                          {item.name}
-                        </SelectItem>
-                      ))
+                      <SelectItem key={item.id} value={item.name}>
+                        {item.name}
+                      </SelectItem>
+                    ))
                     : ["production", "beta", "staging"].map((name) => (
-                        <SelectItem key={name} value={name}>
-                          {name}
-                        </SelectItem>
-                      ))}
+                      <SelectItem key={name} value={name}>
+                        {name}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </Field>

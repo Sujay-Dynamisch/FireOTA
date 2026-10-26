@@ -49,7 +49,7 @@ export function WizardShell({
   footer: ReactNode;
 }) {
   return (
-    <div className="overflow-hidden rounded-lg border border-border bg-surface/50">
+    <div className="overflow-hidden rounded-2xl border border-border bg-surface/50">
       <WizardRail steps={steps} current={current} />
       <div className="p-5">
         <h2 className="font-display text-[16px] font-bold tracking-tight">{title}</h2>
