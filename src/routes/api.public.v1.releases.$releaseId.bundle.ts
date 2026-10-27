@@ -4,6 +4,7 @@
  * against an optional `x-bundle-sha256` header.
  */
 import { createFileRoute } from "@tanstack/react-router";
+import { z } from "zod";
 
 import { contextFromRequest, rateLimit } from "@/lib/backend/apikeys.server";
 import { ApiError, jsonError, jsonOk } from "@/lib/backend/errors";
@@ -15,6 +16,27 @@ import { uploadReleaseBundle } from "@/lib/backend/releases.server";
  * assets are typically 5–20 MB.
  */
 const MAX_UPLOAD_BYTES = 40 * 1024 * 1024;
+
+const expoFields = z.object({
+  assets: z.array(z.object({ name: z.string().min(1).max(200), ext: z.string().max(16) })).max(2000),
+  config: z.record(z.string(), z.unknown()).nullable(),
+});
+
+/** `format=expo` uploads carry `expoAssets` (name + extension per file) and the public `expoConfig`. */
+function parseExpoFields(form: FormData) {
+  const read = (key: string) => {
+    const value = form.get(key);
+    if (typeof value !== "string" || !value) return null;
+    try {
+      return JSON.parse(value) as unknown;
+    } catch {
+      throw new ApiError("INVALID_INPUT", `\`${key}\` must be JSON.`);
+    }
+  };
+  const parsed = expoFields.safeParse({ assets: read("expoAssets") ?? [], config: read("expoConfig") });
+  if (!parsed.success) throw new ApiError("INVALID_INPUT", "The Expo asset list or app config is malformed.");
+  return parsed.data;
+}
 
 export const Route = createFileRoute("/api/public/v1/releases/$releaseId/bundle")({
   server: {
@@ -46,6 +68,7 @@ export const Route = createFileRoute("/api/public/v1/releases/$releaseId/bundle"
             }
           }
 
+          const expo = form.get("format") === "expo" ? parseExpoFields(form) : undefined;
           const expectedHash = request.headers.get("x-bundle-sha256");
           const signatureField = form.get("signature");
           const signature =
@@ -59,6 +82,7 @@ export const Route = createFileRoute("/api/public/v1/releases/$releaseId/bundle"
             },
             assets,
             ...(signature ? { signature: signature.trim() } : {}),
+            ...(expo ? { expo } : {}),
           });
 
           return jsonOk(result, { headers: { "x-request-id": requestId } });

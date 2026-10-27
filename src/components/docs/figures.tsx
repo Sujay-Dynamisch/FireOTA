@@ -452,6 +452,88 @@ export function ChannelsMock() {
   );
 }
 
+/** Releases list with the row actions, and the delete confirmation that opens from them. */
+export function ReleaseActionsMock() {
+  const rows = [
+    ["#7", "a41c09e2", "production", "published", "Archive"],
+    ["#6", "93be71d0", "beta", "archived", "Delete"],
+    ["#5", "5d02aa7c", "development", "failed", "Delete"],
+  ] as const;
+  const tone: Record<string, string> = {
+    published: "bg-success/15 text-success",
+    archived: "bg-surface-2 text-muted-foreground",
+    failed: "bg-danger/15 text-danger",
+  };
+  return (
+    <div className="space-y-4">
+      <BrowserFrame url="fireota.creoai.in/releases">
+        <p className="mb-2 text-[14px] font-semibold text-foreground">Releases</p>
+        <div className="divide-y divide-border rounded-md border border-border">
+          {rows.map(([num, id, channel, status, action]) => (
+            <div key={num} className="flex items-center gap-2 px-2 py-2">
+              <span className="font-mono text-foreground">{num}</span>
+              <span className="font-mono text-[10px] text-faint">{id}</span>
+              <span className="hidden font-mono text-[10px] text-muted-foreground sm:inline">{channel}</span>
+              <span className={cn("rounded-full px-1.5 py-px font-mono text-[9px]", tone[status])}>{status}</span>
+              <span
+                className={cn(
+                  "ml-auto rounded-md px-2 py-0.5 text-[10px] font-medium",
+                  action === "Delete" ? "bg-danger text-white" : "border border-border text-foreground",
+                )}
+              >
+                {action}
+              </span>
+            </div>
+          ))}
+        </div>
+      </BrowserFrame>
+      <div className="mx-auto max-w-[340px] rounded-xl border border-border bg-background p-4 text-[12px] shadow-lg">
+        <p className="text-[14px] font-semibold text-foreground">Delete this update</p>
+        <p className="mt-1 text-muted-foreground">The update is deleted and its bundle is removed from your Firebase Storage bucket.</p>
+        <div className="mt-3 space-y-1 rounded-md bg-surface-2 p-2 font-mono text-[10px]">
+          <p className="flex justify-between"><span className="text-faint">Update</span><span>#6 · 93be71d0</span></p>
+          <p className="flex justify-between"><span className="text-faint">Status</span><span>archived</span></p>
+        </div>
+        <p className="mt-2 text-[11px] text-danger">This cannot be undone.</p>
+        <p className="mt-2 text-[11px] text-muted-foreground">Type DELETE to confirm</p>
+        <p className="mt-1 rounded-md border border-border px-2 py-1 font-mono text-[11px]">DELETE</p>
+        <div className="mt-3 flex justify-end gap-2">
+          <span className="rounded-md border border-border px-2.5 py-1 text-[11px]">Cancel</span>
+          <span className="rounded-md bg-danger px-2.5 py-1 text-[11px] font-medium text-white">Delete update</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** How an expo-updates app talks to FireOTA: manifest from the API, files from your own bucket. */
+export function ExpoUpdatesFlowDiagram() {
+  const boxes = [
+    { icon: "smartphone", title: "Your Expo app", body: "expo-updates checks on launch" },
+    { icon: "local_fire_department", title: "FireOTA", body: "picks the update for the channel, runtime and rollout" },
+    { icon: "cloud", title: "Your Firebase Storage", body: "serves the bundle and assets" },
+  ];
+  return (
+    <div className="grid items-stretch gap-2 sm:grid-cols-[1fr_auto_1fr_auto_1fr]">
+      {boxes.map((box, i) => (
+        <div key={box.title} className="contents">
+          <div className="rounded-xl border border-border bg-background p-3 text-center">
+            <MIcon name={box.icon} className="text-[24px] text-brand" />
+            <p className="mt-1 text-[12px] font-semibold text-foreground">{box.title}</p>
+            <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">{box.body}</p>
+          </div>
+          {i < boxes.length - 1 ? (
+            <div className="flex flex-col items-center justify-center px-1 text-center font-mono text-[9px] text-faint">
+              <MIcon name="sync_alt" className="rotate-90 text-[18px] sm:rotate-0" />
+              {i === 0 ? "manifest" : "files"}
+            </div>
+          ) : null}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function ApiKeyMock() {
   const scopes = [
     ["release.read", "Read releases", true],

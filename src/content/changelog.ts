@@ -35,6 +35,49 @@ const SUJAL: ChangelogAuthor = {
 
 export const changelog: ChangelogEntry[] = [
   {
+    slug: "fireota-cli-0-5-0",
+    date: "2026-10-27",
+    title: "CLI 0.5.0: Expo Updates without EAS, and Archive / Delete in Releases",
+    summary:
+      "Apps that use expo-updates can now get OTA updates from FireOTA instead of EAS Update, with bundles stored in your own Firebase Storage. The Releases list can archive and delete updates.",
+    tags: ["CLI 0.5.0", "Expo", "Dashboard"],
+    authors: [SUJAL],
+    body: [
+      { type: "h", text: "Expo Updates, served by FireOTA" },
+      {
+        type: "p",
+        text: "FireOTA now speaks the Expo Updates protocol. Keep expo-updates in your app, point updates.url at your FireOTA manifest URL and publish with --expo. You don't need the FireOTA SDK or any native change.",
+      },
+      {
+        type: "code",
+        code: 'npm install -D @fireota/cli@0.5.0\nnpx fireota publish --expo --app <appId> --platform android --channel production --message "Fix checkout"',
+      },
+      {
+        type: "list",
+        items: [
+          "Channels, percentage rollouts and rollbacks work as they do for SDK apps.",
+          "Bundles and assets are uploaded to your own Firebase Storage bucket.",
+          "A rollback with no newer update sends the device back to the bundle built into the app.",
+          "Installs are reported automatically when a device starts running an update.",
+        ],
+      },
+      { type: "h", text: "Archive and delete from the Releases list" },
+      {
+        type: "p",
+        text: "Each release row now has Archive and Delete buttons. Before you confirm, the dialog shows the update number, channel and status. Live updates must be archived before they can be deleted, and you type DELETE to confirm a delete. The status filter also gains Failed and Archived.",
+      },
+      { type: "h", text: "A refreshed docs site" },
+      {
+        type: "list",
+        items: [
+          "New guide: Expo Updates without EAS, step by step, with screenshots from a real device.",
+          "New and Updated tags in the sidebar, on page headers and on new sections.",
+          "A cleaner design: page header cards, numbered steps joined by a line, reference tables and a “Was this page helpful?” prompt.",
+        ],
+      },
+    ],
+  },
+  {
     slug: "fireota-0-4-0",
     date: "2026-10-26",
     title: "FireOTA 0.4.0: update screen templates, docs search and Ask AI",

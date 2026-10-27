@@ -1,15 +1,19 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Rocket } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 
 import { AppShell } from "@/components/layout/app-shell";
+import { ConfirmAction } from "@/components/fireota/confirm-dialog";
 import { DataTable, type Column } from "@/components/fireota/data-table";
 import { EmptyState, EnvBadge, PageHeader, PlatformTag, RolloutBar, StatusBadge } from "@/components/fireota/primitives";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { friendlyError } from "@/lib/friendly-error";
 import { q } from "@/lib/queries";
 import type { ReleaseRecord } from "@/lib/types";
+import { releasesService } from "@/services";
 
 export const Route = createFileRoute("/releases/")({
   head: () => ({
@@ -22,6 +26,83 @@ export const Route = createFileRoute("/releases/")({
   }),
   component: ReleasesPage,
 });
+
+const ARCHIVABLE = ["ready", "published", "paused", "rolled_back"];
+const DELETABLE = ["draft", "failed", "ready", "archived", "uploading"];
+
+/** Archive → Delete, the same two-step flow as the release page. Live releases must be archived first. */
+function ReleaseRowActions({ release }: { release: ReleaseRecord }) {
+  const client = useQueryClient();
+  const refresh = () => {
+    void client.invalidateQueries({ queryKey: ["releases"] });
+    void client.invalidateQueries({ queryKey: ["rollouts"] });
+  };
+  const onError = (error: unknown) => toast.error(friendlyError(error, "Something went wrong."));
+  const archive = useMutation({
+    mutationFn: () => releasesService.archive(release.id),
+    onSuccess: () => {
+      toast.success(`Update #${release.number} archived. It can now be deleted.`);
+      refresh();
+    },
+    onError,
+  });
+  const remove = useMutation({
+    mutationFn: () => releasesService.remove(release.id),
+    onSuccess: () => {
+      toast.success(`Update #${release.number} deleted and its bundle removed from Firebase Storage.`);
+      refresh();
+    },
+    onError,
+  });
+  const label = `#${release.number} · ${release.shortId ?? release.id.slice(0, 8)}`;
+
+  return (
+    <div className="flex items-center justify-end gap-1.5">
+      {ARCHIVABLE.includes(release.status) ? (
+        <ConfirmAction
+          trigger={
+            <Button variant="outline" size="sm" className="h-7 px-2.5 text-[12px]" loading={archive.isPending}>
+              Archive
+            </Button>
+          }
+          title="Archive this update"
+          description="It stops being served and leaves its channel. Archived updates can then be deleted."
+          confirmLabel="Archive update"
+          details={[
+            { label: "Update", value: label },
+            { label: "Channel", value: release.channelName },
+            { label: "Status", value: release.status },
+          ]}
+          onConfirm={async () => {
+            await archive.mutateAsync();
+          }}
+        />
+      ) : null}
+      {DELETABLE.includes(release.status) ? (
+        <ConfirmAction
+          trigger={
+            <Button variant="destructive" size="sm" className="h-7 px-2.5 text-[12px]" loading={remove.isPending}>
+              Delete
+            </Button>
+          }
+          title="Delete this update"
+          description="The update is deleted and its bundle is removed from your Firebase Storage bucket."
+          warning="This cannot be undone."
+          confirmLabel="Delete update"
+          destructive
+          requireTyped="DELETE"
+          details={[
+            { label: "Update", value: label },
+            { label: "Status", value: release.status },
+          ]}
+          onConfirm={async () => {
+            await remove.mutateAsync();
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
 
 function ReleasesPage() {
   const navigate = useNavigate();
@@ -111,6 +192,7 @@ function ReleasesPage() {
         searchPlaceholder="Search by number, ID, message, label or author…"
         searchValue={(row) => `${row.number} ${row.id} ${row.version} ${row.notes} ${row.runtimeVersion} ${row.appName} ${row.createdBy} ${row.gitCommit}`}
         onRowClick={(row) => void navigate({ to: "/releases/$releaseId", params: { releaseId: row.id } })}
+        rowActions={(row) => <ReleaseRowActions release={row} />}
         filters={
           <>
             <Select value={appId} onValueChange={setAppId}>
@@ -147,6 +229,8 @@ function ReleasesPage() {
                 <SelectItem value="paused">Paused</SelectItem>
                 <SelectItem value="rolled_back">Rolled back</SelectItem>
                 <SelectItem value="draft">Draft</SelectItem>
+                <SelectItem value="failed">Failed</SelectItem>
+                <SelectItem value="archived">Archived</SelectItem>
               </SelectContent>
             </Select>
           </>

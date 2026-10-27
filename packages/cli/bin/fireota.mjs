@@ -28,9 +28,11 @@ Usage:
                    built-in update UI, and wires MainApplication / AppDelegate for release builds.
   fireota publish  --app <appId> --platform <android|ios|all> [--runtime <x.y.z>] --message "What changed"
                    [--channel production] [--rollout 10] [--version <label>] [--mandatory] [--native ">=1.4.0"]
-                   [--file update.fota] [--private-key fireota-private.pem] [--json]
+                   [--file update.fota] [--private-key fireota-private.pem] [--expo] [--json]
                    Builds (unless --file), uploads to your Firebase Storage and publishes.
                    --platform all publishes Android + iOS as one update group.
+                   --expo builds with \`expo export\` for apps that use expo-updates (no EAS Update):
+                   point app.json updates.url at <FIREOTA_URL>/api/public/v1/expo/<appId>/manifest.
   fireota bundle   --platform <android|ios> [--entry index.js] [--out update.fota] [--hermes auto|on|off]
   fireota whoami   Shows the workspace, key role and apps behind FIREOTA_API_KEY.
   fireota signing generate [--out ./fireota-keys]   Creates an RSA key pair for code signing.
@@ -257,6 +259,97 @@ async function uploadRelease(releaseId, file, signing) {
   return result;
 }
 
+// ---------- Expo (expo-updates clients) ----------
+
+function expoCli() {
+  if (!isExpoProject()) fail("--expo needs an Expo project (the `expo` package must be installed).");
+  const req = createRequire(resolve("package.json"));
+  return req.resolve("@expo/cli", { paths: [req.resolve("expo/package.json")] });
+}
+
+/** The public app config, as expo-updates exposes it to the app (Constants.expoConfig). */
+function expoPublicConfig() {
+  const out = execFileSync(process.execPath, [expoCli(), "config", "--json", "--type", "public"], {
+    stdio: ["ignore", "pipe", "inherit"],
+    maxBuffer: 16 * 1024 * 1024,
+  });
+  return JSON.parse(out.toString());
+}
+
+/** Runtime version for expo-updates: --runtime, else app config `runtimeVersion` (string or appVersion policy). */
+function expoRuntime(flags, platform, config) {
+  const explicit = flags.runtime ?? process.env.FIREOTA_RUNTIME;
+  if (explicit && explicit !== true) return String(explicit);
+  const value = config[platform]?.runtimeVersion ?? config.runtimeVersion;
+  if (typeof value === "string" && value) return value;
+  if (value?.policy === "appVersion" && config.version) return String(config.version);
+  fail(`Could not resolve the ${platform} runtime version from app.json. Set "runtimeVersion": "1.0.0" (or the "appVersion" policy), or pass --runtime <x.y.z>.`);
+}
+
+/** `expo export` for one platform: the launch bundle plus each asset, as expo-updates expects. */
+function expoExport(platform) {
+  const dir = mkdtempSync(join(tmpdir(), "fireota-expo-"));
+  log(`Exporting ${platform} update with expo export…`);
+  execFileSync(process.execPath, [expoCli(), "export", "--platform", platform, "--output-dir", dir], {
+    stdio: jsonMode ? ["ignore", "ignore", "inherit"] : "inherit",
+  });
+  const metadata = JSON.parse(readFileSync(join(dir, "metadata.json"), "utf8"));
+  const files = metadata.fileMetadata?.[platform];
+  if (!files?.bundle) fail(`expo export produced no ${platform} bundle.`);
+  return {
+    dir,
+    bundle: join(dir, files.bundle),
+    assets: (files.assets ?? []).map((a) => ({ path: join(dir, a.path), name: a.path.split("/").pop(), ext: a.ext ?? "" })),
+  };
+}
+
+async function uploadExpoRelease(releaseId, exported, config) {
+  const bytes = readFileSync(exported.bundle);
+  const form = new FormData();
+  form.append("format", "expo");
+  form.append("bundle", new Blob([bytes], { type: "application/javascript" }), "bundle.hbc");
+  for (const asset of exported.assets) {
+    form.append("assets", new Blob([readFileSync(asset.path)]), asset.name);
+  }
+  form.append("expoAssets", JSON.stringify(exported.assets.map((a) => ({ name: a.name, ext: a.ext }))));
+  form.append("expoConfig", JSON.stringify(config));
+  log(`Uploading bundle + ${exported.assets.length} assets…`);
+  const result = await api("POST", `/releases/${releaseId}/bundle`, form, { "x-bundle-sha256": sha256(bytes) });
+  log(`Verified in your Firebase Storage. SHA-256 ${result.checksum}`);
+  return result;
+}
+
+async function publishExpo(flags, platforms) {
+  if (flags.file) fail("--file cannot be combined with --expo; the update is built with expo export.");
+  if (flags["private-key"]) fail("Code signing is not supported for Expo updates yet; publish without --private-key.");
+  const config = expoPublicConfig();
+  const exports = Object.fromEntries(platforms.map((p) => [p, expoExport(p)]));
+  try {
+    const runtimes = Object.fromEntries(platforms.map((p) => [p, expoRuntime(flags, p, config)]));
+    const extra =
+      platforms.length > 1
+        ? { groupId: groupIdFrom(platforms.map((p) => `${sha256(readFileSync(exports[p].bundle))}@${runtimes[p]}`).join(":")) }
+        : {};
+    const results = [];
+    for (const p of platforms) {
+      const release = await createRelease({ ...flags, runtime: runtimes[p] }, p, extra);
+      if (["draft", "failed", "uploading"].includes(release.status)) await uploadExpoRelease(release.id, exports[p], config);
+      else log(`Bundle already uploaded (status ${release.status}); skipping upload.`);
+      if (release.status === "published") {
+        results.push({ id: release.id, number: release.number, platform: p, rollout: null, status: "published" });
+        continue;
+      }
+      const result = await releaseAction(release.id, { action: "publish", rolloutPercentage: Number(flags.rollout ?? 100) });
+      log(`Published update #${release.number} (${p}) at ${result.rollout}%.`);
+      results.push({ id: release.id, number: release.number, platform: p, rollout: result.rollout, status: "published" });
+    }
+    if (jsonMode) console.log(JSON.stringify({ ok: true, groupId: extra.groupId ?? null, updates: results }));
+    else log(`\nexpo-updates URL for app.json:\n  ${process.env.FIREOTA_URL?.replace(/\/+$/, "")}/api/public/v1/expo/${need(flags, "app", "FIREOTA_APP_ID")}/manifest`);
+  } finally {
+    for (const e of Object.values(exports)) rmSync(e.dir, { recursive: true, force: true });
+  }
+}
+
 async function releaseAction(releaseId, body) {
   return api("POST", `/releases/${releaseId}/publish`, body);
 }
@@ -352,6 +445,7 @@ Next:
     jsonMode = Boolean(all.json);
     const platform = need(all, "platform");
     if (!["android", "ios", "all"].includes(platform)) fail("--platform must be android, ios or all");
+    if (all.expo) return publishExpo(all, platform === "all" ? ["android", "ios"] : [platform]);
     if (platform === "all" && all.file) fail("--file cannot be combined with --platform all (each platform needs its own package).");
     let privateKey = null;
     try {

@@ -11,6 +11,7 @@ import {
   deleteArtifact,
   uploadArtifact,
 } from "./firebase.server";
+import { base64UrlSha256, expoContentType, type ExpoAsset, type ExpoManifestTemplate } from "./expo";
 import { buildManifest, isFireOtaPackage, storagePrefix } from "./manifest";
 import { withDownloadToken } from "./ota.server";
 import { assertTransition, canTransition, type ReleaseState } from "./release-state";
@@ -242,6 +243,11 @@ export async function uploadReleaseBundle(
     assets?: { name: string; bytes: Uint8Array; contentType: string }[];
     /** Base64 RSA-SHA256 signature over signatureMessage(), made with the app's private key. */
     signature?: string;
+    /**
+     * Set for updates exported with `expo export`: the bundle is the Hermes/JS launch asset and
+     * each asset is served to expo-updates individually (Expo Updates protocol).
+     */
+    expo?: { config: Record<string, unknown> | null; assets: { name: string; ext: string }[] };
   },
 ) {
   requirePermission(ctx, "release.upload");
@@ -250,7 +256,9 @@ export async function uploadReleaseBundle(
     fail("INVALID_STATE_TRANSITION", `A release in state ${release.status} cannot receive a new bundle.`);
   }
   if (input.bundle.bytes.byteLength === 0) fail("UPLOAD_FAILED", "The bundle is empty.");
-  if (!(await isFireOtaPackage(input.bundle.bytes))) {
+  if (input.expo) {
+    if (input.signature) fail("INVALID_INPUT", "Code signing is not supported for Expo updates yet. Publish without --private-key.");
+  } else if (!(await isFireOtaPackage(input.bundle.bytes))) {
     fail("INVALID_RELEASE", "Upload a .fota update package built with `npx fireota bundle`; plain JS bundles cannot be installed by the SDK.");
   }
 
@@ -267,7 +275,9 @@ export async function uploadReleaseBundle(
     fail("CHECKSUM_MISMATCH", "The uploaded bundle does not match the supplied checksum.");
   }
 
-  const signing = await verifySignatureForUpload(ctx, release, hash, input.signature);
+  const signing = input.expo
+    ? await allowUnsignedExpoUpload(ctx, release)
+    : await verifySignatureForUpload(ctx, release, hash, input.signature);
 
   await ctx.db.from("releases").update({ status: "uploading" }).eq("id", release.id);
 
@@ -291,6 +301,7 @@ export async function uploadReleaseBundle(
     await ctx.db.from("releases").update({ status: "processing" }).eq("id", release.id);
 
     const assetRows = [] as { name: string; url: string; hash: string; size: number }[];
+    const expoAssets: ExpoAsset[] = [];
     for (const asset of input.assets ?? []) {
       const safeName = asset.name.replace(/[^A-Za-z0-9._-]/g, "_");
       const stored = await uploadArtifact({
@@ -301,12 +312,18 @@ export async function uploadReleaseBundle(
         contentType: asset.contentType || "application/octet-stream",
       });
       const assetHash = sha256Hex(asset.bytes);
-      assetRows.push({
-        name: safeName,
-        url: artifactDownloadUrl(target.bucket, stored.path, stored.downloadToken),
-        hash: assetHash,
-        size: stored.size,
-      });
+      const assetUrl = artifactDownloadUrl(target.bucket, stored.path, stored.downloadToken);
+      assetRows.push({ name: safeName, url: assetUrl, hash: assetHash, size: stored.size });
+      if (input.expo) {
+        const ext = input.expo.assets.find((a) => a.name === asset.name)?.ext ?? "";
+        expoAssets.push({
+          hash: base64UrlSha256(asset.bytes),
+          key: safeName,
+          contentType: expoContentType(ext),
+          ...(ext ? { fileExtension: `.${ext.replace(/^\./, "")}` } : {}),
+          url: assetUrl,
+        });
+      }
       await ctx.db.from("release_assets").insert({
         organization_id: ctx.organizationId,
         release_id: release.id,
@@ -320,7 +337,7 @@ export async function uploadReleaseBundle(
     }
 
     const bundleUrl = artifactDownloadUrl(target.bucket, uploaded.path, uploaded.downloadToken);
-    const manifest = buildManifest({
+    const baseManifest = buildManifest({
       releaseId: release.id,
       appId: release.app_id,
       platform: release.platform,
@@ -335,6 +352,20 @@ export async function uploadReleaseBundle(
       mandatory: release.mandatory,
       rolloutPercentage: release.rollout_percentage,
     });
+    const expo: ExpoManifestTemplate | null = input.expo
+      ? {
+          launchAsset: {
+            hash: base64UrlSha256(input.bundle.bytes),
+            key: `bundle-${hash.slice(0, 16)}`,
+            contentType: "application/javascript",
+            fileExtension: ".bundle",
+            url: bundleUrl,
+          },
+          assets: expoAssets,
+          expoClient: input.expo.config,
+        }
+      : null;
+    const manifest = expo ? { ...baseManifest, format: "expo", expo } : baseManifest;
 
     await ctx.db.from("release_assets").insert({
       organization_id: ctx.organizationId,
@@ -400,6 +431,18 @@ export async function uploadReleaseBundle(
  * Checks the update signature against the app's registered public key. With a key on file a
  * supplied signature must verify; with "required" on, a missing one is refused too.
  */
+/** Expo updates are served unsigned for now; apps that require signing cannot take them. */
+async function allowUnsignedExpoUpload(ctx: OrgContext, release: ReleaseRow) {
+  const { data: app } = await ctx.db.from("apps").select("code_signing_required").eq("id", release.app_id).maybeSingle();
+  if (app?.code_signing_required) {
+    fail(
+      "SIGNATURE_REQUIRED",
+      "This app requires signed updates, which Expo updates do not support yet. Turn off 'Require signed updates' in the app's code signing settings.",
+    );
+  }
+  return { signature: null, keyId: null };
+}
+
 async function verifySignatureForUpload(ctx: OrgContext, release: ReleaseRow, hash: string, signature?: string) {
   const { data: app } = await ctx.db
     .from("apps")

@@ -56,6 +56,7 @@ import { Route as ApiPublicV1FirebaseCallbackRouteImport } from './routes/api.pu
 import { Route as ApiPublicV1InternalMaintenanceRouteImport } from './routes/api.public.v1.internal.maintenance'
 import { Route as ApiPublicV1UpdatesCheckRouteImport } from './routes/api.public.v1.updates.check'
 import { Route as ApiPublicV1UpdatesEventsRouteImport } from './routes/api.public.v1.updates.events'
+import { Route as ApiPublicV1ExpoAppIdManifestRouteImport } from './routes/api.public.v1.expo.$appId.manifest'
 import { Route as ApiPublicV1ReleasesReleaseIdBundleRouteImport } from './routes/api.public.v1.releases.$releaseId.bundle'
 import { Route as ApiPublicV1ReleasesReleaseIdPublishRouteImport } from './routes/api.public.v1.releases.$releaseId.publish'
 
@@ -297,6 +298,12 @@ const ApiPublicV1UpdatesEventsRoute =
     path: '/api/public/v1/updates/events',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicV1ExpoAppIdManifestRoute =
+  ApiPublicV1ExpoAppIdManifestRouteImport.update({
+    id: '/api/public/v1/expo/$appId/manifest',
+    path: '/api/public/v1/expo/$appId/manifest',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicV1ReleasesReleaseIdBundleRoute =
   ApiPublicV1ReleasesReleaseIdBundleRouteImport.update({
     id: '/$releaseId/bundle',
@@ -358,6 +365,7 @@ export interface FileRoutesByFullPath {
   '/api/public/v1/internal/maintenance': typeof ApiPublicV1InternalMaintenanceRoute
   '/api/public/v1/updates/check': typeof ApiPublicV1UpdatesCheckRoute
   '/api/public/v1/updates/events': typeof ApiPublicV1UpdatesEventsRoute
+  '/api/public/v1/expo/$appId/manifest': typeof ApiPublicV1ExpoAppIdManifestRoute
   '/api/public/v1/releases/$releaseId/bundle': typeof ApiPublicV1ReleasesReleaseIdBundleRoute
   '/api/public/v1/releases/$releaseId/publish': typeof ApiPublicV1ReleasesReleaseIdPublishRoute
 }
@@ -408,6 +416,7 @@ export interface FileRoutesByTo {
   '/api/public/v1/internal/maintenance': typeof ApiPublicV1InternalMaintenanceRoute
   '/api/public/v1/updates/check': typeof ApiPublicV1UpdatesCheckRoute
   '/api/public/v1/updates/events': typeof ApiPublicV1UpdatesEventsRoute
+  '/api/public/v1/expo/$appId/manifest': typeof ApiPublicV1ExpoAppIdManifestRoute
   '/api/public/v1/releases/$releaseId/bundle': typeof ApiPublicV1ReleasesReleaseIdBundleRoute
   '/api/public/v1/releases/$releaseId/publish': typeof ApiPublicV1ReleasesReleaseIdPublishRoute
 }
@@ -460,6 +469,7 @@ export interface FileRoutesById {
   '/api/public/v1/internal/maintenance': typeof ApiPublicV1InternalMaintenanceRoute
   '/api/public/v1/updates/check': typeof ApiPublicV1UpdatesCheckRoute
   '/api/public/v1/updates/events': typeof ApiPublicV1UpdatesEventsRoute
+  '/api/public/v1/expo/$appId/manifest': typeof ApiPublicV1ExpoAppIdManifestRoute
   '/api/public/v1/releases/$releaseId/bundle': typeof ApiPublicV1ReleasesReleaseIdBundleRoute
   '/api/public/v1/releases/$releaseId/publish': typeof ApiPublicV1ReleasesReleaseIdPublishRoute
 }
@@ -513,6 +523,7 @@ export interface FileRouteTypes {
     | '/api/public/v1/internal/maintenance'
     | '/api/public/v1/updates/check'
     | '/api/public/v1/updates/events'
+    | '/api/public/v1/expo/$appId/manifest'
     | '/api/public/v1/releases/$releaseId/bundle'
     | '/api/public/v1/releases/$releaseId/publish'
   fileRoutesByTo: FileRoutesByTo
@@ -563,6 +574,7 @@ export interface FileRouteTypes {
     | '/api/public/v1/internal/maintenance'
     | '/api/public/v1/updates/check'
     | '/api/public/v1/updates/events'
+    | '/api/public/v1/expo/$appId/manifest'
     | '/api/public/v1/releases/$releaseId/bundle'
     | '/api/public/v1/releases/$releaseId/publish'
   id:
@@ -614,6 +626,7 @@ export interface FileRouteTypes {
     | '/api/public/v1/internal/maintenance'
     | '/api/public/v1/updates/check'
     | '/api/public/v1/updates/events'
+    | '/api/public/v1/expo/$appId/manifest'
     | '/api/public/v1/releases/$releaseId/bundle'
     | '/api/public/v1/releases/$releaseId/publish'
   fileRoutesById: FileRoutesById
@@ -662,6 +675,7 @@ export interface RootRouteChildren {
   ApiPublicV1InternalMaintenanceRoute: typeof ApiPublicV1InternalMaintenanceRoute
   ApiPublicV1UpdatesCheckRoute: typeof ApiPublicV1UpdatesCheckRoute
   ApiPublicV1UpdatesEventsRoute: typeof ApiPublicV1UpdatesEventsRoute
+  ApiPublicV1ExpoAppIdManifestRoute: typeof ApiPublicV1ExpoAppIdManifestRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -995,6 +1009,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicV1UpdatesEventsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/v1/expo/$appId/manifest': {
+      id: '/api/public/v1/expo/$appId/manifest'
+      path: '/api/public/v1/expo/$appId/manifest'
+      fullPath: '/api/public/v1/expo/$appId/manifest'
+      preLoaderRoute: typeof ApiPublicV1ExpoAppIdManifestRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/v1/releases/$releaseId/bundle': {
       id: '/api/public/v1/releases/$releaseId/bundle'
       path: '/$releaseId/bundle'
@@ -1096,6 +1117,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicV1InternalMaintenanceRoute: ApiPublicV1InternalMaintenanceRoute,
   ApiPublicV1UpdatesCheckRoute: ApiPublicV1UpdatesCheckRoute,
   ApiPublicV1UpdatesEventsRoute: ApiPublicV1UpdatesEventsRoute,
+  ApiPublicV1ExpoAppIdManifestRoute: ApiPublicV1ExpoAppIdManifestRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
