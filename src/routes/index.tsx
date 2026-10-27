@@ -1132,7 +1132,7 @@ function Landing() {
                 </li>
                 <li>
                   <a
-                    href="https://www.npmjs.com"
+                    href="https://www.npmjs.com/package/@fireota/react-native"
                     target="_blank"
                     rel="noreferrer"
                     className="hover:text-foreground flex items-center gap-1"
