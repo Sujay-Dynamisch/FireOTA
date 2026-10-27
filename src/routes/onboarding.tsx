@@ -1,3 +1,4 @@
+import { friendlyError } from "@/lib/friendly-error";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
@@ -234,7 +235,7 @@ function OnboardingPage() {
                           toast.warning("FireOTA cannot write to this project's Storage yet. Set up Storage or fix permissions, then retry.");
                         }
                       } catch (error) {
-                        toast.error(error instanceof Error ? error.message : "Verification failed.");
+                        toast.error(friendlyError(error, "Verification failed."));
                       } finally {
                         setVerifying(false);
                       }

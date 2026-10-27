@@ -1,4 +1,5 @@
 /** Applications, platforms and channels. */
+import { friendlyError } from "@/lib/friendly-error";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
@@ -353,7 +354,7 @@ export const setAppSigning = createServerFn({ method: "POST" })
         try {
           parsed = parsePublicKey(data.publicKeyPem);
         } catch (error) {
-          fail("INVALID_INPUT", error instanceof Error ? error.message : "Invalid public key.");
+          fail("INVALID_INPUT", friendlyError(error, "Invalid public key."));
         }
         patch["code_signing_public_key"] = parsed.pem;
         patch["code_signing_key_id"] = parsed.keyId;

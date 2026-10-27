@@ -1,3 +1,4 @@
+import { friendlyError } from "@/lib/friendly-error";
 import { ChevronDown, ChevronLeft, ChevronRight, Columns3, Search } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 
@@ -145,7 +146,7 @@ export function DataTable<T>({
       ) : null}
 
       {error ? (
-        <ErrorState title="We couldn't load this list" description={error.message} />
+        <ErrorState title="We couldn't load this list" description={friendlyError(error, "Please refresh the page and try again.")} />
       ) : isLoading ? (
         <SkeletonRows rows={15} cols={visibleColumns.length} />
       ) : filtered.length === 0 ? (

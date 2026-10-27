@@ -2,6 +2,7 @@
  * Chat with a FireOTA agent: multi-turn conversation, tool activity, inline approvals,
  * `/` commands and .fota attachments that are uploaded to the releases an agent creates.
  */
+import { friendlyError } from "@/lib/friendly-error";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowUp,
@@ -262,7 +263,7 @@ export function AgentChat({ agents, configured }: { agents: Agent[]; configured:
       savedSnapshot.current = JSON.stringify(next.messages);
       void client.invalidateQueries({ queryKey: ["agent-conversations"] });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not save this chat.");
+      toast.error(friendlyError(error, "Could not save this chat."));
     }
   };
 
@@ -325,7 +326,7 @@ export function AgentChat({ agents, configured }: { agents: Agent[]; configured:
       writeActive(chat.id);
     } catch (error) {
       writeActive(null);
-      toast.error(error instanceof Error ? error.message : "Could not open this chat.");
+      toast.error(friendlyError(error, "Could not open this chat."));
       void client.invalidateQueries({ queryKey: ["agent-conversations"] });
     } finally {
       setOpening(false);
@@ -346,7 +347,7 @@ export function AgentChat({ agents, configured }: { agents: Agent[]; configured:
       if (id === conversationId) setCustomTitle(title);
       await client.invalidateQueries({ queryKey: ["agent-conversations"] });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not rename this chat.");
+      toast.error(friendlyError(error, "Could not rename this chat."));
     }
   };
 
@@ -405,7 +406,7 @@ export function AgentChat({ agents, configured }: { agents: Agent[]; configured:
       } catch (error) {
         setUpload({
           state: "failed",
-          error: error instanceof Error ? error.message : "Upload failed.",
+          error: friendlyError(error, "Upload failed."),
         });
       }
     }
@@ -453,7 +454,7 @@ export function AgentChat({ agents, configured }: { agents: Agent[]; configured:
           role: "assistant",
           agentName: input.agent.name,
           error: true,
-          content: error instanceof Error ? error.message : "The agent failed.",
+          content: friendlyError(error, "The agent failed."),
         },
       ]),
   });
@@ -483,7 +484,7 @@ export function AgentChat({ agents, configured }: { agents: Agent[]; configured:
       void client.invalidateQueries({ queryKey: ["agent-executions"] });
     },
     onError: (error) =>
-      toast.error(error instanceof Error ? error.message : "Could not complete the action."),
+      toast.error(friendlyError(error, "Could not complete the action.")),
   });
 
   const commandQuery =

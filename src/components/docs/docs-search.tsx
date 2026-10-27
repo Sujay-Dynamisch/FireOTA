@@ -4,6 +4,7 @@
  *   Ask AI  — a question answered by the docs assistant (Groq) from the most relevant doc sections.
  * Keyboard: ↑/↓ navigate, ↵ select or send, Tab switch mode, Esc close.
  */
+import { friendlyError } from "@/lib/friendly-error";
 import { useNavigate } from "@tanstack/react-router";
 import {
   Check,
@@ -307,10 +308,7 @@ export function DocsSearch({ onNavigate }: { onNavigate?: () => void }) {
         ),
       );
     } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message.replace(/^Error:\s*/, "")
-          : "The assistant could not answer.";
+      const message = friendlyError(error, "The assistant could not answer.");
       setTurns((t) =>
         t.map((turn, i) => (i === t.length - 1 ? { ...turn, error: message } : turn)),
       );

@@ -1,3 +1,4 @@
+import { friendlyError } from "@/lib/friendly-error";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Bot } from "lucide-react";
@@ -60,7 +61,7 @@ function AgentsPage() {
       void client.invalidateQueries({ queryKey: ["agent-approvals"] });
       void client.invalidateQueries({ queryKey: ["agent-executions"] });
     },
-    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not complete the action."),
+    onError: (error) => toast.error(friendlyError(error, "Could not complete the action.")),
   });
 
   return (

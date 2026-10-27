@@ -1,3 +1,4 @@
+import { friendlyError } from "@/lib/friendly-error";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
@@ -97,7 +98,7 @@ function ConnectProjectPage() {
                     await firebaseService.reconnect();
                   } catch (error) {
                     setAuthorizing(false);
-                    toast.error(error instanceof Error ? error.message : "Could not start Google sign-in.");
+                    toast.error(friendlyError(error, "Could not start Google sign-in."));
                   }
                 }}
               >
@@ -189,7 +190,7 @@ function ConnectProjectPage() {
                       if (result.status === "connected") toast.success("Firebase project connected and verified.");
                       else toast.warning("Project connected, but Storage is not writable yet. Fix it and verify again from Projects.");
                     } catch (error) {
-                      toast.error(error instanceof Error ? error.message : "Verification failed. Check the bucket permissions and retry.");
+                      toast.error(friendlyError(error, "Verification failed. Check the bucket permissions and retry."));
                     } finally {
                       setVerifying(false);
                     }

@@ -1,3 +1,4 @@
+import { friendlyError } from "@/lib/friendly-error";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { KeyRound } from "lucide-react";
@@ -69,7 +70,7 @@ function ApiKeysPage() {
       setIssued(result.token);
       void client.invalidateQueries({ queryKey: ["api-keys"] });
     },
-    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not create the key."),
+    onError: (error) => toast.error(friendlyError(error, "Could not create the key.")),
   });
   const remove = useMutation({
     mutationFn: (id: string) => apiKeysService.remove(id),
@@ -77,7 +78,7 @@ function ApiKeysPage() {
       toast.success("Key deleted.");
       void client.invalidateQueries({ queryKey: ["api-keys"] });
     },
-    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not delete the key."),
+    onError: (error) => toast.error(friendlyError(error, "Could not delete the key.")),
   });
   const revoke = useMutation({
     mutationFn: (id: string) => apiKeysService.revoke(id),
