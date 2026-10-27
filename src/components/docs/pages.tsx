@@ -307,6 +307,19 @@ npx expo run:android --variant release
 # Or EAS Build: the plugin runs on EAS's servers too
 eas build --platform all --profile production`;
 
+const EXPO_UPDATES_APP_JSON = `{
+  "expo": {
+    "runtimeVersion": "1.0.0",
+    "updates": {
+      "url": "https://fireota.creoai.in/api/public/v1/expo/<appId>/manifest",
+      "requestHeaders": { "expo-channel-name": "production" }
+    }
+  }
+}`;
+
+const EXPO_UPDATES_PUBLISH = `export FIREOTA_API_KEY=fota_sk_live_...
+npx fireota publish --expo --app <appId> --platform android --channel production --message "Fix checkout"`;
+
 const EXPO_PUBLISH = `# Bundles with Expo (expo export:embed + Hermes), exactly like the store build
 FIREOTA_URL=https://fireota.example.com FIREOTA_API_KEY=fota_sk_... \\
   npm run ota:publish -- --message "Fix checkout crash"`;
@@ -1136,6 +1149,30 @@ function UpdateBadge() {
                   <C>"jsEngine": "jsc"</C>:
                 </p>
                 <Code code={EXPO_PUBLISH} />
+              </>
+            ),
+          },
+          {
+            id: "expo-updates",
+            title: "Keep expo-updates, skip EAS Update",
+            body: (
+              <>
+                <p>
+                  Already using <C>expo-updates</C>? Keep it and point it at FireOTA instead of EAS Update. FireOTA speaks the
+                  Expo Updates protocol, so no FireOTA SDK or native change is needed. Bundles are stored in your own Firebase
+                  Storage, and you still get channels, rollouts and rollbacks.
+                </p>
+                <Steps
+                  items={[
+                    <>Point <C>app.json</C> at your app's manifest URL and choose a channel:<Code language="json" code={EXPO_UPDATES_APP_JSON} /></>,
+                    <>Make one store build, so the app contains the new <C>updates.url</C>.</>,
+                    <>Publish JavaScript changes with <C>--expo</C>. The CLI runs <C>expo export</C>, uploads the bundle and assets, and publishes:<Code code={EXPO_UPDATES_PUBLISH} /></>,
+                  ]}
+                />
+                <Callout kind="note">
+                  Expo updates are not signed by FireOTA. Apps that require signed updates reject <C>--expo</C> publishes.
+                  Rolling back to no update tells the device to go back to the bundle built into the app.
+                </Callout>
               </>
             ),
           },
