@@ -1,3 +1,4 @@
+import { friendlyError } from "@/lib/friendly-error";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { ShieldCheck, UserPlus } from "lucide-react";
@@ -135,7 +136,7 @@ function RoleEditor({ role, onDone }: { role?: CustomRole; onDone: () => void })
       onDone();
     },
     onError: (error) =>
-      toast.error(error instanceof Error ? error.message : "Could not save the role."),
+      toast.error(friendlyError(error, "Could not save the role.")),
   });
   const toggle = (p: string, on: boolean) =>
     setPermissions((prev) => (on ? [...new Set([...prev, p])] : prev.filter((x) => x !== p)));
@@ -217,7 +218,7 @@ function TeamPage() {
     void client.invalidateQueries({ queryKey: ["roles"] });
   };
   const onError = (error: unknown) =>
-    toast.error(error instanceof Error ? error.message : "Something went wrong.");
+    toast.error(friendlyError(error, "Something went wrong."));
 
   const invite = useMutation({
     mutationFn: () => {

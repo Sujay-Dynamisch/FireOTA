@@ -1,3 +1,4 @@
+import { friendlyError } from "@/lib/friendly-error";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { GitBranch, Pause, Pencil, Play, Plus, Trash2 } from "lucide-react";
@@ -105,7 +106,7 @@ function ChannelDialog({
       onOpenChange(false);
     },
     onError: (error) =>
-      toast.error(error instanceof Error ? error.message : "Could not save the channel."),
+      toast.error(friendlyError(error, "Could not save the channel.")),
   });
   const set = <K extends keyof ChannelForm>(key: K, value: ChannelForm[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
@@ -229,7 +230,7 @@ function PromoteDialog({ channel, onClose }: { channel: ChannelRecord; onClose: 
       onClose();
     },
     onError: (error) =>
-      toast.error(error instanceof Error ? error.message : "Could not promote the update."),
+      toast.error(friendlyError(error, "Could not promote the update.")),
   });
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -299,7 +300,7 @@ function ChannelsPage() {
 
   const refresh = () => void client.invalidateQueries({ queryKey: ["channels"] });
   const onError = (error: unknown) =>
-    toast.error(error instanceof Error ? error.message : "Something went wrong.");
+    toast.error(friendlyError(error, "Something went wrong."));
   const togglePause = useMutation({
     mutationFn: (channel: ChannelRecord) =>
       channelsService.update(channel.id, {

@@ -1,3 +1,4 @@
+import { friendlyError } from "@/lib/friendly-error";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate, useParams } from "@tanstack/react-router";
 import { UploadCloud } from "lucide-react";
@@ -84,7 +85,7 @@ function NewReleasePage() {
     } catch (error) {
       setBundle(null);
       setUpload(null);
-      toast.error(error instanceof Error ? error.message : "Upload failed. Check your connection and try again.");
+      toast.error(friendlyError(error, "Upload failed. Check your connection and try again."));
     }
   };
 
@@ -105,8 +106,7 @@ function NewReleasePage() {
       void navigate({ to: "/releases" });
     } catch (error) {
       // Show the server's reason (validation, permissions, Firebase Storage) instead of a generic line.
-      const reason = error instanceof Error ? error.message.replace(/^Error:s*/, "") : "";
-      toast.error(reason ? `The release could not be published: ${reason}` : "The release could not be published.");
+      toast.error(`The release could not be published. ${friendlyError(error, "Please try again.")}`);
     } finally {
       setPending(false);
     }

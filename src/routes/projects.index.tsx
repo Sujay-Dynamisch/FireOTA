@@ -1,3 +1,4 @@
+import { friendlyError } from "@/lib/friendly-error";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { Database } from "lucide-react";
@@ -54,7 +55,7 @@ function ProjectsPage() {
       void client.invalidateQueries({ queryKey: ["projects"] });
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : "Verification failed.");
+      toast.error(friendlyError(error, "Verification failed."));
       void client.invalidateQueries({ queryKey: ["projects"] });
     },
   });
@@ -64,7 +65,7 @@ function ProjectsPage() {
       toast.success("Project disconnected. Existing bundles stay in your bucket.");
       void client.invalidateQueries({ queryKey: ["projects"] });
     },
-    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not disconnect the project."),
+    onError: (error) => toast.error(friendlyError(error, "Could not disconnect the project.")),
   });
   const remove = useMutation({
     mutationFn: (id: string) => firebaseService.remove(id),
@@ -73,7 +74,7 @@ function ProjectsPage() {
       void client.invalidateQueries({ queryKey: ["projects"] });
       void client.invalidateQueries({ queryKey: ["dashboard"] });
     },
-    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not remove the project."),
+    onError: (error) => toast.error(friendlyError(error, "Could not remove the project.")),
   });
 
   return (

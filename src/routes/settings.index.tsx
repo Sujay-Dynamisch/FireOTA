@@ -1,3 +1,4 @@
+import { friendlyError } from "@/lib/friendly-error";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
@@ -41,7 +42,7 @@ function NotificationPreferences() {
       void client.invalidateQueries({ queryKey: ["notification-prefs"] });
       void client.invalidateQueries({ queryKey: ["notifications"] });
     },
-    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not save preferences."),
+    onError: (error) => toast.error(friendlyError(error, "Could not save preferences.")),
   });
   const current = Object.fromEntries((prefs.data ?? []).map((p) => [p.key, p.enabled]));
   return (
@@ -183,7 +184,7 @@ function SettingsPage() {
                         setDefaultChannel("");
                         void client.invalidateQueries({ queryKey: ["session"] });
                       } catch (error) {
-                        toast.error(error instanceof Error ? error.message : "Could not save the settings.");
+                        toast.error(friendlyError(error, "Could not save the settings."));
                       } finally {
                         setSaving(false);
                       }
@@ -217,7 +218,7 @@ function SettingsPage() {
                       await organizationService.update({ requirePublishConfirmation: value });
                       void client.invalidateQueries({ queryKey: ["session"] });
                     } catch (error) {
-                      toast.error(error instanceof Error ? error.message : "Could not save.");
+                      toast.error(friendlyError(error, "Could not save."));
                     }
                   }}
                   aria-label="Require approval for production publishes"
@@ -266,7 +267,7 @@ function SettingsPage() {
                     client.clear();
                     void navigate({ to: "/onboarding" });
                   } catch (error) {
-                    toast.error(error instanceof Error ? error.message : "Could not delete the workspace.");
+                    toast.error(friendlyError(error, "Could not delete the workspace."));
                   }
                 }}
               />
@@ -318,7 +319,7 @@ function SettingsPage() {
                     setNewPassword("");
                     toast.success("Password updated.");
                   } catch (error) {
-                    toast.error(error instanceof Error ? error.message : "Could not update the password.");
+                    toast.error(friendlyError(error, "Could not update the password."));
                   } finally {
                     setChangingPassword(false);
                   }

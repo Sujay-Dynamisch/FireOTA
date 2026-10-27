@@ -1,4 +1,5 @@
 /** Admin panels of the application page: runtimes, code signing and deletion. */
+import { friendlyError } from "@/lib/friendly-error";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { KeyRound, Layers, ShieldCheck, ShieldOff } from "lucide-react";
@@ -120,7 +121,7 @@ export function CodeSigningPanel({ app, canEdit }: { app: AppRecord; canEdit: bo
       void client.invalidateQueries({ queryKey: ["apps"] });
     },
     onError: (error) =>
-      toast.error(error instanceof Error ? error.message : "Could not update code signing."),
+      toast.error(friendlyError(error, "Could not update code signing.")),
   });
 
   return (
@@ -243,7 +244,7 @@ export function DeleteAppPanel({ app }: { app: AppRecord }) {
       void navigate({ to: "/apps" });
     },
     onError: (error) =>
-      toast.error(error instanceof Error ? error.message : "Could not delete the application."),
+      toast.error(friendlyError(error, "Could not delete the application.")),
   });
   return (
     <SectionCard title={<span className="text-danger">Danger zone</span>}>

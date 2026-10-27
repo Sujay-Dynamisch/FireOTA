@@ -1,3 +1,4 @@
+import { friendlyError } from "@/lib/friendly-error";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Webhook as WebhookIcon } from "lucide-react";
@@ -123,7 +124,7 @@ function WebhooksPage() {
       else toast.error(`Delivery failed: ${result.error ?? `HTTP ${result.status || "no response"}`}. Check the endpoint and its logs.`);
       void client.invalidateQueries({ queryKey: ["webhooks"] });
     },
-    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not send the test event."),
+    onError: (error) => toast.error(friendlyError(error, "Could not send the test event.")),
   });
   const { can } = usePermissions();
   const webhooks = useQuery(q.webhooks());
@@ -134,7 +135,7 @@ function WebhooksPage() {
   const [editing, setEditing] = useState<{ id: string; events: string[] } | null>(null);
 
   const refresh = () => void client.invalidateQueries({ queryKey: ["webhooks"] });
-  const onError = (error: unknown) => toast.error(error instanceof Error ? error.message : "Something went wrong.");
+  const onError = (error: unknown) => toast.error(friendlyError(error, "Something went wrong."));
 
   const create = useMutation({
     mutationFn: () => webhooksService.create({ endpoint, events }),

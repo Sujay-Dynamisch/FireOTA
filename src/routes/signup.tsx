@@ -1,3 +1,4 @@
+import { friendlyError } from "@/lib/friendly-error";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useAuthUser } from "@/hooks/use-auth-user";
 import { useEffect, useState } from "react";
@@ -50,7 +51,7 @@ function SignupPage() {
             try {
               await authService.signInWithGoogle("/onboarding");
             } catch (error) {
-              toast.error(error instanceof Error ? error.message : "Google sign-in failed. Try again.");
+              toast.error(friendlyError(error, "Google sign-in failed. Try again."));
             }
           }}
         />

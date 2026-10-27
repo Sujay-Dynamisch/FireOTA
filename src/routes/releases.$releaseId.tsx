@@ -1,3 +1,4 @@
+import { friendlyError } from "@/lib/friendly-error";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate, useParams } from "@tanstack/react-router";
 import { useState } from "react";
@@ -55,7 +56,7 @@ export const Route = createFileRoute("/releases/$releaseId")({
           </span>
           <p className="font-display text-[15px] font-bold tracking-tight">This release could not be loaded.</p>
           <p className="mt-1 max-w-lg text-[12px] text-muted-foreground whitespace-pre-wrap">
-            {error instanceof Error ? error.message : "Something went wrong while loading this release."}
+            {friendlyError(error, "Something went wrong while loading this release.")}
           </p>
           {error instanceof Error && error.stack ? (
             <pre className="mt-3 max-h-48 max-w-xl overflow-auto rounded border border-border bg-surface-2 p-3 text-left font-mono text-[10px] text-danger/80 whitespace-pre-wrap">
@@ -93,7 +94,7 @@ function ReleaseDetailPage() {
       invalidate();
     },
   });
-  const onError = (error: unknown) => toast.error(error instanceof Error ? error.message : "Something went wrong.");
+  const onError = (error: unknown) => toast.error(friendlyError(error, "Something went wrong."));
   const pause = useMutation({
     mutationFn: async (resume: boolean) => {
       if (resume) await releasesService.resume(releaseId);

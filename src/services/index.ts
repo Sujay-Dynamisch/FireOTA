@@ -6,6 +6,7 @@
  * through typed server functions that enforce membership, roles and auditing.
  * No fixtures, no simulated latency, no hardcoded successes.
  */
+import { friendlyError } from "@/lib/friendly-error";
 import { supabase } from "@/integrations/supabase/client";
 import {
   changeMemberRole,
@@ -146,7 +147,7 @@ let googleRedirectStarted = false;
 
 /** Server errors arrive as messages; surface them verbatim to the existing UI. */
 function unwrap(error: unknown): never {
-  const message = error instanceof Error ? error.message : "Something went wrong.";
+  const message = friendlyError(error, "Something went wrong.");
   throw new ServiceError(message.replace(/^Error:\s*/, ""), "unknown");
 }
 

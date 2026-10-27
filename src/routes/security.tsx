@@ -1,3 +1,4 @@
+import { friendlyError } from "@/lib/friendly-error";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { ShieldAlert, ShieldCheck } from "lucide-react";
@@ -71,7 +72,7 @@ function SecurityPage() {
       securityService.setStatus(id, next),
     onSuccess: () => void client.invalidateQueries({ queryKey: ["security"] }),
     onError: (error) =>
-      toast.error(error instanceof Error ? error.message : "Could not update the alert."),
+      toast.error(friendlyError(error, "Could not update the alert.")),
   });
 
   if (!loading && !allowed) {

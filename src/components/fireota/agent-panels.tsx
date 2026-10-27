@@ -1,4 +1,5 @@
 /** Agents page panels: bring-your-own AI key and per-tool permissions (chat lives in agent-chat). */
+import { friendlyError } from "@/lib/friendly-error";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { KeyRound, Loader2 } from "lucide-react";
 import { useState } from "react";
@@ -61,7 +62,7 @@ export function ProviderSettings({ canManage }: { canManage: boolean }) {
       void client.invalidateQueries({ queryKey: ["agents"] });
     },
     onError: (error) =>
-      toast.error(error instanceof Error ? error.message : "Could not save the key."),
+      toast.error(friendlyError(error, "Could not save the key.")),
   });
   const remove = useMutation({
     mutationFn: () => agentsService.removeSettings(),
@@ -70,7 +71,7 @@ export function ProviderSettings({ canManage }: { canManage: boolean }) {
       void client.invalidateQueries({ queryKey: ["agent-settings"] });
     },
     onError: (error) =>
-      toast.error(error instanceof Error ? error.message : "Could not remove the key."),
+      toast.error(friendlyError(error, "Could not remove the key.")),
   });
 
   if (settings.isLoading) {
@@ -228,13 +229,13 @@ export function AgentToolModes({ agent, canManage }: { agent: Agent; canManage: 
     }) => agentsService.setToolMode(agent.id, tool, mode),
     onSuccess: () => void client.invalidateQueries({ queryKey: ["agents"] }),
     onError: (error) =>
-      toast.error(error instanceof Error ? error.message : "Could not change the permission."),
+      toast.error(friendlyError(error, "Could not change the permission.")),
   });
   const toggle = useMutation({
     mutationFn: (enabled: boolean) => agentsService.setEnabled(agent.id, enabled),
     onSuccess: () => void client.invalidateQueries({ queryKey: ["agents"] }),
     onError: (error) =>
-      toast.error(error instanceof Error ? error.message : "Could not update the agent."),
+      toast.error(friendlyError(error, "Could not update the agent.")),
   });
   return (
     <SectionCard
