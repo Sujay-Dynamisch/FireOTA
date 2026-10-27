@@ -8,7 +8,7 @@ import type { ReactNode } from "react";
 import { CI_TOOLS, CiLogo, Icons8Credit, ciToolTitle } from "@/components/fireota/ci-logos";
 import { ProductVideo } from "@/components/fireota/product-video";
 
-import { Bullets, C, Callout, Code, ExtLink, PlatformTabs, Steps } from "./docs-ui";
+import { Bullets, C, Callout, Code, ExtLink, FieldTable, PhoneShots, PlatformTabs, Steps } from "./docs-ui";
 import {
   AddAppMock,
   AnalyticsEventsMock,
@@ -17,6 +17,8 @@ import {
   ChannelsMock,
   ConnectFirebaseMock,
   CustomPromptMock,
+  ExpoUpdatesFlowDiagram,
+  ReleaseActionsMock,
   Figure,
   FirebaseStorageMock,
   LaunchLifecycleDiagram,
@@ -43,11 +45,15 @@ import TPL_SETTINGS from "../../../packages/react-native/templates/UpdatesSettin
 export interface DocSection {
   id: string;
   title: string;
+  /** Marks a section added in the latest release. */
+  isNew?: boolean;
   body: ReactNode;
 }
 export interface DocPage {
   slug: string;
   title: string;
+  /** "new" for a page added in the latest release, "updated" when it gained new sections. */
+  badge?: "new" | "updated";
   description: string;
   sections: DocSection[];
 }
@@ -319,6 +325,99 @@ const EXPO_UPDATES_APP_JSON = `{
 
 const EXPO_UPDATES_PUBLISH = `export FIREOTA_API_KEY=fota_sk_live_...
 npx fireota publish --expo --app <appId> --platform android --channel production --message "Fix checkout"`;
+
+const EXPO_UPDATES_INSTALL = `npx expo install expo-updates
+npm install -D @fireota/cli`;
+
+const EXPO_UPDATES_APP_JSON_FULL = `{
+  "expo": {
+    "version": "1.4.0",
+    "runtimeVersion": { "policy": "appVersion" },
+    "updates": {
+      "url": "https://fireota.creoai.in/api/public/v1/expo/<appId>/manifest",
+      "requestHeaders": { "expo-channel-name": "production" },
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    }
+  }
+}`;
+
+const EXPO_UPDATES_BUILD = `# Local release build
+npx expo run:android --variant release
+npx expo run:ios --configuration Release
+
+# …or EAS Build (only the build runs on EAS; updates come from FireOTA)
+eas build --platform all`;
+
+const EXPO_UPDATES_ENV = `# .env or CI secrets
+FIREOTA_URL=https://fireota.creoai.in
+FIREOTA_API_KEY=fota_sk_live_...
+FIREOTA_APP_ID=<appId>`;
+
+const EXPO_UPDATES_PUBLISH_MORE = `# Both platforms as one update group, to 10% of the beta channel
+npx fireota publish --expo --platform all --channel beta --rollout 10 --message "New onboarding"
+
+# Force a runtime version instead of reading app.json
+npx fireota publish --expo --platform ios --runtime 1.4.0 --message "Hotfix"
+
+# Machine-readable output for CI
+npx fireota publish --expo --platform android --channel production --message "CI build" --json`;
+
+const EXPO_UPDATES_STATUS = `import * as Updates from "expo-updates";
+import { Text, View } from "react-native";
+
+export function UpdateInfo() {
+  return (
+    <View>
+      <Text>Built-in bundle: {String(Updates.isEmbeddedLaunch)}</Text>
+      <Text>Update ID: {Updates.updateId ?? "none"}</Text>
+      <Text>Channel: {Updates.channel} · runtime {Updates.runtimeVersion}</Text>
+    </View>
+  );
+}`;
+
+const EXPO_UPDATES_MANUAL = `import * as Updates from "expo-updates";
+
+export async function checkNow() {
+  const check = await Updates.checkForUpdateAsync();
+  if (!check.isAvailable) return;
+  await Updates.fetchUpdateAsync();
+  await Updates.reloadAsync(); // restart into the new bundle now
+}`;
+
+const EXPO_UPDATES_CURL = `curl -i "https://fireota.creoai.in/api/public/v1/expo/<appId>/manifest" \\
+  -H "expo-platform: android" \\
+  -H "expo-runtime-version: 1.4.0" \\
+  -H "expo-channel-name: production" \\
+  -H "expo-protocol-version: 1"`;
+
+const EXPO_UPDATES_RESPONSE = `HTTP/1.1 200 OK
+content-type: multipart/mixed; boundary=…
+expo-protocol-version: 1
+expo-sfv-version: 0
+
+--…
+content-disposition: form-data; name="manifest"
+content-type: application/json
+
+{
+  "id": "7f4cde6f-6ac2-414c-a369-0bb7f65a4912",
+  "runtimeVersion": "1.4.0",
+  "launchAsset": { "key": "bundle-…", "hash": "<sha256, base64url>", "url": "https://firebasestorage.googleapis.com/…" },
+  "assets": [ … ],
+  "extra": { "fireota": { "releaseId": "7f4cde6f-…" } }
+}
+--…
+content-disposition: form-data; name="extensions"
+
+{ "assetRequestHeaders": {} }`;
+
+const EXPO_UPDATES_LOCAL = `{
+  "expo": {
+    "updates": { "url": "http://localhost:3000/api/public/v1/expo/<appId>/manifest" },
+    "plugins": [["expo-build-properties", { "android": { "usesCleartextTraffic": true } }]]
+  }
+}`;
 
 const EXPO_PUBLISH = `# Bundles with Expo (expo export:embed + Hermes), exactly like the store build
 FIREOTA_URL=https://fireota.example.com FIREOTA_API_KEY=fota_sk_... \\
@@ -1078,6 +1177,7 @@ function UpdateBadge() {
       {
         slug: "expo",
         title: "Expo",
+        badge: "updated",
         description: "Use FireOTA in an Expo app: one config plugin, works with expo prebuild, EAS Build and expo-router.",
         sections: [
           {
@@ -1088,7 +1188,7 @@ function UpdateBadge() {
                 items={[
                   <>Expo SDK 50 or newer, with <strong>development or release builds</strong> (<C>npx expo run:android</C>, EAS Build). <strong>Expo Go</strong> cannot load native modules, so it can't run FireOTA.</>,
                   <>Works with Continuous Native Generation: you don't need to commit <C>android/</C> and <C>ios/</C>. The config plugin re-applies FireOTA's native change on every <C>expo prebuild</C> and EAS Build.</>,
-                  <><strong>No <C>expo-updates</C>.</strong> Both replace the JavaScript bundle at launch; the plugin stops the build if it is installed. See <a href="#migrate" className="text-brand underline-offset-2 hover:underline">migrating from EAS Update</a>.</>,
+                  <><strong>No <C>expo-updates</C>.</strong> Both replace the JavaScript bundle at launch; the plugin stops the build if it is installed. See <a href="#migrate" className="text-brand underline-offset-2 hover:underline">migrating from EAS Update</a>, or keep <C>expo-updates</C> and use <D to="expo-updates">Expo Updates without EAS</D> instead of the SDK.</>,
                   <>Tested with Expo SDK 58 (React Native 0.88, expo-router): prebuild, OTA bundling and the Android release compile are verified. On-device OTA runs and iOS (same plugin) are still being tested.</>,
                 ]}
               />
@@ -1155,23 +1255,17 @@ function UpdateBadge() {
           {
             id: "expo-updates",
             title: "Keep expo-updates, skip EAS Update",
+            isNew: true,
             body: (
               <>
                 <p>
-                  Already using <C>expo-updates</C>? Keep it and point it at FireOTA instead of EAS Update. FireOTA speaks the
-                  Expo Updates protocol, so no FireOTA SDK or native change is needed. Bundles are stored in your own Firebase
-                  Storage, and you still get channels, rollouts and rollbacks.
+                  Already using <C>expo-updates</C>? You can keep it and point it at FireOTA instead of EAS Update. You don't need
+                  the FireOTA SDK or any native change. Bundles are stored in your own Firebase Storage, and you still get channels,
+                  rollouts and rollbacks.
                 </p>
-                <Steps
-                  items={[
-                    <>Point <C>app.json</C> at your app's manifest URL and choose a channel:<Code language="json" code={EXPO_UPDATES_APP_JSON} /></>,
-                    <>Make one store build, so the app contains the new <C>updates.url</C>.</>,
-                    <>Publish JavaScript changes with <C>--expo</C>. The CLI runs <C>expo export</C>, uploads the bundle and assets, and publishes:<Code code={EXPO_UPDATES_PUBLISH} /></>,
-                  ]}
-                />
-                <Callout kind="note">
-                  Expo updates are not signed by FireOTA. Apps that require signed updates reject <C>--expo</C> publishes.
-                  Rolling back to no update tells the device to go back to the bundle built into the app.
+                <Callout kind="tip">
+                  The full step-by-step guide, with screenshots from a real device, is in{" "}
+                  <D to="expo-updates">Expo Updates without EAS</D>.
                 </Callout>
               </>
             ),
@@ -1205,6 +1299,362 @@ function UpdateBadge() {
                   <><strong>Prebuild warns “could not find the expected code”</strong> — your <C>MainApplication</C> or <C>AppDelegate</C> was customised. Apply the change from <D to="android-setup">Android setup</D> / <D to="ios-setup">iOS setup</D> in your own config plugin.</>,
                   <><strong>Update downloads but never applies</strong> — you're running a debug build or Expo Go; test with <C>npx expo run:android --variant release</C>.</>,
                   <><strong>“No compatible update”</strong> — <C>expo.version</C> of the installed build must equal the update's runtime version.</>,
+                ]}
+              />
+            ),
+          },
+        ],
+      },
+      {
+        slug: "expo-updates",
+        title: "Expo Updates without EAS",
+        badge: "new",
+        description:
+          "Keep expo-updates in your Expo app and serve over-the-air updates from FireOTA instead of EAS Update. Bundles stay in your own Firebase Storage, with channels, rollouts and rollbacks included.",
+        sections: [
+          {
+            id: "how-it-works",
+            title: "How it works",
+            isNew: true,
+            body: (
+              <>
+                <p>
+                  <C>expo-updates</C> is Expo's open-source update client. It asks a server for a <em>manifest</em> (which bundle to
+                  run) and then downloads the files. EAS Update is Expo's paid server for this. FireOTA speaks the same{" "}
+                  <ExtLink href="https://docs.expo.dev/technical-specs/expo-updates-1/">Expo Updates protocol</ExtLink>, so you can
+                  swap the server by changing one URL.
+                </p>
+                <Figure caption="The app asks FireOTA which update to run. The bundle and assets download straight from your own Firebase Storage bucket.">
+                  <ExpoUpdatesFlowDiagram />
+                </Figure>
+                <Bullets
+                  items={[
+                    <>On every launch, <C>expo-updates</C> sends its platform, runtime version, channel and the ID of the update it runs.</>,
+                    <>FireOTA picks the newest published update for that channel and runtime, and applies your rollout percentage.</>,
+                    <>The app downloads the files in the background, checks every file's SHA-256 hash, and switches to the new bundle on the next launch.</>,
+                    <>Installs show up in <strong>Analytics</strong> as soon as a device starts running the update.</>,
+                  ]}
+                />
+              </>
+            ),
+          },
+          {
+            id: "choose",
+            title: "expo-updates or the FireOTA SDK?",
+            isNew: true,
+            body: (
+              <>
+                <p>Both work in Expo apps. Pick one per app, because they can't both run in the same app.</p>
+                <FieldTable
+                  head={["", "expo-updates + FireOTA (this page) vs FireOTA SDK"]}
+                  rows={[
+                    ["Native change", <>None, if <C>expo-updates</C> is already installed. The SDK adds a config plugin.</>],
+                    ["Update UI", <>Silent: the update applies on the next launch, or you build your own UI with <C>useUpdates()</C>. The SDK includes ready-made prompts and screens.</>],
+                    ["Mandatory updates", <>Not shown to users automatically. With the SDK, a mandatory update blocks the app until it's installed.</>],
+                    ["Code signing", <>Not yet. The SDK supports signed updates.</>],
+                    ["Best for", <>Moving off EAS Update with no code changes. The SDK suits new apps and full control.</>],
+                  ]}
+                />
+                <p>
+                  Choosing the SDK? Follow the <D to="expo">Expo</D> guide instead.
+                </p>
+              </>
+            ),
+          },
+          {
+            id: "requirements",
+            title: "Requirements",
+            body: (
+              <Bullets
+                items={[
+                  <>Expo SDK 50 or newer with <C>expo-updates</C> installed, in a development or release build. Expo Go always loads from the dev server.</>,
+                  <>A FireOTA workspace with Firebase connected and the app registered. See <D to="workspace">Create a workspace and connect Firebase</D> and <D to="register-app">Register your app</D>.</>,
+                  <>An API key that can publish releases, for the CLI (<strong>Settings → API keys</strong>).</>,
+                  <>Tested on a real Android phone with Expo SDK 58 (React Native 0.88). iOS uses the same protocol.</>,
+                ]}
+              />
+            ),
+          },
+          {
+            id: "install",
+            title: "1. Install the packages",
+            body: (
+              <>
+                <p>
+                  Add <C>expo-updates</C> to the app (skip this if it's already there) and the FireOTA CLI as a dev dependency:
+                </p>
+                <Code code={EXPO_UPDATES_INSTALL} />
+                <p>
+                  Copy the <strong>App ID</strong> from the app's page in the dashboard. Every command and URL below uses it.
+                </p>
+                <Figure caption="The App ID on the app's page in the FireOTA dashboard.">
+                  <AppIdMock />
+                </Figure>
+              </>
+            ),
+          },
+          {
+            id: "configure",
+            title: "2. Point expo-updates at FireOTA",
+            body: (
+              <>
+                <p>
+                  In <C>app.json</C> (or <C>app.config.ts</C>), set <C>updates.url</C> to your app's manifest URL and choose a
+                  channel. If <C>eas update:configure</C> added a <C>u.expo.dev</C> URL, replace it.
+                </p>
+                <Code language="json" code={EXPO_UPDATES_APP_JSON_FULL} />
+                <FieldTable
+                  rows={[
+                    [<C>updates.url</C>, <>Where the app checks for updates: <C>{"<FIREOTA_URL>/api/public/v1/expo/<appId>/manifest"}</C>.</>],
+                    [<C>expo-channel-name</C>, <>The FireOTA channel this build listens to, for example <C>production</C>, <C>beta</C> or <C>development</C>. Use a different value per build profile.</>],
+                    [<C>runtimeVersion</C>, <>A fixed string (<C>"1.4.0"</C>) or <C>{'{ "policy": "appVersion" }'}</C>. Updates only go to builds with the same runtime. The <C>fingerprint</C> policy isn't supported by the CLI yet.</>],
+                    [<C>checkAutomatically</C>, <><C>ON_LOAD</C> checks on every cold start. Use <C>NEVER</C> if you only want to check from code.</>],
+                    [<C>fallbackToCacheTimeout</C>, <><C>0</C> starts the app immediately and applies the update on the next launch. A higher value (ms) waits for the download first.</>],
+                  ]}
+                />
+                <Callout kind="tip">
+                  Use <C>app.config.ts</C> to pick the channel from an environment variable, so your <C>preview</C> and{" "}
+                  <C>production</C> builds listen to different channels.
+                </Callout>
+              </>
+            ),
+          },
+          {
+            id: "build",
+            title: "3. Make a store build",
+            body: (
+              <>
+                <p>
+                  The update URL and channel are built into the native app, so make one new build and ship it (Play Store, App Store,
+                  TestFlight or an internal APK). From then on, JavaScript-only changes go out as updates.
+                </p>
+                <Code code={EXPO_UPDATES_BUILD} />
+                <p>Freshly installed, the app runs the bundle built into it:</p>
+                <PhoneShots
+                  shots={[
+                    {
+                      src: "/docs/expo-built-in.png",
+                      alt: "Expo test app showing 'Built-in version' with embedded launch true",
+                      label: <>A new install runs the built-in bundle: <C>isEmbeddedLaunch</C> is <C>true</C>.</>,
+                    },
+                  ]}
+                />
+              </>
+            ),
+          },
+          {
+            id: "publish",
+            title: "4. Publish an update",
+            body: (
+              <>
+                <p>Set your credentials once (locally or as CI secrets):</p>
+                <Code code={EXPO_UPDATES_ENV} />
+                <p>
+                  Then publish with <C>--expo</C>. The CLI runs <C>expo export</C>, reads the runtime version from your app config,
+                  uploads the bundle and every asset to your Firebase Storage, checks the upload, and publishes to the channel:
+                </p>
+                <Code code={EXPO_UPDATES_PUBLISH} />
+                <Figure caption="Real output from publishing an Expo update to the development channel.">
+                  <TerminalFrame
+                    title="fireota publish --expo"
+                    lines={[
+                      '$ npx fireota publish --expo --app 83822cef-… --platform android --channel development --message "OTA update from FireOTA"',
+                      "Exporting android update with expo export…",
+                      "› android bundles (1):",
+                      "  _expo/static/js/android/index-c9501d24….hbc (1.6MB)",
+                      "Update #2 (7f4cde6f-6ac2-414c-a369-0bb7f65a4912) — draft [android, local]",
+                      "Uploading bundle + 0 assets…",
+                      "✓ Verified in your Firebase Storage. SHA-256 7cd72657…",
+                      "✓ Published update #2 (android) at 100%.",
+                      "",
+                      "– expo-updates URL for app.json:",
+                      "–   https://fireota.creoai.in/api/public/v1/expo/83822cef-…/manifest",
+                    ]}
+                  />
+                </Figure>
+                <p>More examples:</p>
+                <Code code={EXPO_UPDATES_PUBLISH_MORE} />
+                <FieldTable
+                  head={["Flag", "Meaning"]}
+                  rows={[
+                    [<C>--expo</C>, "Build with expo export, for apps that use expo-updates."],
+                    [<C>--app</C>, <>App ID. Defaults to <C>FIREOTA_APP_ID</C>.</>],
+                    [<C>--platform</C>, <><C>android</C>, <C>ios</C> or <C>all</C> (one update group for both).</>],
+                    [<C>--channel</C>, <>Must match the <C>expo-channel-name</C> in the build.</>],
+                    [<C>--rollout</C>, "Percentage of devices to receive the update (default 100)."],
+                    [<C>--runtime</C>, "Overrides the runtime version from app.json."],
+                    [<C>--message</C>, "Release notes shown in the dashboard."],
+                    [<C>--json</C>, "Prints a JSON result for CI."],
+                  ]}
+                />
+                <Callout kind="note">
+                  <C>--file</C> and <C>--private-key</C> can't be combined with <C>--expo</C>. If the app requires signed updates,
+                  the upload is rejected with <C>SIGNATURE_REQUIRED</C>.
+                </Callout>
+              </>
+            ),
+          },
+          {
+            id: "verify",
+            title: "5. Check it on a device",
+            body: (
+              <>
+                <p>
+                  Open the app, close it fully, and open it again. The first launch downloads the update in the background, and the
+                  second launch runs it. These screenshots are from a real Android phone:
+                </p>
+                <PhoneShots
+                  shots={[
+                    {
+                      src: "/docs/expo-built-in.png",
+                      alt: "Before: Built-in version, embedded launch true",
+                      label: <><strong>Before:</strong> the built-in bundle (<C>embedded launch: true</C>).</>,
+                    },
+                    {
+                      src: "/docs/expo-ota-applied.png",
+                      alt: "After: OTA update from FireOTA, embedded launch false, update id 7f4cde6f",
+                      label: <><strong>After:</strong> the FireOTA update is running (<C>embedded launch: false</C>), and its update ID matches the release.</>,
+                    },
+                  ]}
+                />
+                <p>Show the same details in your own app while you test:</p>
+                <Code language="tsx" code={EXPO_UPDATES_STATUS} />
+                <p>To check and apply an update straight away (from a button, for example) instead of waiting for a restart:</p>
+                <Code language="ts" code={EXPO_UPDATES_MANUAL} />
+                <p>
+                  In the dashboard, the release records an install once the device starts running it.
+                </p>
+              </>
+            ),
+          },
+          {
+            id: "rollouts",
+            title: "Channels, rollouts and rollback",
+            body: (
+              <>
+                <p>
+                  Expo updates use the same release controls as SDK updates. Everything on <D to="rollouts">Rollouts, pause and
+                  rollback</D> applies:
+                </p>
+                <Bullets
+                  items={[
+                    <><strong>Staged rollout:</strong> publish with <C>--rollout 10</C>, then raise the percentage from the dashboard. Each device stays in the same bucket.</>,
+                    <><strong>Pause:</strong> stops new downloads. Devices that already have the update keep it.</>,
+                    <><strong>Roll back:</strong> devices move to the previous update on their next launch. With no earlier update, FireOTA tells them to go back to the bundle built into the app (<C>rollBackToEmbedded</C>).</>,
+                    <><strong>Archive and delete:</strong> remove old updates from the Releases list. See <D to="rollouts">Archive and delete releases</D>.</>,
+                  ]}
+                />
+              </>
+            ),
+          },
+          {
+            id: "runtime",
+            title: "Runtime versions",
+            body: (
+              <>
+                <p>
+                  An update only goes to builds with exactly the same runtime version. Change it every time native code changes (new
+                  native package, Expo SDK upgrade, permissions or config plugins), then make a new store build.
+                </p>
+                <Bullets
+                  items={[
+                    <><C>"runtimeVersion": "1.4.0"</C>: you control it by hand.</>,
+                    <><C>{'{ "policy": "appVersion" }'}</C>: follows <C>expo.version</C>. The CLI reads it automatically.</>,
+                    <>Per-platform values (<C>android.runtimeVersion</C> / <C>ios.runtimeVersion</C>) take priority over the top-level value.</>,
+                  ]}
+                />
+                <p>See <D to="runtime-versions">Runtime versions</D> for how FireOTA matches them.</p>
+              </>
+            ),
+          },
+          {
+            id: "security",
+            title: "Storage and security",
+            body: (
+              <Bullets
+                items={[
+                  <><strong>Your bucket, your data.</strong> Bundles and assets are uploaded to the Firebase Storage bucket you connected. FireOTA stores only the release details and file paths.</>,
+                  <><strong>Integrity.</strong> The manifest has a SHA-256 hash for the bundle and every asset. <C>expo-updates</C> rejects any file that doesn't match.</>,
+                  <><strong>Upload check.</strong> The CLI sends the bundle's hash, and FireOTA checks it against the stored file before it can be published.</>,
+                  <><strong>HTTPS.</strong> Use an <C>https://</C> URL in production. Plain <C>http://</C> only works if you allow cleartext traffic, which is meant for local testing.</>,
+                  <><strong>API keys</strong> are only needed to publish. Devices call the manifest URL without a key, and the endpoint is rate limited.</>,
+                  <><strong>Code signing</strong> for Expo updates is not available yet. Use the <D to="code-signing">FireOTA SDK</D> if you need signed updates.</>,
+                ]}
+              />
+            ),
+          },
+          {
+            id: "protocol",
+            title: "What FireOTA sends (protocol details)",
+            body: (
+              <>
+                <p>Useful for debugging. Ask for the manifest exactly as the app does:</p>
+                <Code code={EXPO_UPDATES_CURL} />
+                <Code language="http" code={EXPO_UPDATES_RESPONSE} />
+                <FieldTable
+                  head={["Request header", "Used for"]}
+                  rows={[
+                    [<C>expo-platform</C>, <><C>android</C> or <C>ios</C>.</>],
+                    [<C>expo-runtime-version</C>, "Only updates with this runtime are considered."],
+                    [<C>expo-channel-name</C>, "Which FireOTA channel to serve."],
+                    [<C>expo-current-update-id</C>, "Records the install once the device runs a FireOTA update."],
+                    [<C>expo-embedded-update-id</C>, "Tells the built-in bundle apart from a downloaded update."],
+                    [<C>eas-client-id</C>, "A stable device ID, used for rollout buckets and analytics."],
+                  ]}
+                />
+                <p>
+                  With no update to serve, FireOTA returns a <C>noUpdateAvailable</C> directive, or <C>rollBackToEmbedded</C> when
+                  the device runs an update that has since been rolled back. Old clients on protocol 0 get a plain JSON manifest, or
+                  <C>204 No Content</C> when there's nothing new.
+                </p>
+              </>
+            ),
+          },
+          {
+            id: "local",
+            title: "Testing against a local server",
+            body: (
+              <>
+                <p>
+                  When you run FireOTA locally (<C>npm run dev</C> on port 3000), point a test build at it and forward the port to an
+                  Android phone with <C>adb reverse tcp:3000 tcp:3000</C>. Android blocks plain HTTP by default, so allow it in the
+                  test build only:
+                </p>
+                <Code language="json" code={EXPO_UPDATES_LOCAL} />
+                <Callout kind="caution">Never ship a store build with cleartext traffic allowed or a localhost update URL.</Callout>
+              </>
+            ),
+          },
+          {
+            id: "troubleshooting",
+            title: "Troubleshooting",
+            body: (
+              <Bullets
+                items={[
+                  <><strong>The app still shows the old version</strong>: updates apply on the <em>next</em> launch. Close the app fully and open it again, or call <C>Updates.reloadAsync()</C>.</>,
+                  <><strong><C>noUpdateAvailable</C> from the curl check</strong>: check that the channel, platform and runtime version match a <C>published</C> update, and that its rollout includes the device.</>,
+                  <><strong>Works in the emulator but not on the phone</strong>: the phone can't reach the URL. Use HTTPS in production. For a local server, run <C>adb reverse</C> again after reconnecting the phone.</>,
+                  <><strong>Download fails on some networks</strong>: some networks block Firebase Storage or break HTTPS. Try another Wi-Fi network or mobile data.</>,
+                  <><strong>Firebase returns 402</strong>: billing is disabled on the Firebase project, so Storage downloads stop. Turn billing back on in Google Cloud.</>,
+                  <><strong>“Could not resolve the runtime version”</strong>: set <C>runtimeVersion</C> to a string or the <C>appVersion</C> policy, or pass <C>--runtime</C>.</>,
+                  <><strong><C>SIGNATURE_REQUIRED</C></strong>: the app requires signed updates, and Expo updates can't be signed yet. Turn that setting off for this app, or use the SDK.</>,
+                  <><strong>Running in Expo Go</strong>: Expo Go always loads from your dev server. Test with a release build.</>,
+                ]}
+              />
+            ),
+          },
+          {
+            id: "faq",
+            title: "FAQ",
+            body: (
+              <FieldTable
+                head={["Question", "Answer"]}
+                rows={[
+                  ["Do I still need an Expo account?", <>Only if you use EAS Build. Updates no longer go through EAS.</>],
+                  ["Can I keep EAS Build?", "Yes. Builds can stay on EAS; only the update server changes."],
+                  ["What happens to users on an old build?", <>They keep checking the old <C>updates.url</C> until they install the new build.</>],
+                  ["Does it cost anything?", "You pay Firebase for storage and downloads in your own project. There's no per-update fee from FireOTA."],
+                  ["Web support?", <>No. <C>expo-updates</C> only updates Android and iOS apps.</>],
                 ]}
               />
             ),
@@ -1935,6 +2385,7 @@ text:   "#F4F5F7"   muted:      "#9AA1AC"   danger: "#F05252"`}
       {
         slug: "rollouts",
         title: "Rollouts, pause and rollback",
+        badge: "updated",
         description: "Release gradually and recover quickly when something goes wrong.",
         sections: [
           {
@@ -1969,6 +2420,55 @@ text:   "#F4F5F7"   muted:      "#9AA1AC"   danger: "#F05252"`}
                 Requires a reason. The channel returns to the previous release (or one you choose with the same runtime) and devices move
                 to it on their next check. Release files are never deleted by a rollback.
               </p>
+            ),
+          },
+          {
+            id: "archive-delete",
+            title: "Archive and delete releases",
+            isNew: true,
+            body: (
+              <>
+                <p>
+                  Clean up old or broken updates straight from the <strong>Releases</strong> list (or from a release's page). Each
+                  row shows the action that fits its status, so you don't need to open the release first.
+                </p>
+                <Figure caption="The Releases list with the row actions, and the confirmation dialog that opens when you delete an update.">
+                  <ReleaseActionsMock />
+                </Figure>
+                <Steps
+                  items={[
+                    <>
+                      <strong>Archive</strong> a live update (<C>ready</C>, <C>published</C>, <C>paused</C> or <C>rolled_back</C>). It
+                      stops being served and leaves its channel. Devices that already installed it keep running it until a newer
+                      update arrives.
+                    </>,
+                    <>
+                      <strong>Delete</strong> it once it's archived. <C>draft</C>, <C>failed</C>, <C>ready</C> and <C>uploading</C>{" "}
+                      updates can be deleted right away. Type <C>DELETE</C> to confirm. FireOTA removes the record and the bundle
+                      files from your Firebase Storage bucket.
+                    </>,
+                  ]}
+                />
+                <FieldTable
+                  head={["Status", "Available actions"]}
+                  rows={[
+                    [<C>published</C>, "Archive"],
+                    [<C>paused</C>, "Archive"],
+                    [<C>rolled_back</C>, "Archive"],
+                    [<C>ready</C>, "Archive or Delete"],
+                    [<C>archived</C>, "Delete"],
+                    [<><C>draft</C> · <C>failed</C> · <C>uploading</C></>, "Delete"],
+                  ]}
+                />
+                <p>
+                  Use the <strong>Status</strong> filter and pick <strong>Archived</strong> or <strong>Failed</strong> to find
+                  everything that's ready to clean up. Each confirmation dialog shows the update number, ID, channel and status, so
+                  you can check you've picked the right one.
+                </p>
+                <Callout kind="caution">
+                  Deleting can't be undone. Archive first if you might need the update again, for example as a rollback target.
+                </Callout>
+              </>
             ),
           },
           {

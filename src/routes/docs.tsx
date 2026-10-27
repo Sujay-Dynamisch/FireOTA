@@ -2,7 +2,7 @@ import { Link, Outlet, createFileRoute, useRouterState } from "@tanstack/react-r
 import { useState } from "react";
 
 import { DocsSearch } from "@/components/docs/docs-search";
-import { MIcon } from "@/components/docs/docs-ui";
+import { MIcon, NewBadge } from "@/components/docs/docs-ui";
 import { docGroups } from "@/components/docs/pages";
 import { BrandMark } from "@/components/fireota/brand-mark";
 import { ChangelogLink, GitHubStarButton, ThemeSelect } from "@/components/site/header-actions";
@@ -69,19 +69,25 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         {groups.map((group) => {
           const isClosed = closed[group.title];
           return (
-            <div key={group.title} className="mt-3 border-t border-border pt-3">
+            <div key={group.title} className="mt-4">
               <button
                 type="button"
                 onClick={() => setClosed((c) => ({ ...c, [group.title]: !c[group.title] }))}
-                className="flex w-full items-center gap-2 px-5 py-1 text-left font-mono text-[10px] uppercase tracking-[0.12em] text-faint hover:text-foreground dark:text-white/70 dark:hover:text-white"
+                className="group/g mx-2 flex w-[calc(100%-1rem)] items-center gap-2.5 rounded-md px-3 py-1.5 text-left text-[13px] font-semibold text-foreground hover:bg-surface-2"
                 aria-expanded={!isClosed}
               >
-                <MIcon name={group.icon} className="text-[16px]" />
+                <span className="grid size-6 place-items-center rounded-md bg-brand/10 text-brand">
+                  <MIcon name={group.icon} className="text-[16px]" />
+                </span>
                 <span className="flex-1">{group.title}</span>
-                <MIcon name={isClosed ? "expand_more" : "expand_less"} className="text-[18px]" />
+                {isClosed && group.pages.some((p) => p.badge === "new") ? <span className="size-1.5 rounded-full bg-brand" /> : null}
+                <MIcon
+                  name="expand_more"
+                  className={cn("text-[18px] text-faint transition-transform group-hover/g:text-foreground", !isClosed && "rotate-180")}
+                />
               </button>
               {!isClosed ? (
-                <ul className="mt-1 space-y-0.5">
+                <ul className="ml-[25px] mr-2 mt-1 border-l border-border">
                   {group.pages.map((page) => (
                     <li key={page.slug}>
                       <Link
@@ -89,11 +95,13 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                         params={{ slug: page.slug }}
                         onClick={onNavigate}
                         className={cn(
-                          "mx-2 block rounded-md py-1.5 pl-9 pr-3 text-[13px] text-muted-foreground hover:bg-surface-2 hover:text-foreground dark:text-white",
-                          active === page.slug && "bg-brand/10 font-medium text-brand hover:bg-brand/15 hover:text-brand dark:text-brand",
+                          "-ml-px flex items-center gap-2 border-l-2 border-transparent py-1.5 pl-4 pr-2 text-[13px] text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground dark:text-white/75 dark:hover:text-white",
+                          active === page.slug &&
+                            "rounded-r-md border-brand bg-brand/[0.07] font-medium text-brand hover:border-brand hover:text-brand dark:text-brand dark:hover:text-brand",
                         )}
                       >
-                        {page.title}
+                        <span className="min-w-0 flex-1 truncate">{page.title}</span>
+                        {page.badge ? <NewBadge label={page.badge === "new" ? "New" : "Updated"} /> : null}
                       </Link>
                     </li>
                   ))}

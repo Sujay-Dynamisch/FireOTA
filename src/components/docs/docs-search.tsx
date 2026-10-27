@@ -117,37 +117,68 @@ function AIGlowToggle({ mode, onChange }: { mode: Mode; onChange: (mode: Mode) =
   );
 }
 
-function CodeWithCopy({ code }: { code: string }) {
+function CopyButton({ text, label, className }: { text: string; label: string; className?: string }) {
   const [copied, setCopied] = useState(false);
   return (
-    <div className="relative rounded-2xl border border-border bg-surface/70 dark:bg-[#0B0C0E]">
-      <pre className="overflow-x-auto py-3.5 pl-4 pr-14 font-mono text-[13px] leading-6 text-foreground dark:text-white">
-        {code}
-      </pre>
-      <button
-        type="button"
-        onClick={() =>
-          void navigator.clipboard?.writeText(code).then(() => {
-            setCopied(true);
-            setTimeout(() => setCopied(false), 1500);
-          })
-        }
-        aria-label="Copy code"
-        className="absolute right-2.5 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-full border border-border bg-background text-muted-foreground hover:text-foreground"
-      >
-        {copied ? <Check className="size-3.5" /> : <Clipboard className="size-3.5" />}
-      </button>
+    <button
+      type="button"
+      onClick={() =>
+        void navigator.clipboard?.writeText(text).then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        })
+      }
+      aria-label={label}
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full border border-border bg-background px-2.5 py-1 text-[11px] text-muted-foreground hover:text-foreground",
+        className,
+      )}
+    >
+      {copied ? <Check className="size-3.5 text-success" /> : <Clipboard className="size-3.5" />}
+      {copied ? "Copied" : "Copy"}
+    </button>
+  );
+}
+
+function CodeWithCopy({ code, language }: { code: string; language?: string }) {
+  return (
+    <div className="overflow-hidden rounded-xl border border-border bg-surface/70 dark:bg-[#0B0C0E]">
+      <div className="flex items-center justify-between border-b border-border/70 px-3 py-1.5">
+        <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-faint">{language || "code"}</span>
+        <CopyButton text={code} label="Copy code" className="py-0.5" />
+      </div>
+      <pre className="overflow-x-auto px-4 py-3 font-mono text-[12.5px] leading-6 text-foreground dark:text-white">{code}</pre>
     </div>
   );
 }
 
-/** Renders the assistant's markdown subset: paragraphs, "- " lists, ``` code, `code`, **bold**, [links](/docs/…). */
+const isTableRow = (line: string) => /^\s*\|.*\|\s*$/.test(line);
+const isTableDivider = (line: string) => /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(line);
+const tableCells = (line: string) =>
+  line
+    .trim()
+    .replace(/^\|/, "")
+    .replace(/\|$/, "")
+    .split("|")
+    .map((cell) => cell.trim());
+
+/**
+ * Renders the assistant's markdown: headings, paragraphs, bullet and numbered lists, tables,
+ * ``` code, > quotes, --- dividers, `code`, **bold**, *italic*, [links](/docs/…) and "Source:" chips.
+ */
 function Answer({ text, onLink }: { text: string; onLink: (url: string) => void }) {
-  const inline = (line: string, key: string) => {
+  const inline = (line: string, key: string): ReactNode[] => {
+    // <br> inside table cells and paragraphs becomes a real line break.
+    if (/<br\s*\/?>/i.test(line)) {
+      return line.split(/<br\s*\/?>/i).flatMap((part, n) => [
+        ...(n > 0 ? [<br key={`${key}-br${n}`} />] : []),
+        ...inline(part, `${key}-${n}`),
+      ]);
+    }
     const parts: ReactNode[] = [];
     // Links: [label](url), and the "**label**(/docs/…)" form some models produce.
     const re =
-      /(`[^`]+`|\*\*[^*]+\*\*\(\/docs[^)\s]*\)|\[[^\]]+\]\([^)\s]+\)|\*\*[^*]+\*\*|(?<![\w(])\/docs\/[\w-]+(?:#[\w-]+)?)/g;
+      /(`[^`]+`|\*\*[^*]+\*\*\(\/docs[^)\s]*\)|\[[^\]]+\]\([^)\s]+\)|\*\*[^*]+\*\*|(?<![*\w])\*[^*\s][^*]*\*(?![*\w])|(?<![\w(])\/docs\/[\w-]+(?:#[\w-]+)?)/g;
     let last = 0;
     let m: RegExpExecArray | null;
     let i = 0;
@@ -158,13 +189,19 @@ function Answer({ text, onLink }: { text: string; onLink: (url: string) => void 
         parts.push(
           <code
             key={`${key}-${i}`}
-            className="rounded bg-surface-2 px-1 py-0.5 font-mono text-[12px]"
+            className="rounded-md border border-border/60 bg-surface-2 px-1.5 py-px font-mono text-[12px] text-foreground"
           >
             {token.slice(1, -1)}
           </code>,
         );
       } else if (token.startsWith("**") && !token.endsWith(")")) {
-        parts.push(<strong key={`${key}-${i}`}>{token.slice(2, -2)}</strong>);
+        parts.push(
+          <strong key={`${key}-${i}`} className="font-semibold text-foreground">
+            {token.slice(2, -2)}
+          </strong>,
+        );
+      } else if (token.startsWith("*") && !token.startsWith("**")) {
+        parts.push(<em key={`${key}-${i}`}>{token.slice(1, -1)}</em>);
       } else {
         const [, rawLabel, rawUrl] = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(token) ??
           /^\*\*([^*]+)\*\*\(([^)]+)\)$/.exec(token) ?? [token, token, token];
@@ -197,36 +234,119 @@ function Answer({ text, onLink }: { text: string; onLink: (url: string) => void 
   const lines = text.split("\n");
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i]!;
-    if (line.trimStart().startsWith("```")) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("```")) {
       const indent = line.length - line.trimStart().length;
+      const language = trimmed.slice(3).trim();
       const code: string[] = [];
       i += 1;
       while (i < lines.length && !lines[i]!.trimStart().startsWith("```"))
         code.push(lines[i++]!.slice(indent));
-      blocks.push(<CodeWithCopy key={i} code={code.join("\n")} />);
-    } else if (/^\s*[-*] /.test(line)) {
-      const items: string[] = [];
-      while (i < lines.length && /^\s*[-*] /.test(lines[i]!))
-        items.push(lines[i++]!.replace(/^\s*[-*] /, ""));
+      blocks.push(<CodeWithCopy key={i} code={code.join("\n")} language={language} />);
+    } else if (isTableRow(line) && i + 1 < lines.length && isTableDivider(lines[i + 1]!)) {
+      const head = tableCells(line);
+      const rows: string[][] = [];
+      i += 2;
+      while (i < lines.length && isTableRow(lines[i]!)) rows.push(tableCells(lines[i++]!));
       i -= 1;
       blocks.push(
-        <ul key={i} className="list-disc space-y-1 pl-5 marker:text-brand">
+        <div key={i} className="overflow-x-auto rounded-xl border border-border">
+          <table className="w-full min-w-[460px] text-left text-[13px]">
+            <thead className="bg-surface-2/70">
+              <tr>
+                {head.map((cell, c) => (
+                  <th key={c} className="px-3 py-2 text-[12px] font-semibold text-foreground">
+                    {inline(cell, `${i}-h${c}`)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {rows.map((row, r) => (
+                <tr key={r} className="align-top">
+                  {row.map((cell, c) => (
+                    <td key={c} className={cn("px-3 py-2 leading-relaxed", c === 0 && "font-medium text-foreground")}>
+                      {inline(cell, `${i}-${r}-${c}`)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>,
+      );
+    } else if (/^\s*[-*•] /.test(line)) {
+      const items: string[] = [];
+      while (i < lines.length && /^\s*[-*•] /.test(lines[i]!))
+        items.push(lines[i++]!.replace(/^\s*[-*•] /, ""));
+      i -= 1;
+      blocks.push(
+        <ul key={i} className="space-y-1.5">
           {items.map((item, j) => (
-            <li key={j}>{inline(item, `${i}-${j}`)}</li>
+            <li key={j} className="flex gap-2.5">
+              <span className="mt-[9px] size-1.5 shrink-0 rounded-full bg-brand" />
+              <span className="min-w-0">{inline(item, `${i}-${j}`)}</span>
+            </li>
           ))}
         </ul>,
       );
-    } else if (/^#{1,4} /.test(line)) {
+    } else if (/^\s*\d+[.)] /.test(line)) {
+      const items: string[] = [];
+      while (i < lines.length && /^\s*\d+[.)] /.test(lines[i]!))
+        items.push(lines[i++]!.replace(/^\s*\d+[.)] /, ""));
+      i -= 1;
       blocks.push(
-        <p key={i} className="font-semibold">
-          {inline(line.replace(/^#{1,4} /, ""), String(i))}
+        <ol key={i} className="space-y-2">
+          {items.map((item, j) => (
+            <li key={j} className="flex gap-3">
+              <span className="grid size-6 shrink-0 place-items-center rounded-full bg-brand/10 font-mono text-[11px] font-semibold text-brand">
+                {j + 1}
+              </span>
+              <span className="min-w-0 pt-0.5">{inline(item, `${i}-${j}`)}</span>
+            </li>
+          ))}
+        </ol>,
+      );
+    } else if (/^#{1,6} /.test(trimmed)) {
+      const level = /^#+/.exec(trimmed)![0].length;
+      blocks.push(
+        <p
+          key={i}
+          className={cn(
+            "font-display font-semibold tracking-tight text-foreground",
+            level <= 2 ? "pt-2 text-[17px]" : "pt-1 text-[15px]",
+          )}
+        >
+          {inline(trimmed.replace(/^#+ /, ""), String(i))}
         </p>,
       );
-    } else if (line.trim()) {
+    } else if (/^(-{3,}|\*{3,}|_{3,})$/.test(trimmed)) {
+      blocks.push(<hr key={i} className="border-border" />);
+    } else if (trimmed.startsWith(">")) {
+      const quote: string[] = [];
+      while (i < lines.length && lines[i]!.trim().startsWith(">")) quote.push(lines[i++]!.trim().replace(/^>\s?/, ""));
+      i -= 1;
+      blocks.push(
+        <div key={i} className="relative overflow-hidden rounded-xl border border-info/25 bg-info/[0.06] py-2.5 pl-4 pr-3">
+          <span className="absolute inset-y-0 left-0 w-1 bg-info" />
+          {quote.map((q, j) => (
+            <p key={j}>{inline(q, `${i}-${j}`)}</p>
+          ))}
+        </div>,
+      );
+    } else if (/^sources?:/i.test(trimmed.replace(/^[*_]+/, ""))) {
+      // "Source: [Page](/docs/…)" → a compact chip row instead of a sentence.
+      blocks.push(
+        <p key={i} className="flex flex-wrap items-center gap-1.5 text-[12px] text-muted-foreground">
+          <MIcon name="menu_book" className="text-[15px] text-faint" />
+          {inline(trimmed.replace(/^[*_]*sources?:?[*_]*\s*/i, "").replace(/[*_]+$/, ""), String(i))}
+        </p>,
+      );
+    } else if (trimmed) {
       blocks.push(<p key={i}>{inline(line, String(i))}</p>);
     }
   }
-  return <div className="space-y-3 text-[14px] leading-relaxed">{blocks}</div>;
+  return <div className="space-y-3 text-[14px] leading-[1.7] text-foreground/90">{blocks}</div>;
 }
 
 export function DocsSearch({ onNavigate }: { onNavigate?: () => void }) {
@@ -278,6 +398,16 @@ export function DocsSearch({ onNavigate }: { onNavigate?: () => void }) {
       ?.scrollIntoView({ block: "nearest" });
   }, [active]);
 
+  // A new question scrolls into view at the top, so its answer is read from the start.
+  useEffect(() => {
+    if (turns.length === 0) return;
+    requestAnimationFrame(() =>
+      listRef.current
+        ?.querySelector(`[data-turn="${turns.length - 1}"]`)
+        ?.scrollIntoView({ block: "start", behavior: "smooth" }),
+    );
+  }, [turns.length]);
+
   const go = (url: string) => {
     setOpen(false);
     onNavigate?.();
@@ -298,7 +428,7 @@ export function DocsSearch({ onNavigate }: { onNavigate?: () => void }) {
       const history = turns
         .filter((t) => t.answer)
         .slice(-3)
-        .map((t) => ({ question: t.question, answer: t.answer! }));
+        .map((t) => ({ question: t.question, answer: t.answer!.slice(0, 1500) }));
       const result = await askDocs({ data: { question, history } });
       setTurns((t) =>
         t.map((turn, i) =>
@@ -479,7 +609,7 @@ export function DocsSearch({ onNavigate }: { onNavigate?: () => void }) {
             ) : (
               <div className="space-y-6 p-2">
                 {turns.map((turn, i) => (
-                  <div key={i} className="space-y-3">
+                  <div key={i} data-turn={i} className="scroll-mt-3 space-y-3">
                     <p className="text-[17px] font-semibold text-foreground">
                       You asked: “{turn.question}”
                     </p>

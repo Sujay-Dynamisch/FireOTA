@@ -126,6 +126,8 @@ function normalizedIndex() {
 export function searchDocs(
   query: string,
   limit = 12,
+  /** Share of the query's weighted vocabulary an entry must contain (lower = looser). */
+  minCoverage = 0.5,
 ): (DocHit & { score: number; snippet: string })[] {
   const words = tokenize(query);
   if (words.length === 0) return [];
@@ -174,8 +176,8 @@ export function searchDocs(
       if (s > 0) matchedIdf += weight;
       score += s * weight;
     }
-    // Must cover at least half of the query's informative (weighted) vocabulary.
-    if (matchedIdf < totalIdf * 0.5) continue;
+    // Must cover enough of the query's informative (weighted) vocabulary (half by default).
+    if (matchedIdf === 0 || matchedIdf < totalIdf * minCoverage) continue;
     if (title.includes(phrase)) score += 15;
     else if (text.includes(phrase)) score += 6;
     if (hit.sectionId === null) score += 1;

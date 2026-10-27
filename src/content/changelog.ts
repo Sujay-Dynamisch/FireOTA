@@ -66,6 +66,15 @@ export const changelog: ChangelogEntry[] = [
         type: "p",
         text: "Each release row now has Archive and Delete buttons. Before you confirm, the dialog shows the update number, channel and status. Live updates must be archived before they can be deleted, and you type DELETE to confirm a delete. The status filter also gains Failed and Archived.",
       },
+      { type: "h", text: "A refreshed docs site" },
+      {
+        type: "list",
+        items: [
+          "New guide: Expo Updates without EAS, step by step, with screenshots from a real device.",
+          "New and Updated tags in the sidebar, on page headers and on new sections.",
+          "A cleaner design: page header cards, numbered steps joined by a line, reference tables and a “Was this page helpful?” prompt.",
+        ],
+      },
     ],
   },
   {
