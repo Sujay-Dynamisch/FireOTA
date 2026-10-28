@@ -5,7 +5,7 @@
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
-import { CI_TOOLS, CiLogo, Icons8Credit, ciToolTitle } from "@/components/fireota/ci-logos";
+import { CiPipelinePicker } from "@/components/fireota/ci-pipelines";
 import { ProductVideo } from "@/components/fireota/product-video";
 
 import { Bullets, C, Callout, Code, ExtLink, FieldTable, PhoneShots, PlatformTabs, Steps } from "./docs-ui";
@@ -2508,20 +2508,24 @@ npx fireota release rollback <releaseId> --reason "Crash on launch on Android 14
                   The CLI is the same everywhere. It detects commit, branch and build number on GitHub Actions, GitLab CI, Bitbucket
                   Pipelines, Jenkins, Azure DevOps, CircleCI, Bitrise, Buildkite, Travis, TeamCity, Codemagic and AWS CodeBuild (or set{" "}
                   <C>FIREOTA_GIT_SHA</C>, <C>FIREOTA_GIT_BRANCH</C>, <C>FIREOTA_BUILD_NUMBER</C>). Ready-made pipeline files for each tool
-                  are in the dashboard under <A to="/settings/ci-cd">CI/CD</A>.
+                  are in the dashboard under <A to="/settings/ci-cd">CI/CD</A>, already filled in with your app.
                 </p>
-                <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3" aria-label="Supported CI/CD tools">
-                  {CI_TOOLS.filter((tool) => tool !== "drone").map((tool) => (
-                    <li key={tool} className="flex items-center gap-2 rounded-md border border-border bg-surface-2/40 px-3 py-2 text-[12px]">
-                      <CiLogo tool={tool} className="size-4" />
-                      {ciToolTitle(tool)}
-                    </li>
-                  ))}
-                  <li className="flex items-center gap-2 rounded-md border border-dashed border-border px-3 py-2 text-[12px] text-muted-foreground">
-                    + AWS CodeBuild and any CI with Node 18+
-                  </li>
-                </ul>
-                <Icons8Credit />
+                <p>
+                  <strong>Pick your CI tool</strong> to see its pipeline file. Replace <C>YOUR_APP_ID</C> with your app's ID and add{" "}
+                  <C>FIREOTA_API_KEY</C> to the CI's secret store.
+                </p>
+                <CiPipelinePicker
+                  options={{
+                    appId: "YOUR_APP_ID",
+                    channel: "production",
+                    platform: "android",
+                    rollout: 10,
+                    runtime: "1.0.0",
+                    signed: false,
+                    url: "https://fireota.creoai.in",
+                  }}
+                />
+                <p>Using another tool (AWS CodeBuild, Drone, a shell script)? Any CI with Node 18+ works:</p>
                 <Code code={ANY_CI} />
               </>
             ),

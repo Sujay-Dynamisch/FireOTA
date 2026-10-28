@@ -78,13 +78,13 @@ export interface FirebaseProject {
   name: string;
   firebaseId: string;
   storageBucket: string;
-  firestore: "enabled" | "disabled";
   storage: "enabled" | "disabled";
   apps: number;
   status: ConnectionStatus;
   lastVerified: string;
   googleAccount: string;
-  permissions: { label: string; granted: boolean; optional?: boolean }[];
+  /** `reason` on a failed check says why (e.g. "billing" when Google returns 402). */
+  permissions: { label: string; granted: boolean; optional?: boolean; reason?: string }[];
 }
 
 export interface AppRecord {
@@ -290,7 +290,7 @@ export interface DashboardSummary {
   greetingName: string;
   stats: { apps: number; productionReleases: number; activeRollouts: number; successRate: number };
   health: { adoption: number; successful: number; failed: number; rollbacks: number; rollbackRefs: string };
-  firebase: { name: string; status: ConnectionStatus; storage: boolean; firestore: boolean; permissions: boolean };
+  firebase: { name: string; status: ConnectionStatus; storage: boolean; permissions: boolean };
 }
 
 export interface AnalyticsSummary {

@@ -6,6 +6,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { createChannel as createChannelRecord } from "@/lib/backend/channels.server";
 import { audit, orgContextForUser, ownedRow, requirePermission } from "@/lib/backend/context.server";
+import { describeLive, liveReleases } from "@/lib/backend/delete-guards.server";
 import { fail } from "@/lib/backend/errors";
 import { deleteAppArtifacts } from "@/lib/backend/releases.server";
 import { parsePublicKey } from "@/lib/backend/signing";
@@ -314,6 +315,12 @@ export const deleteApp = createServerFn({ method: "POST" })
     requirePermission(ctx, "app.delete");
     const app = await ownedRow<{ id: string; name: string; slug: string }>(ctx, "apps", data.id, "id, name, slug");
     if (data.confirmSlug !== app.slug) fail("INVALID_INPUT", "Type the application ID exactly to confirm.");
+    // Devices may still be running or downloading these updates: archive them first.
+    const live = await liveReleases(ctx, [app.id]);
+    if (live.length > 0)
+      fail("CONFLICT", `Archive this app's ${describeLive(live)} on the Releases page first, then delete the app.`, {
+        blockers: live,
+      });
 
     const artifacts = await deleteAppArtifacts(ctx, app.id);
     const { error } = await ctx.db.from("apps").delete().eq("id", app.id).eq("organization_id", ctx.organizationId);

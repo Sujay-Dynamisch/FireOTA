@@ -36,7 +36,7 @@ export function AuthLayout({ children }: { children: ReactNode }) {
         </div>
 
         <p className="font-mono text-[10px] text-faint">
-          React Native OTA · Firebase Storage + Firestore · no vendor lock-in
+          React Native OTA · Firebase Storage · no vendor lock-in
         </p>
       </div>
 

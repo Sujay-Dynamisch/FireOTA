@@ -7,7 +7,34 @@ import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { audit, orgContextForUser, requirePermission } from "@/lib/backend/context.server";
+import { audit, orgContextForUser, requirePermission, type OrgContext } from "@/lib/backend/context.server";
+import { describeLive, liveReleases, shortList } from "@/lib/backend/delete-guards.server";
+
+/**
+ * Apps that use a Firebase project block removing it (their bundles live in its bucket).
+ * The message names them and says whether their live updates must be archived first.
+ */
+async function assertProjectUnused(ctx: OrgContext, projectId: string) {
+  const { data: apps } = await ctx.db
+    .from("apps")
+    .select("id, name")
+    .eq("organization_id", ctx.organizationId)
+    .eq("firebase_project_id", projectId);
+  if (!apps || apps.length === 0) return;
+  const names = shortList(apps.map((a) => a.name as string));
+  const one = apps.length === 1;
+  const live = await liveReleases(
+    ctx,
+    apps.map((a) => a.id as string),
+  );
+  fail(
+    "CONFLICT",
+    live.length > 0
+      ? `Used by ${names}. Archive the ${describeLive(live)}, delete the ${one ? "app" : "apps"}, then remove the project.`
+      : `Used by ${names}. Delete the ${one ? "app" : "apps"} first, then remove the project.`,
+    { apps: apps.map((a) => ({ id: a.id, name: a.name })), liveReleases: live },
+  );
+}
 import { ApiError, fail } from "@/lib/backend/errors";
 import { pkcePair, randomToken } from "@/lib/backend/crypto.server";
 import {
@@ -61,10 +88,20 @@ export const listSelectableProjects = createServerFn({ method: "GET" })
     if (!connection) fail("FIREBASE_CONNECTION_ERROR", "Authorize a Google account first.");
 
     const accessToken = await accessTokenFromConnection(connection.refresh_token_ciphertext as string | null);
-    const projects = await listProjects(accessToken);
+    const [projects, { data: existing }] = await Promise.all([
+      listProjects(accessToken),
+      ctx.db.from("firebase_projects").select("firebase_project_id").eq("organization_id", ctx.organizationId),
+    ]);
+    // Projects this workspace already connected are listed but can't be picked again.
+    const connected = new Set((existing ?? []).map((row) => row.firebase_project_id as string));
     return {
       googleAccount: connection.google_account as string,
-      projects: projects.map((p) => ({ id: p.projectId, name: p.displayName, region: p.storageBucket ?? "" })),
+      projects: projects.map((p) => ({
+        id: p.projectId,
+        name: p.displayName,
+        region: p.storageBucket ?? "",
+        connected: connected.has(p.projectId),
+      })),
     };
   });
 
@@ -101,7 +138,6 @@ export const connectProject = createServerFn({ method: "POST" })
           display_name: health.displayName,
           storage_bucket: health.storageBucket,
           storage_enabled: health.storage,
-          firestore_enabled: health.firestore,
           google_account: connection.google_account,
           permissions: health.permissions,
           status: health.status,
@@ -139,7 +175,7 @@ export const listFirebaseProjects = createServerFn({ method: "GET" })
     const { data } = await ctx.db
       .from("firebase_projects")
       .select(
-        "id, firebase_project_id, display_name, storage_bucket, firestore_enabled, storage_enabled, status, last_verified_at, google_account, permissions",
+        "id, firebase_project_id, display_name, storage_bucket, storage_enabled, status, last_verified_at, google_account, permissions",
       )
       .eq("organization_id", ctx.organizationId)
       .order("created_at", { ascending: true });
@@ -151,13 +187,15 @@ export const listFirebaseProjects = createServerFn({ method: "GET" })
       name: p.display_name as string,
       firebaseId: p.firebase_project_id as string,
       storageBucket: (p.storage_bucket as string) ?? "",
-      firestore: p.firestore_enabled ? ("enabled" as const) : ("disabled" as const),
       storage: p.storage_enabled ? ("enabled" as const) : ("disabled" as const),
       apps: (counts.data ?? []).filter((a) => a.firebase_project_id === p.id).length,
       status: uiStatus(p.status as string),
       lastVerified: p.last_verified_at ? new Date(p.last_verified_at as string).toISOString().slice(0, 16).replace("T", " ") : "never",
       googleAccount: (p.google_account as string) ?? "",
-      permissions: (p.permissions as { label: string; granted: boolean; optional?: boolean }[]) ?? [],
+      // Projects verified before Firestore was dropped still store a "Firestore access" entry.
+      permissions: ((p.permissions as { label: string; granted: boolean; optional?: boolean; reason?: string }[]) ?? []).filter(
+        (permission) => permission.label !== "Firestore access",
+      ),
     }));
   });
 
@@ -189,7 +227,6 @@ export const verifyFirebaseProject = createServerFn({ method: "POST" })
         .update({
           storage_bucket: health.storageBucket,
           storage_enabled: health.storage,
-          firestore_enabled: health.firestore,
           permissions: health.permissions,
           status: health.status === "connected" ? "connected" : "degraded",
           last_verified_at: new Date().toISOString(),
@@ -217,13 +254,7 @@ export const disconnectFirebaseProject = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const ctx = await orgContextForUser(context.userId);
     requirePermission(ctx, "project.disconnect");
-
-    const { count } = await ctx.db
-      .from("apps")
-      .select("id", { count: "exact", head: true })
-      .eq("organization_id", ctx.organizationId)
-      .eq("firebase_project_id", data.id);
-    if ((count ?? 0) > 0) fail("CONFLICT", "Move or delete the applications using this project first.");
+    await assertProjectUnused(ctx, data.id);
 
     await ctx.db.from("firebase_projects").update({ status: "disconnected" }).eq("id", data.id).eq("organization_id", ctx.organizationId);
     await audit(ctx, { action: "firebase.disconnected", resourceType: "firebase_project", resourceId: data.id });
@@ -248,13 +279,7 @@ export const removeFirebaseProject = createServerFn({ method: "POST" })
       .eq("organization_id", ctx.organizationId)
       .maybeSingle();
     if (!project) fail("RESOURCE_NOT_FOUND", "Firebase project not found.");
-
-    const { count } = await ctx.db
-      .from("apps")
-      .select("id", { count: "exact", head: true })
-      .eq("organization_id", ctx.organizationId)
-      .eq("firebase_project_id", data.id);
-    if ((count ?? 0) > 0) fail("CONFLICT", "Move or delete the applications using this project first.");
+    await assertProjectUnused(ctx, data.id);
 
     const { error } = await ctx.db.from("firebase_projects").delete().eq("id", data.id).eq("organization_id", ctx.organizationId);
     if (error) fail("CONFLICT", "The project could not be removed.");

@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { authService } from "@/services";
+import { ServiceError, authService } from "@/services";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
@@ -34,17 +34,25 @@ function LoginPage() {
   const [password, setPassword] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [unverified, setUnverified] = useState(false);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     setPending(true);
     setError(null);
+    setUnverified(false);
     try {
       await authService.signIn(email, password);
       toast.success("Signed in to FireOTA.");
       void navigate({ to: "/dashboard" });
-    } catch {
-      setError("We couldn't sign you in. Check your email and password.");
+    } catch (failure) {
+      // Unconfirmed accounts get their own message and a way to resend the link.
+      if (failure instanceof ServiceError && failure.code === "unverified") {
+        setError(failure.message);
+        setUnverified(true);
+      } else {
+        setError("We couldn't sign you in. Check your email and password.");
+      }
     } finally {
       setPending(false);
     }
@@ -118,7 +126,12 @@ function LoginPage() {
 
         {error ? (
           <p role="alert" className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-[12px] text-danger">
-            {error}
+            {error}{" "}
+            {unverified ? (
+              <Link to="/verify-email" search={{ email }} className="font-medium underline underline-offset-2">
+                Resend the link
+              </Link>
+            ) : null}
           </p>
         ) : null}
 

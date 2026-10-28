@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { BrandMark } from "@/components/fireota/brand-mark";
+import { SettingUpScreen } from "@/components/fireota/setting-up-screen";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -243,6 +244,11 @@ export function AppShell({ breadcrumb, children }: { breadcrumb: Crumb[]; childr
   const crumbs = breadcrumb.map((crumb, index) =>
     index === 0 && crumb.to === "/dashboard" && org?.name ? { ...crumb, label: org.name } : crumb,
   );
+
+  // Until we know the account has a workspace, show the loader instead of the dashboard, so a
+  // new account goes straight to onboarding without the dashboard flashing first.
+  if (session.isPending) return <SettingUpScreen title="Loading your workspace…" />;
+  if (session.isSuccess && !org) return <SettingUpScreen />;
 
 
 

@@ -1372,7 +1372,7 @@ function RolloutSimulator() {
 const STEPS = [
   {
     title: "Connect Firebase",
-    copy: "Authenticate with Google and select your Firebase project. Releases and source maps stream directly to your Storage bucket and Firestore.",
+    copy: "Authenticate with Google and select your Firebase project. Releases and source maps stream directly to your Firebase Storage bucket.",
     code: "# Step 1: In your FireOTA dashboard\nProjects → Connect Firebase → Select your Google Cloud Project",
   },
   {
@@ -1471,7 +1471,7 @@ function HowItWorks() {
 const FAQ: [string, string][] = [
   [
     "Is FireOTA really free at the platform level?",
-    "Yes, FireOTA charges $0 for platform usage. Your releases, assets, and source maps are stored directly inside your own Google Firebase Storage bucket and Firestore, so you only use your own Google Cloud plan (which is typically within the free tier for small-to-medium mobile apps).",
+    "Yes, FireOTA charges $0 for platform usage. Your releases, assets, and source maps are stored directly inside your own Google Firebase Storage bucket, so you only use your own Google Cloud plan (which is typically within the free tier for small-to-medium mobile apps).",
   ],
   [
     "Does FireOTA have access to or hold my JavaScript bundles?",
