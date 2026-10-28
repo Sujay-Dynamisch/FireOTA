@@ -8,6 +8,7 @@ import { z } from "zod";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { admin, audit, hasPermission, log, newRequestId, orgContextForUser, ownedRow, requirePermission } from "@/lib/backend/context.server";
+import { describeLive, liveReleases } from "@/lib/backend/delete-guards.server";
 import { ApiError, fail } from "@/lib/backend/errors";
 import { acceptPendingInvites, deliverInvite } from "@/lib/backend/invites.server";
 import { NOTIFICATION_PREFS, prefEnabled } from "@/lib/backend/notifications";
@@ -210,9 +211,113 @@ export const deleteOrganization = createServerFn({ method: "POST" })
     const ctx = await orgContextForUser(context.userId);
     if (ctx.role !== "owner") fail("AUTHORIZATION_ERROR", "Only an owner can delete the workspace.");
     if (data.confirmSlug !== ctx.organizationSlug) fail("INVALID_INPUT", "Type the workspace ID exactly to confirm.");
+    const live = await liveReleases(ctx);
+    if (live.length > 0) fail("CONFLICT", `Archive the workspace's ${describeLive(live)} first, then delete the workspace.`);
     const { error } = await ctx.db.from("organizations").delete().eq("id", ctx.organizationId);
     if (error) throw new ApiError("INTERNAL_ERROR", "Could not delete the workspace.");
     log(ctx, { event: "organization.deleted", slug: ctx.organizationSlug });
+    return { deleted: true };
+  });
+
+interface AccountBlocker {
+  id: "transfer" | "live";
+  title: string;
+  detail: string;
+  to: "/team" | "/releases";
+}
+
+/**
+ * What deleting this account would do, and what has to happen first:
+ * - the only owner of a workspace with other members must hand over ownership;
+ * - if the workspace is deleted with the account, its live updates must be archived first.
+ */
+async function accountDeletionPlan(userId: string) {
+  const ctx = await orgContextForUser(userId).catch(() => null);
+  if (!ctx) return { ctx: null, workspace: null, deletesWorkspace: false, counts: null, blockers: [] as AccountBlocker[] };
+
+  const { data: members } = await ctx.db
+    .from("organization_members")
+    .select("role, user_id")
+    .eq("organization_id", ctx.organizationId);
+  const others = (members ?? []).filter((m) => m.user_id !== userId);
+  const soleOwner = ctx.role === "owner" && !others.some((m) => m.role === "owner");
+  const deletesWorkspace = soleOwner && others.length === 0;
+  const blockers: AccountBlocker[] = [];
+
+  if (soleOwner && others.length > 0) {
+    blockers.push({
+      id: "transfer",
+      title: "Hand over the workspace",
+      detail: `You're the only owner of ${ctx.organizationName}, which has ${others.length} other member${others.length === 1 ? "" : "s"}. Make one of them an owner, or remove them.`,
+      to: "/team",
+    });
+  }
+
+  let counts: { apps: number; releases: number; firebaseProjects: number } | null = null;
+  if (deletesWorkspace) {
+    const live = await liveReleases(ctx);
+    if (live.length > 0) {
+      blockers.push({
+        id: "live",
+        title: "Archive live updates",
+        detail: `Your workspace still has ${describeLive(live)}. Archive them so devices stop being offered them.`,
+        to: "/releases",
+      });
+    }
+    const count = async (table: string) =>
+      (await ctx.db.from(table).select("id", { count: "exact", head: true }).eq("organization_id", ctx.organizationId)).count ?? 0;
+    const [apps, releases, firebaseProjects] = await Promise.all([count("apps"), count("releases"), count("firebase_projects")]);
+    counts = { apps, releases, firebaseProjects };
+  }
+
+  return {
+    ctx,
+    workspace: { name: ctx.organizationName, slug: ctx.organizationSlug ?? "", role: ctx.role },
+    deletesWorkspace,
+    counts,
+    blockers,
+  };
+}
+
+/** Pre-flight for the "Delete account" dialog. */
+export const getAccountDeletionPlan = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { ctx: _ctx, ...plan } = await accountDeletionPlan(context.userId);
+    return plan;
+  });
+
+/**
+ * Permanently deletes the signed-in user's account. Re-checks the blockers on the server, deletes
+ * the workspace too when the user is its only member, then removes the user's own data and login.
+ * Bundles already uploaded stay in the customer's Firebase Storage bucket.
+ */
+export const deleteAccount = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { confirm: string }) => z.object({ confirm: z.string().max(20) }).parse(input))
+  .handler(async ({ data, context }) => {
+    if (data.confirm !== "DELETE") fail("INVALID_INPUT", "Type DELETE to confirm.");
+    const plan = await accountDeletionPlan(context.userId);
+    if (plan.blockers.length > 0) fail("CONFLICT", plan.blockers[0]!.detail);
+
+    const db = await admin();
+    if (plan.ctx) {
+      if (plan.deletesWorkspace) {
+        const { error } = await db.from("organizations").delete().eq("id", plan.ctx.organizationId);
+        if (error) throw new ApiError("INTERNAL_ERROR", "Could not delete your workspace.");
+        log(plan.ctx, { event: "organization.deleted", slug: plan.ctx.organizationSlug, reason: "account_deleted" });
+      } else {
+        await audit(plan.ctx, { action: "team.removed", resourceType: "member", resourceId: context.userId, after: { reason: "account_deleted" } });
+      }
+    }
+    // These rows reference the user by id only (no foreign key), so remove them explicitly.
+    await db.from("organization_members").delete().eq("user_id", context.userId);
+    await db.from("notifications").delete().eq("user_id", context.userId);
+    await db.from("agent_conversations").delete().eq("user_id", context.userId);
+    await db.from("profiles").delete().eq("id", context.userId);
+
+    const { error } = await db.auth.admin.deleteUser(context.userId);
+    if (error) throw new ApiError("INTERNAL_ERROR", "Could not delete your login. Please contact support.");
     return { deleted: true };
   });
 
@@ -771,7 +876,7 @@ export const getDashboard = createServerFn({ method: "GET" })
         .eq("status", "active"),
       ctx.db
         .from("firebase_projects")
-        .select("display_name, status, storage_enabled, firestore_enabled, permissions")
+        .select("display_name, status, storage_enabled, permissions")
         .eq("organization_id", ctx.organizationId)
         .order("created_at", { ascending: true })
         .limit(1)
@@ -801,7 +906,6 @@ export const getDashboard = createServerFn({ method: "GET" })
         name: project.data?.display_name ?? "",
         status: (project.data?.status as "connected" | "degraded" | "expired" | "disconnected") ?? "disconnected",
         storage: Boolean(project.data?.storage_enabled),
-        firestore: Boolean(project.data?.firestore_enabled),
         permissions,
       },
     };

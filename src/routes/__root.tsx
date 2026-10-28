@@ -10,6 +10,7 @@ import {
 } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
 
+import { NavigationLoader } from "@/components/fireota/navigation-loader";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import appCss from "../styles.css?url";
@@ -158,6 +159,7 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider delayDuration={200}>
+        <NavigationLoader />
         {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
         <Outlet />
         <Toaster position="bottom-right" />

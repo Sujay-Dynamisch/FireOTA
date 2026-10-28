@@ -1,10 +1,11 @@
 import { friendlyError } from "@/lib/friendly-error";
-import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Loader2 } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Home, Loader2, LogOut, ShieldCheck, Users, Zap } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { BrandMark } from "@/components/fireota/brand-mark";
+import { BackgroundGlow, SettingUpScreen } from "@/components/fireota/setting-up-screen";
 
 import { CheckList, Field, WizardShell } from "@/components/fireota/wizard";
 import { CopyButton, Label as TokenLabel } from "@/components/fireota/primitives";
@@ -13,7 +14,8 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { q } from "@/lib/queries";
 import type { FirebaseProject } from "@/lib/types";
-import { firebaseService, organizationService } from "@/services";
+import { cn } from "@/lib/utils";
+import { authService, firebaseService, organizationService } from "@/services";
 
 export const Route = createFileRoute("/onboarding")({
   head: () => ({
@@ -31,7 +33,9 @@ const steps = ["Welcome", "Organization", "Connect Firebase", "Verify", "First a
 
 function OnboardingPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [step, setStep] = useState(0);
+  const [signingOut, setSigningOut] = useState(false);
   const session = useQuery(q.session());
   const joined = session.data?.organization ?? null;
   // An accepted invitation (or an existing workspace) skips onboarding.
@@ -63,10 +67,79 @@ function OnboardingPage() {
   const next = () => setStep((s) => Math.min(s + 1, steps.length - 1));
   const back = () => setStep((s) => Math.max(s - 1, 0));
 
+  // Returning users already have a workspace (and Firebase): show a loader while we check and
+  // redirect, instead of flashing the setup wizard.
+  if (session.isPending || (joined && step === 0)) return <SettingUpScreen workspace={joined?.name} />;
+
   return (
-    <div className="min-h-screen bg-background px-5 py-10">
-      <div className="mx-auto max-w-2xl">
-        <div className="mb-5 flex items-center gap-2">
+    <div className="relative min-h-screen overflow-hidden bg-background">
+      <BackgroundGlow />
+      {/* Way out of onboarding: back to the website, or sign out to use another account. */}
+      <div className="absolute right-4 top-4 z-10 flex items-center gap-2">
+        {session.data?.user?.email ? (
+          <span className="hidden max-w-[220px] truncate rounded-full border border-border bg-background/80 px-3 py-1 text-[12px] text-muted-foreground backdrop-blur sm:inline">
+            {session.data.user.email}
+          </span>
+        ) : null}
+        <Button variant="ghost" size="sm" className="gap-1.5" asChild>
+          <Link to="/">
+            <Home className="size-4" aria-hidden /> Home
+          </Link>
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1.5 bg-background/80 backdrop-blur"
+          loading={signingOut}
+          onClick={async () => {
+            setSigningOut(true);
+            try {
+              await authService.signOut();
+              queryClient.clear();
+              void navigate({ to: "/login" });
+            } catch (error) {
+              setSigningOut(false);
+              toast.error(friendlyError(error, "Could not sign out. Try again."));
+            }
+          }}
+        >
+          <LogOut className="size-4" aria-hidden /> Sign out
+        </Button>
+      </div>
+      <div className="relative mx-auto grid min-h-screen max-w-6xl items-center gap-10 px-5 py-16 lg:grid-cols-[0.9fr_1.1fr] lg:py-10">
+        <aside className="hidden lg:block">
+          <div className="flex items-center gap-2">
+            <BrandMark className="size-9" />
+            <span className="font-display text-[20px] font-bold tracking-tight">FireOTA</span>
+          </div>
+          <h1 className="mt-8 font-display text-[34px] font-bold leading-[1.15] tracking-tight">
+            Ship React Native updates from <span className="text-brand">your own Firebase</span>.
+          </h1>
+          <p className="mt-3 max-w-md text-[14px] leading-relaxed text-muted-foreground">
+            Over-the-air updates with staged rollouts and instant rollback. Your bundles never leave your Google Firebase project.
+          </p>
+          <PoweredByFirebase className="mt-8" />
+          <ul className="mt-8 space-y-4">
+            {[
+              { icon: ShieldCheck, title: "Your data stays yours", text: "Bundles live in your Firebase Storage. FireOTA stores only release details." },
+              { icon: Zap, title: "Ship in minutes", text: "Publish from the CLI or CI, roll out to 10%, then everyone." },
+              { icon: Users, title: "Built for teams", text: "Invite teammates, set roles and keep an audit trail." },
+            ].map(({ icon: Icon, title, text }) => (
+              <li key={title} className="flex gap-3">
+                <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-brand/10 text-brand">
+                  <Icon className="size-4.5" aria-hidden />
+                </span>
+                <span>
+                  <span className="block text-[13px] font-semibold">{title}</span>
+                  <span className="block text-[12px] text-muted-foreground">{text}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </aside>
+
+        <div className="mx-auto w-full max-w-2xl">
+        <div className="mb-5 flex items-center gap-2 lg:hidden">
           <BrandMark />
           <span className="font-display text-[18px] font-bold tracking-tight">FireOTA</span>
         </div>
@@ -162,6 +235,17 @@ function OnboardingPage() {
             }
           >
             <div className="space-y-4">
+              <div className="flex items-center gap-3 rounded-2xl border border-[#ffca28]/40 bg-gradient-to-r from-[#FFF8E1] to-transparent p-3.5 dark:from-[#ffca28]/10">
+                <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-background shadow-sm">
+                  <img src="/brand/eco/firebase.svg" alt="Google Firebase" width={28} height={28} className="size-7" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-[14px] font-semibold">Google Firebase</span>
+                  <span className="block text-[12px] text-muted-foreground">
+                    Choose the project from your Google account that will store your update bundles.
+                  </span>
+                </span>
+              </div>
               {selectable.isPending && (
                 <div className="flex items-center gap-2 rounded-md border border-border bg-surface-2/40 px-3 py-2.5 text-[12px] text-muted-foreground">
                   <Loader2 className="size-4 animate-spin" aria-hidden />
@@ -183,8 +267,9 @@ function OnboardingPage() {
                   </SelectTrigger>
                   <SelectContent>
                     {(selectable.data ?? []).map((option) => (
-                      <SelectItem key={option.id} value={option.id}>
+                      <SelectItem key={option.id} value={option.id} disabled={option.connected}>
                         {option.id} · {option.name}
+                        {option.connected ? " · already connected" : ""}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -197,7 +282,6 @@ function OnboardingPage() {
                     items={[
                       { label: "Project access", granted: true },
                       { label: "Storage access", granted: true },
-                      { label: "Firestore access", granted: true },
                       { label: "Firebase application metadata", granted: true },
                       { label: "Analytics", granted: false, optional: true },
                       { label: "Crashlytics", granted: false, optional: true },
@@ -214,7 +298,7 @@ function OnboardingPage() {
             steps={steps}
             current={3}
             title="Verify Firebase access"
-            description="We check that FireOTA can write bundles to Storage and record release metadata in Firestore."
+            description="We check that FireOTA can write update bundles to your Firebase Storage bucket."
             footer={
               <>
                 <Button variant="outline" size="sm" onClick={back}>
@@ -255,7 +339,6 @@ function OnboardingPage() {
                 ["Project name", verifiedProject?.name ?? "—"],
                 ["Project ID", verifiedProject?.firebaseId ?? (project || "—")],
                 ["Storage", verifiedProject ? (verifiedProject.storage === "enabled" ? `writable (${verifiedProject.storageBucket})` : "not writable") : "not checked"],
-                ["Firestore", verifiedProject?.firestore ?? "not checked"],
                 ["Permissions", verifiedProject ? (verifiedProject.permissions.every((p) => p.granted || p.optional) ? "granted" : "missing") : "not checked"],
                 ["Connection", verifiedProject?.status ?? (verifying ? "verifying" : "not verified")],
               ].map(([label, value]) => (
@@ -365,7 +448,26 @@ function OnboardingPage() {
             </div>
           </WizardShell>
         )}
+        <PoweredByFirebase className="mt-6 lg:hidden" />
+        </div>
       </div>
+    </div>
+  );
+}
+
+/** Shows that storage and metadata run on the customer's own Google Firebase project. */
+function PoweredByFirebase({ className }: { className?: string }) {
+  return (
+    <div className={cn("flex items-center gap-3 rounded-2xl border border-border bg-background/80 p-3.5 shadow-sm backdrop-blur", className)}>
+      <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-[#FFF8E1] dark:bg-[#ffca28]/10">
+        <img src="/brand/eco/firebase.svg" alt="Google Firebase" width={28} height={28} className="size-7" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[10px] font-semibold uppercase tracking-wider text-faint">Powered by</span>
+        <span className="block text-[14px] font-semibold">Google Firebase</span>
+        <span className="block truncate text-[11px] text-muted-foreground">Cloud Storage for Firebase</span>
+      </span>
+      <img src="/brand/eco/google-cloud.svg" alt="Google Cloud" width={24} height={24} className="size-6 opacity-90" />
     </div>
   );
 }

@@ -10,7 +10,6 @@ const ALLOWED_HOSTS = new Set([
   "accounts.google.com",
   "firebase.googleapis.com",
   "firebasestorage.googleapis.com",
-  "firestore.googleapis.com",
   "storage.googleapis.com",
   "www.googleapis.com",
 ]);
@@ -36,6 +35,8 @@ async function googleFetch(url: string, init: RequestInit & { accessToken?: stri
   if (init.accessToken) headers.set("Authorization", `Bearer ${init.accessToken}`);
   const response = await fetch(url, { ...init, headers, redirect: "error" });
   if (response.status === 401) fail("FIREBASE_AUTH_EXPIRED", "The Google authorization for this project expired.");
+  if (response.status === 402)
+    fail("FIREBASE_CONNECTION_ERROR", "Billing is disabled for this Google Cloud project.", { reason: "billing" });
   if (response.status === 403) fail("FIREBASE_PERMISSION_ERROR", "The connected Google account is missing permissions.");
   if (response.status === 404) fail("FIREBASE_PROJECT_NOT_FOUND", "The Firebase resource was not found.");
   if (!response.ok) {
@@ -192,7 +193,10 @@ export async function discoverStorageBucket(accessToken: string, projectId: stri
 }
 
 /** Proves write + delete access with a tiny object under the FireOTA prefix. */
-async function canWriteStorage(accessToken: string, bucket: string) {
+type StorageFailure = "billing" | "permission" | "bucket_missing" | "auth_expired" | "unknown";
+
+/** Writes and deletes a probe file; on failure says why, so the UI can show the right fix. */
+async function canWriteStorage(accessToken: string, bucket: string): Promise<{ ok: boolean; reason?: StorageFailure }> {
   try {
     const probe = await uploadArtifact({
       accessToken,
@@ -202,9 +206,20 @@ async function canWriteStorage(accessToken: string, bucket: string) {
       contentType: "text/plain",
     });
     await deleteArtifact({ accessToken, bucket, path: probe.path });
-    return true;
-  } catch {
-    return false;
+    return { ok: true };
+  } catch (error) {
+    const code = error instanceof ApiError ? error.code : null;
+    const reason: StorageFailure =
+      error instanceof ApiError && error.details?.["reason"] === "billing"
+        ? "billing"
+        : code === "FIREBASE_PERMISSION_ERROR"
+          ? "permission"
+          : code === "FIREBASE_PROJECT_NOT_FOUND"
+            ? "bucket_missing"
+            : code === "FIREBASE_AUTH_EXPIRED"
+              ? "auth_expired"
+              : "unknown";
+    return { ok: false, reason };
   }
 }
 
@@ -218,24 +233,13 @@ export async function projectHealth(accessToken: string, projectId: string) {
     resources?: { storageBucket?: string };
   };
   const storageBucket = project.resources?.storageBucket ?? (await discoverStorageBucket(accessToken, projectId));
-  const storage = storageBucket ? await canWriteStorage(accessToken, storageBucket) : false;
+  const write = storageBucket ? await canWriteStorage(accessToken, storageBucket) : { ok: false, reason: "bucket_missing" as const };
+  const storage = write.ok;
 
-  let firestore = false;
-  try {
-    const res = await googleFetch(
-      `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/databases`,
-      { accessToken },
-    );
-    const dbs = (await res.json()) as { databases?: unknown[] };
-    firestore = (dbs.databases?.length ?? 0) > 0;
-  } catch {
-    firestore = false;
-  }
-
+  // FireOTA only uses Cloud Storage; release metadata lives in FireOTA's own database, not Firestore.
   const permissions = [
     { label: "Firebase project read", granted: true },
-    { label: "Cloud Storage read/write", granted: storage },
-    { label: "Firestore access", granted: firestore, optional: true },
+    { label: "Cloud Storage read/write", granted: storage, ...(write.reason ? { reason: write.reason } : {}) },
   ];
 
   return {
@@ -243,7 +247,6 @@ export async function projectHealth(accessToken: string, projectId: string) {
     displayName: project.displayName || projectId,
     storageBucket,
     storage,
-    firestore,
     permissions,
     status: storage ? ("connected" as const) : ("permission_error" as const),
   };

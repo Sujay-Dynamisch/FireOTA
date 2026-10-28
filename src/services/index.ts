@@ -11,7 +11,9 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   changeMemberRole,
   createOrganization,
+  deleteAccount,
   deleteOrganization,
+  getAccountDeletionPlan,
   deleteRole,
   getDashboard,
   getNotificationPrefs,
@@ -129,7 +131,7 @@ import type {
 export class ServiceError extends Error {
   constructor(
     message: string,
-    readonly code: "not_found" | "forbidden" | "unauthorized" | "disconnected" | "invalid" | "unknown",
+    readonly code: "not_found" | "forbidden" | "unauthorized" | "disconnected" | "invalid" | "unverified" | "unknown",
   ) {
     super(message);
     this.name = "ServiceError";
@@ -161,6 +163,9 @@ export const authService = {
   },
   signIn: async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    // Supabase refuses password sign-in until the confirmation link has been opened.
+    if (error?.code === "email_not_confirmed" || /email not confirmed/i.test(error?.message ?? ""))
+      throw new ServiceError("Confirm your email first. Open the link we sent you, or send a new one.", "unverified");
     if (error) throw new ServiceError(error.message, "unauthorized");
     return { user: data.user };
   },
@@ -180,12 +185,16 @@ export const authService = {
     return await new Promise<never>(() => {});
   },
   signUp: async (name: string, email: string, password: string) => {
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: { data: { name }, emailRedirectTo: `${window.location.origin}/onboarding` },
     });
     if (error) throw new ServiceError(error.message, "invalid");
+    // For an address that is already registered Supabase "succeeds" without sending an email,
+    // returning a user with no identities. Say so instead of waiting for a link that never comes.
+    if (data.user && (data.user.identities ?? []).length === 0)
+      throw new ServiceError("An account with this email already exists. Sign in, or reset your password.", "invalid");
     return { verificationSentTo: email, name };
   },
   requestPasswordReset: async (email: string) => {
@@ -219,16 +228,28 @@ export const authService = {
     if (error) throw new ServiceError(error.message, "invalid");
     return { ok: true };
   },
-  resendVerification: async () => {
-    const { data } = await supabase.auth.getUser();
-    const email = data.user?.email;
-    if (!email) throw new ServiceError("Sign in again to resend the verification email.", "unauthorized");
-    const { error } = await supabase.auth.resend({ type: "signup", email });
+  /** Unconfirmed accounts have no session, so the caller passes the address it signed up with. */
+  resendVerification: async (emailAddress?: string) => {
+    const email = emailAddress?.trim() || (await supabase.auth.getUser()).data.user?.email;
+    if (!email) throw new ServiceError("Enter the email address you signed up with.", "invalid");
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email,
+      options: { emailRedirectTo: `${window.location.origin}/onboarding` },
+    });
     if (error) throw new ServiceError(error.message, "invalid");
     return { ok: true };
   },
   signOut: async () => {
     await supabase.auth.signOut();
+    return { ok: true };
+  },
+  /** What blocks deleting the account, and what would be deleted with it. */
+  deletionPlan: () => getAccountDeletionPlan(),
+  /** Deletes the account on the server, then clears the now-invalid local session. */
+  deleteAccount: async () => {
+    await deleteAccount({ data: { confirm: "DELETE" } });
+    await supabase.auth.signOut().catch(() => undefined);
     return { ok: true };
   },
 };

@@ -35,6 +35,7 @@ function SignupPage() {
   const [password, setPassword] = useState("");
   const [accepted, setAccepted] = useState(false);
   const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   return (
     <AuthLayout>
@@ -68,10 +69,13 @@ function SignupPage() {
         onSubmit={async (event) => {
           event.preventDefault();
           setPending(true);
+          setError(null);
           try {
             await authService.signUp(name, email, password);
             toast.info("Check your inbox to verify your email address.");
-            void navigate({ to: "/verify-email" });
+            void navigate({ to: "/verify-email", search: { email } });
+          } catch (failure) {
+            setError(friendlyError(failure, "We couldn't create your account. Try again."));
           } finally {
             setPending(false);
           }
@@ -120,8 +124,29 @@ function SignupPage() {
             onCheckedChange={(checked) => setAccepted(checked === true)}
             className="mt-0.5"
           />
-          I accept the terms of service and privacy policy.
+          <span>
+            I accept the{" "}
+            <Link to="/terms" target="_blank" className="text-foreground underline underline-offset-2 hover:text-brand">
+              terms of service
+            </Link>{" "}
+            and{" "}
+            <Link to="/privacy" target="_blank" className="text-foreground underline underline-offset-2 hover:text-brand">
+              privacy policy
+            </Link>
+            .
+          </span>
         </label>
+
+        {error ? (
+          <p role="alert" className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-[12px] text-danger">
+            {error}{" "}
+            {/already exists/i.test(error) ? (
+              <Link to="/login" className="font-medium underline underline-offset-2">
+                Sign in
+              </Link>
+            ) : null}
+          </p>
+        ) : null}
 
         <Button type="submit" className="h-9 w-full" disabled={!accepted} loading={pending}>
           {pending ? "Creating account…" : "Create account"}

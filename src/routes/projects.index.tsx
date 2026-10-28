@@ -1,7 +1,7 @@
 import { friendlyError } from "@/lib/friendly-error";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, createFileRoute } from "@tanstack/react-router";
-import { Database } from "lucide-react";
+import { Database, Lock } from "lucide-react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/layout/app-shell";
@@ -129,7 +129,6 @@ function ProjectsPage() {
                 items={[
                   { label: "Storage bucket", value: <span className="font-mono">{project.storageBucket}</span> },
                   { label: "Cloud Storage", value: project.storage === "enabled" ? "Enabled" : "Disabled" },
-                  { label: "Firestore", value: project.firestore === "enabled" ? "Enabled" : "Disabled" },
                   { label: "Applications", value: project.apps },
                   { label: "Google account", value: <span className="font-mono">{project.googleAccount}</span> },
                 ]}
@@ -151,7 +150,18 @@ function ProjectsPage() {
                 >
                   {verify.isPending ? "Verifying…" : "Verify connection"}
                 </Button>
-                {can("project.disconnect") && project.status !== "disconnected" ? (
+                {project.apps > 0 && (can("project.disconnect") || can("project.delete")) ? (
+                  // The server refuses both while apps use the project, so explain the order up front.
+                  <p className="ml-auto flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                    <Lock className="size-3.5" aria-hidden />
+                    Used by {project.apps} app{project.apps === 1 ? "" : "s"}. To remove it, archive their live updates, then delete
+                    the {project.apps === 1 ? "app" : "apps"}.
+                    <Link to="/apps" className="font-medium text-brand hover:underline">
+                      Open Apps
+                    </Link>
+                  </p>
+                ) : null}
+                {project.apps === 0 && can("project.disconnect") && project.status !== "disconnected" ? (
                 <ConfirmAction
                   trigger={
                     <Button variant="ghost" size="sm" className="h-7 text-[11px] text-danger">
@@ -159,8 +169,8 @@ function ProjectsPage() {
                     </Button>
                   }
                   title="Disconnect this Firebase project"
-                  description="Applications using this project stop receiving new releases until it is reconnected."
-                  warning={`${project.apps} application(s) currently publish to this project. Bundles already in your bucket are not deleted.`}
+                  description="FireOTA stops using this project until you reconnect it."
+                  warning="Bundles already in your bucket are not deleted."
                   confirmLabel="Disconnect project"
                   destructive
                   requireTyped="DISCONNECT"
@@ -174,7 +184,7 @@ function ProjectsPage() {
                   }}
                 />
                 ) : null}
-                {can("project.delete") ? (
+                {project.apps === 0 && can("project.delete") ? (
                   <ConfirmAction
                     trigger={
                       <Button variant="ghost" size="sm" className="ml-auto h-7 text-[11px] text-danger">
@@ -183,11 +193,6 @@ function ProjectsPage() {
                     }
                     title="Remove this Firebase project from FireOTA"
                     description="The project and its stored Google authorization are deleted from this workspace. Your Firebase project itself and every file in its bucket are left untouched."
-                    warning={
-                      project.apps > 0
-                        ? `${project.apps} application(s) still use this project — delete them or move them first.`
-                        : undefined
-                    }
                     confirmLabel="Remove project"
                     destructive
                     requireTyped="REMOVE"

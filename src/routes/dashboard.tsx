@@ -120,7 +120,7 @@ function DashboardPage() {
           <span className="font-mono text-[11px] text-muted-foreground">FIREBASE</span>
           <span className="text-[12px] font-medium">{firebase.name}</span>
           <span className="font-mono text-[10px] text-faint">
-            storage {firebase.storage ? "✓" : "✗"} · firestore {firebase.firestore ? "✓" : "✗"} · permissions{" "}
+            storage {firebase.storage ? "✓" : "✗"} · permissions{" "}
             {firebase.permissions ? "✓" : "✗"} · {firebase.status}
           </span>
           <Button variant="outline" size="sm" className="ml-auto h-7 text-[11px]" asChild>
@@ -161,10 +161,10 @@ function DashboardPage() {
         )}
       </div>
 
-      {/* Release health + activity */}
+      {/* Release health + recent releases (left), activity (right) */}
       <div className="grid items-start gap-3 xl:grid-cols-3">
+        <div className="space-y-3 xl:col-span-2">
         <SectionCard
-          className="xl:col-span-2"
           title="Release health"
           aside={<span className="font-mono text-[10px] text-faint">last 7 days</span>}
         >
@@ -202,14 +202,6 @@ function DashboardPage() {
           )}
         </SectionCard>
 
-        <SectionCard title="Recent activity">
-          <div className="max-h-[340px] overflow-y-auto">
-            {activity.data ? <ActivityFeed items={activity.data} /> : <SkeletonRows rows={4} cols={2} />}
-          </div>
-        </SectionCard>
-      </div>
-
-      {/* Recent releases */}
       <SectionCard
         title="Recent releases"
         aside={
@@ -224,7 +216,7 @@ function DashboardPage() {
           <EmptyState icon={Activity} title="No releases have been deployed." compact />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] text-[12px]">
+            <table className="w-full min-w-[640px] text-[12px]">
               <thead>
                 <tr className="border-b border-border text-left font-mono text-[10px] uppercase tracking-[0.08em] text-faint">
                   <th className="px-4 py-2 font-medium">Release</th>
@@ -273,6 +265,14 @@ function DashboardPage() {
           </div>
         )}
       </SectionCard>
+        </div>
+
+        <SectionCard title="Recent activity">
+          <div className="max-h-[520px] overflow-y-auto">
+            {activity.data ? <ActivityFeed items={activity.data} /> : <SkeletonRows rows={4} cols={2} />}
+          </div>
+        </SectionCard>
+      </div>
 
       {/* Active rollouts + progressive onboarding */}
       <div className="grid gap-3 xl:grid-cols-3">

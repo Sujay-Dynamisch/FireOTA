@@ -4,32 +4,50 @@ import { cn } from "@/lib/utils";
 
 export function WizardRail({ steps, current }: { steps: string[]; current: number }) {
   return (
-    <ol className="flex flex-wrap gap-x-4 gap-y-1.5 border-b border-border px-4 py-3">
-      {steps.map((step, index) => {
-        const state = index === current ? "active" : index < current ? "done" : "pending";
-        return (
-          <li key={step} className="flex items-center gap-1.5">
-            <span
-              aria-hidden
-              className={cn(
-                "font-mono text-[11px]",
-                state === "done" ? "text-success" : state === "active" ? "text-brand" : "text-faint",
-              )}
-            >
-              {state === "done" ? "✓" : state === "active" ? "◧" : "○"}
-            </span>
-            <span
-              className={cn(
-                "text-[12px]",
-                state === "active" ? "font-medium text-foreground" : "text-muted-foreground",
-              )}
-            >
-              {step}
-            </span>
-          </li>
-        );
-      })}
-    </ol>
+    <div className="border-b border-border px-5 py-4">
+      <div className="flex items-center justify-between gap-3 text-[11px]">
+        <span className="font-semibold text-brand">
+          Step {current + 1} of {steps.length}
+        </span>
+        <span className="truncate text-muted-foreground">{steps[current]}</span>
+      </div>
+      <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-surface-2">
+        <div
+          className="h-full rounded-full bg-gradient-to-r from-brand to-[#ff9a5a] transition-[width] duration-500"
+          style={{ width: `${((current + 1) / steps.length) * 100}%` }}
+        />
+      </div>
+      <ol className="mt-3 hidden flex-wrap gap-x-4 gap-y-1.5 sm:flex">
+        {steps.map((step, index) => {
+          const state = index === current ? "active" : index < current ? "done" : "pending";
+          return (
+            <li key={step} className="flex items-center gap-1.5">
+              <span
+                aria-hidden
+                className={cn(
+                  "grid size-5 place-items-center rounded-full text-[10px] font-semibold",
+                  state === "done"
+                    ? "bg-success/15 text-success"
+                    : state === "active"
+                      ? "bg-brand text-white"
+                      : "bg-surface-2 text-faint",
+                )}
+              >
+                {state === "done" ? "✓" : index + 1}
+              </span>
+              <span
+                className={cn(
+                  "text-[12px]",
+                  state === "active" ? "font-medium text-foreground" : "text-muted-foreground",
+                )}
+              >
+                {step}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+    </div>
   );
 }
 
@@ -49,14 +67,14 @@ export function WizardShell({
   footer: ReactNode;
 }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-surface/50">
+    <div className="overflow-hidden rounded-3xl border border-border bg-background/85 shadow-xl shadow-black/[0.04] backdrop-blur">
       <WizardRail steps={steps} current={current} />
-      <div className="p-5">
-        <h2 className="font-display text-[16px] font-bold tracking-tight">{title}</h2>
-        {description ? <p className="mt-1 max-w-xl text-[12px] text-muted-foreground">{description}</p> : null}
-        <div className="mt-5">{children}</div>
+      <div className="p-6">
+        <h2 className="font-display text-[20px] font-bold tracking-tight">{title}</h2>
+        {description ? <p className="mt-1.5 max-w-xl text-[13px] leading-relaxed text-muted-foreground">{description}</p> : null}
+        <div className="mt-6">{children}</div>
       </div>
-      <div className="flex items-center justify-between gap-2 border-t border-border px-4 py-3">{footer}</div>
+      <div className="flex items-center justify-between gap-2 border-t border-border bg-surface/40 px-5 py-3.5">{footer}</div>
     </div>
   );
 }
