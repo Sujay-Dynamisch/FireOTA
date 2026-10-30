@@ -44,6 +44,12 @@ import {
   verifyFirebaseProject,
 } from "@/lib/api/firebase.functions";
 import {
+  createStorageTargetFn,
+  deleteStorageTargetFn,
+  listStorageTargetsFn,
+  testStorageTargetFn,
+} from "@/lib/api/storage.functions";
+import {
   deleteConversation,
   getConversation,
   listConversations,
@@ -332,6 +338,21 @@ export const firebaseService = {
   remove: (id: string) => removeFirebaseProject({ data: { id } }),
 };
 
+export const storageService = {
+  list: () => listStorageTargetsFn(),
+  create: (input: {
+    name: string;
+    provider: "s3" | "r2" | "gcs" | "minio" | "azure" | "firebase" | "external";
+    bucket?: string;
+    endpoint?: string;
+    region?: string;
+    publicCdnUrl?: string;
+    credentials?: Record<string, unknown>;
+  }) => createStorageTargetFn({ data: input }),
+  test: (id: string) => testStorageTargetFn({ data: { id } }),
+  remove: (id: string) => deleteStorageTargetFn({ data: { id } }),
+};
+
 export const appsService = {
   list: (): Promise<AppRecord[]> => listApps() as Promise<AppRecord[]>,
   get: (id: string): Promise<AppRecord> => getApp({ data: { id } }) as Promise<AppRecord>,
@@ -340,6 +361,7 @@ export const appsService = {
     slug?: string;
     runtimeVersion?: string;
     firebaseProjectId?: string;
+    storageTargetId?: string;
     platforms?: { platform: "android" | "ios"; packageName?: string; bundleIdentifier?: string; nativeVersion: string }[];
   }) =>
     createApp({
@@ -347,6 +369,7 @@ export const appsService = {
         name: input.name,
         ...(input.slug ? { slug: input.slug } : {}),
         ...(input.firebaseProjectId ? { firebaseProjectId: input.firebaseProjectId } : {}),
+        ...(input.storageTargetId ? { storageTargetId: input.storageTargetId } : {}),
         runtimeVersion: input.runtimeVersion ?? "1.0.0",
         platforms:
           input.platforms ??

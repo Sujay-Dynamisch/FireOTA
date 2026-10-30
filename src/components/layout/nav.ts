@@ -3,6 +3,7 @@ import {
   BookOpen,
   Boxes,
   Bot,
+  Cloud,
   Database,
   GitBranch,
   KeyRound,
@@ -46,7 +47,7 @@ export const navGroups: NavGroup[] = [
   {
     label: "Workspace",
     items: [
-      { label: "Projects", to: "/projects", icon: Database },
+      { label: "Storage", to: "/projects", icon: Cloud },
       { label: "Team", to: "/team", icon: Users },
       { label: "Audit Logs", to: "/audit-logs", icon: ScrollText, permission: "audit.read" },
       { label: "Security", to: "/security", icon: ShieldAlert, permission: "security.read" },

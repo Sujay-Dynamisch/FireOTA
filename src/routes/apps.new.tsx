@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -25,7 +25,7 @@ export const Route = createFileRoute("/apps/new")({
   component: NewAppPage,
 });
 
-const steps = ["Details", "Firebase project", "Platforms", "Runtime", "Channels", "Review"];
+const steps = ["Details", "Storage target", "Platforms", "Runtime", "Channels", "Review"];
 
 function NewAppPage() {
   const navigate = useNavigate();
@@ -41,6 +41,7 @@ function NewAppPage() {
   const [channels, setChannels] = useState<string[]>(["production", "beta"]);
   const [defaultChannel, setDefaultChannel] = useState("production");
   const projects = useQuery(q.projects());
+  const storageTargets = useQuery(q.storageTargets());
   const [pending, setPending] = useState(false);
 
   const next = () => setStep((s) => Math.min(s + 1, steps.length - 1));
@@ -96,8 +97,8 @@ function NewAppPage() {
         <WizardShell
           steps={steps}
           current={1}
-          title="Firebase project"
-          description="Bundles and assets for this application will be stored in the selected Firebase project."
+          title="Storage target"
+          description="Bundles and assets for this application will be stored in your own cloud bucket."
           footer={
             <>
               <Button variant="outline" size="sm" onClick={back}>
@@ -109,20 +110,30 @@ function NewAppPage() {
             </>
           }
         >
-          <Field label="Destination project">
+          <Field label="Destination storage target" hint="Pick which connected cloud bucket will store this app's releases">
             <Select value={project} onValueChange={setProject}>
               <SelectTrigger className="h-9 max-w-sm text-[12px]">
-                <SelectValue />
+                <SelectValue placeholder="Select storage target" />
               </SelectTrigger>
               <SelectContent>
+                {(storageTargets.data ?? []).map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.name} ({t.provider.toUpperCase()}{t.bucket ? ` · ${t.bucket}` : ""})
+                  </SelectItem>
+                ))}
                 {(projects.data ?? []).map((option) => (
                   <SelectItem key={option.id} value={option.id}>
-                    {option.firebaseId} · {option.name}
+                    {option.name} (Firebase · {option.storageBucket})
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </Field>
+          <div className="mt-3">
+            <Button variant="outline" size="sm" className="h-7 text-[11px]" asChild>
+              <Link to="/projects/connect">+ Connect New Storage (R2, S3, MinIO, GCS, Azure)</Link>
+            </Button>
+          </div>
         </WizardShell>
       )}
 
@@ -276,7 +287,7 @@ function NewAppPage() {
                       name,
                       slug,
                       runtimeVersion: runtime,
-                      ...(project ? { firebaseProjectId: project } : {}),
+                      ...(project ? { storageTargetId: project, firebaseProjectId: project } : {}),
                       platforms: [
                         ...(android
                           ? [{ platform: "android" as const, packageName: androidPackage, nativeVersion: runtime }]

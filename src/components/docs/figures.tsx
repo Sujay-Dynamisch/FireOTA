@@ -271,6 +271,184 @@ export function RolloutBucketsDiagram({ percent = 10 }: { percent?: number }) {
   );
 }
 
+/** Visual architecture diagram comparing FireOTA control plane (metadata only) with customer cloud storage (zero-proxy data plane). */
+export function StorageArchitectureDiagram() {
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-3 sm:grid-cols-3">
+        {/* Step 1: CI / Developer */}
+        <div className="flex flex-col rounded-xl border border-border bg-background p-3.5">
+          <div className="flex items-center gap-2 text-foreground">
+            <span className="grid size-7 place-items-center rounded-lg bg-brand/10 text-brand">
+              <MIcon name="terminal" className="text-[18px]" />
+            </span>
+            <div>
+              <p className="text-[12px] font-semibold">1. Developer / CI</p>
+              <p className="text-[10px] text-muted-foreground">GitHub Actions / CLI</p>
+            </div>
+          </div>
+          <div className="mt-3 flex-1 space-y-1.5 rounded-lg border border-border bg-surface-2/50 p-2 font-mono text-[10.5px]">
+            <p className="text-foreground">$ npx fireota release</p>
+            <p className="text-muted-foreground">→ Compiles JS bundle</p>
+            <p className="text-muted-foreground">→ Archives into .fota</p>
+            <p className="text-emerald-500 font-medium">→ Computes SHA-256 hash</p>
+          </div>
+        </div>
+
+        {/* Step 2: Split Planes */}
+        <div className="space-y-2.5">
+          {/* Customer Cloud Storage */}
+          <div className="rounded-xl border border-border bg-background p-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-foreground">
+                <span className="grid size-6 place-items-center rounded-md bg-amber-500/10 text-amber-500">
+                  <MIcon name="cloud_upload" className="text-[15px]" />
+                </span>
+                <span className="text-[11px] font-semibold">Customer Cloud Storage</span>
+              </div>
+              <span className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-medium text-emerald-500">
+                Data Plane
+              </span>
+            </div>
+            <p className="mt-1 text-[10px] text-muted-foreground">
+              Cloudflare R2, AWS S3, MinIO, GCS, Azure or BYOU CDN.
+            </p>
+            <div className="mt-2 rounded border border-border bg-surface-2/60 px-2 py-1 font-mono text-[10px] text-foreground">
+              📦 stores .fota packages
+            </div>
+          </div>
+
+          {/* FireOTA Control Plane */}
+          <div className="rounded-xl border border-border bg-background p-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-foreground">
+                <span className="grid size-6 place-items-center rounded-md bg-brand/10 text-brand">
+                  <MIcon name="local_fire_department" className="text-[15px]" />
+                </span>
+                <span className="text-[11px] font-semibold">FireOTA Control Plane</span>
+              </div>
+              <span className="rounded-full bg-brand/10 px-1.5 py-0.5 text-[9px] font-medium text-brand">
+                Metadata Only
+              </span>
+            </div>
+            <p className="mt-1 text-[10px] text-muted-foreground">
+              Channels, staged rollouts, runtime matching, device telemetry.
+            </p>
+            <div className="mt-2 rounded border border-border bg-surface-2/60 px-2 py-1 font-mono text-[10px] text-emerald-500">
+              🛡️ 0 bundle bytes stored
+            </div>
+          </div>
+        </div>
+
+        {/* Step 3: Client Mobile Devices */}
+        <div className="flex flex-col rounded-xl border border-border bg-background p-3.5">
+          <div className="flex items-center gap-2 text-foreground">
+            <span className="grid size-7 place-items-center rounded-lg bg-brand/10 text-brand">
+              <MIcon name="smartphone" className="text-[18px]" />
+            </span>
+            <div>
+              <p className="text-[12px] font-semibold">3. Mobile Applications</p>
+              <p className="text-[10px] text-muted-foreground">React Native / Expo SDK</p>
+            </div>
+          </div>
+          <div className="mt-3 flex-1 space-y-1.5 rounded-lg border border-border bg-surface-2/50 p-2 text-[10.5px]">
+            <p className="flex items-center gap-1.5 text-muted-foreground">
+              <MIcon name="sync" className="text-[13px] text-brand" />
+              1. Checks FireOTA for manifest
+            </p>
+            <p className="flex items-center gap-1.5 text-muted-foreground">
+              <MIcon name="download" className="text-[13px] text-amber-500" />
+              2. Downloads direct from your bucket
+            </p>
+            <p className="flex items-center gap-1.5 text-emerald-500 font-medium">
+              <MIcon name="verified_user" className="text-[13px]" />
+              3. Verifies SHA-256 before apply
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Security badge footer */}
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-[11px] text-foreground">
+        <span className="flex items-center gap-1.5 font-medium text-emerald-600 dark:text-emerald-400">
+          <MIcon name="shield" filled className="text-[15px]" />
+          Zero-Proxy Sovereign Architecture
+        </span>
+        <span className="text-[10px] text-muted-foreground">
+          Your compiled JavaScript never touches FireOTA servers. Mobile devices stream directly from your storage or CDN.
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** Diagram illustrating the 4-step Bring Your Own URL (BYOU) enterprise workflow. */
+export function ByouFlowDiagram() {
+  const steps = [
+    {
+      num: "1",
+      icon: "precision_manufacturing",
+      title: "Build in CI/CD",
+      desc: "Bundles JS & packages .fota with SHA-256 hash",
+      code: "npx react-native bundle",
+    },
+    {
+      num: "2",
+      icon: "cloud_upload",
+      title: "Upload to Your CDN",
+      desc: "CI pushes .fota to your S3, R2, or Akamai CDN",
+      code: "aws s3 cp release.fota s3://cdn/...",
+    },
+    {
+      num: "3",
+      icon: "bolt",
+      title: "Register Release",
+      desc: "Registers download URL & hash (sub-second)",
+      code: "fireota release --bundle-url ...",
+    },
+    {
+      num: "4",
+      icon: "verified_user",
+      title: "Device Download",
+      desc: "Mobile device streams from CDN & checks hash",
+      code: "SHA-256 match → atomic swap",
+    },
+  ];
+
+  return (
+    <div className="space-y-3">
+      <div className="grid gap-2 sm:grid-cols-4">
+        {steps.map((s, idx) => (
+          <div key={s.num} className="relative rounded-xl border border-border bg-background p-3">
+            <div className="flex items-center gap-1.5">
+              <span className="grid size-5 place-items-center rounded-full bg-brand/10 font-mono text-[10px] font-bold text-brand">
+                {s.num}
+              </span>
+              <p className="text-[11.5px] font-semibold text-foreground">{s.title}</p>
+            </div>
+            <p className="mt-1 text-[10.5px] leading-tight text-muted-foreground">{s.desc}</p>
+            <div className="mt-2.5 truncate rounded bg-surface-2 px-1.5 py-1 font-mono text-[9.5px] text-foreground">
+              {s.code}
+            </div>
+            {idx < steps.length - 1 ? (
+              <MIcon
+                name="arrow_forward"
+                className="absolute -bottom-3 left-1/2 z-10 -translate-x-1/2 rotate-90 rounded-full bg-surface-2 text-[14px] text-faint sm:-right-3 sm:bottom-auto sm:left-auto sm:top-1/2 sm:-translate-y-1/2 sm:translate-x-0 sm:rotate-0"
+              />
+            ) : null}
+          </div>
+        ))}
+      </div>
+      <div className="flex items-center gap-2 rounded-lg border border-border bg-surface-2/60 px-3 py-2 text-[11px] text-muted-foreground">
+        <MIcon name="info" className="text-[15px] text-brand shrink-0" />
+        <span>
+          <strong>Why BYOU?</strong> Enterprise pipelines keep full control of code artifacts and CDN caching. FireOTA only stores metadata and never requires cloud credentials.
+        </span>
+      </div>
+    </div>
+  );
+}
+
 /* --------------------------- external tool mock-ups --------------------------- */
 
 export function FirebaseStorageMock() {
@@ -295,6 +473,57 @@ export function FirebaseStorageMock() {
           <p className="pt-1 font-mono text-[10px] text-faint">
             bucket → gs://my-app.firebasestorage.app
           </p>
+        </div>
+      </div>
+    </BrowserFrame>
+  );
+}
+
+/** Cloudflare R2 Console showing bucket settings, zero egress rate, and S3 credentials. */
+export function CloudflareR2SetupMock() {
+  return (
+    <BrowserFrame url="dash.cloudflare.com/.../r2/default/buckets/mobile-ota-releases">
+      <div className="space-y-3">
+        {/* Breadcrumb & Header */}
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-2.5">
+          <div>
+            <p className="font-mono text-[10px] text-muted-foreground">R2 Object Storage &gt; Buckets</p>
+            <p className="text-[14px] font-bold text-foreground">mobile-ota-releases</p>
+          </div>
+          <div className="flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[10.5px] font-medium text-emerald-600 dark:text-emerald-400">
+            <MIcon name="bolt" className="text-[14px]" /> Zero Egress Bandwidth Fees
+          </div>
+        </div>
+
+        {/* Cloudflare Stats Grid */}
+        <div className="grid grid-cols-3 gap-2">
+          <div className="rounded-lg border border-border bg-background p-2">
+            <p className="text-[10px] text-muted-foreground">Bucket Size</p>
+            <p className="font-mono text-[12px] font-bold text-foreground">38.4 MB</p>
+          </div>
+          <div className="rounded-lg border border-border bg-background p-2">
+            <p className="text-[10px] text-muted-foreground">Egress Bandwidth</p>
+            <p className="font-mono text-[12px] font-bold text-emerald-500">$0.00 / Free</p>
+          </div>
+          <div className="rounded-lg border border-border bg-background p-2">
+            <p className="text-[10px] text-muted-foreground">Custom Domain</p>
+            <p className="truncate font-mono text-[10.5px] font-medium text-foreground">ota.mycompany.com</p>
+          </div>
+        </div>
+
+        {/* S3 API Credentials Callout */}
+        <div className="space-y-2 rounded-lg border border-border bg-surface-2 p-2.5">
+          <p className="text-[11px] font-semibold text-foreground">S3 API Compatibility Configuration</p>
+          <div className="grid gap-1.5 text-[10px]">
+            <div className="flex flex-wrap items-center justify-between gap-1 rounded bg-background px-2 py-1 font-mono">
+              <span className="text-muted-foreground">S3 Endpoint URL:</span>
+              <span className="text-foreground">https://&lt;account-id&gt;.r2.cloudflarestorage.com</span>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-1 rounded bg-background px-2 py-1 font-mono">
+              <span className="text-muted-foreground">API Token Permission:</span>
+              <span className="font-semibold text-emerald-600 dark:text-emerald-400">Object Read &amp; Write</span>
+            </div>
+          </div>
         </div>
       </div>
     </BrowserFrame>
@@ -367,6 +596,194 @@ export function ConnectFirebaseMock() {
             ) : null}
           </div>
         ))}
+      </div>
+    </BrowserFrame>
+  );
+}
+
+/** Framed mockup of the Connect Storage Target wizard with multi-cloud selector and live automated probe test results. */
+export function ConnectStorageMock() {
+  const providers = [
+    { name: "Cloudflare R2", tag: "Recommended · $0 Egress", active: true, icon: "cloud_done" },
+    { name: "Amazon S3", tag: "AWS IAM SigV4", active: false, icon: "cloud" },
+    { name: "MinIO / S3", tag: "Self-hosted / Private", active: false, icon: "dns" },
+    { name: "Google Cloud", tag: "Service Account JSON", active: false, icon: "cloud_circle" },
+    { name: "Azure Blob", tag: "Shared Key", active: false, icon: "cloud_sync" },
+    { name: "BYOU", tag: "Bring Your Own URL", active: false, icon: "link" },
+  ];
+
+  return (
+    <BrowserFrame url="fireota.example.com/projects/connect">
+      <div className="space-y-3.5">
+        <div>
+          <p className="text-[14px] font-semibold text-foreground">Connect Cloud Storage Target</p>
+          <p className="text-[11px] text-muted-foreground">
+            FireOTA stores metadata only. All bundle packages are stored in and served directly from your sovereign bucket.
+          </p>
+        </div>
+
+        {/* Provider selector grid */}
+        <div>
+          <label className="text-[10px] font-semibold uppercase tracking-wider text-faint">
+            Select Cloud Storage Provider
+          </label>
+          <div className="mt-1.5 grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {providers.map((p) => (
+              <div
+                key={p.name}
+                className={cn(
+                  "flex items-center justify-between rounded-lg border p-2 text-left transition-colors",
+                  p.active
+                    ? "border-brand bg-brand/5 shadow-xs ring-1 ring-brand"
+                    : "border-border bg-background",
+                )}
+              >
+                <div className="flex items-center gap-2">
+                  <MIcon
+                    name={p.icon}
+                    className={cn("text-[17px]", p.active ? "text-brand" : "text-muted-foreground")}
+                  />
+                  <div>
+                    <p className="text-[11px] font-medium text-foreground">{p.name}</p>
+                    <p className="text-[9px] text-muted-foreground">{p.tag}</p>
+                  </div>
+                </div>
+                {p.active ? (
+                  <MIcon name="check_circle" filled className="text-[14px] text-brand" />
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Form fields */}
+        <div className="grid gap-2.5 sm:grid-cols-2">
+          <FieldMock label="Target Label" value="Production Cloudflare R2" />
+          <FieldMock label="Cloudflare Account ID" value="8f7b2c90e1a4d538201fa7b98c3e2104" mono />
+          <FieldMock label="Bucket Name" value="mobile-ota-releases" mono />
+          <FieldMock
+            label="Public Domain / CDN URL (Optional)"
+            value="https://ota.mycompany.com"
+            hint="For zero egress custom domain streaming"
+            mono
+          />
+          <FieldMock label="Access Key ID" value="cf_r2_fota_98a71c0b3d" mono />
+          <FieldMock label="Secret Access Key" value="••••••••••••••••••••••••••••••••" mono />
+        </div>
+
+        {/* Live Probe Verification Box */}
+        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-[11px]">
+          <div className="flex items-center justify-between">
+            <span className="flex items-center gap-1.5 font-semibold text-emerald-700 dark:text-emerald-300">
+              <MIcon name="verified" filled className="text-[16px]" />
+              Automated Health Check Probe (Completed in 218ms)
+            </span>
+            <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[9px] font-mono font-medium text-emerald-600 dark:text-emerald-300">
+              Verified &amp; Ready
+            </span>
+          </div>
+          <div className="mt-2 space-y-1 font-mono text-[10px] text-foreground/90">
+            <p className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
+              <span>✓</span> Endpoint reachable via AWS SigV4 handshake (HTTP 200 OK)
+            </p>
+            <p className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
+              <span>✓</span> Write probe: Created <code className="text-foreground">fireota/.healthcheck-probe</code>
+            </p>
+            <p className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
+              <span>✓</span> Read probe: Byte stream integrity verified 100%
+            </p>
+            <p className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
+              <span>✓</span> Cleanup probe: Deleted temporary healthcheck object
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between pt-1">
+          <p className="text-[10px] text-faint">
+            🔒 Credentials are encrypted at rest with AES-256-GCM.
+          </p>
+          <div className="flex gap-2">
+            <span className="rounded-md border border-border px-3 py-1 text-[11px] font-medium text-foreground">
+              Cancel
+            </span>
+            <Btn primary>
+              <MIcon name="link" className="text-[13px]" /> Save &amp; Connect Target
+            </Btn>
+          </div>
+        </div>
+      </div>
+    </BrowserFrame>
+  );
+}
+
+/** Framed mockup of the Storage Targets management dashboard in FireOTA. */
+export function StorageTargetsListMock() {
+  const targets = [
+    {
+      name: "Production Cloudflare R2",
+      type: "Cloudflare R2",
+      bucket: "mobile-ota-releases",
+      cdn: "https://ota.mycompany.com",
+      apps: "2 apps connected",
+      status: "Verified",
+    },
+    {
+      name: "AWS S3 West Backup",
+      type: "Amazon S3",
+      bucket: "company-mobile-assets",
+      cdn: "us-west-2",
+      apps: "1 app connected",
+      status: "Verified",
+    },
+    {
+      name: "Corporate CDN (BYOU)",
+      type: "Bring Your Own URL",
+      bucket: "External CDN",
+      cdn: "https://cdn.mycompany.com",
+      apps: "1 app connected",
+      status: "Active",
+    },
+  ];
+
+  return (
+    <BrowserFrame url="fireota.example.com/projects">
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-[14px] font-semibold text-foreground">Storage Targets</p>
+            <p className="text-[11px] text-muted-foreground">
+              Connected cloud storage buckets and sovereign CDN endpoints.
+            </p>
+          </div>
+          <Btn primary>
+            <MIcon name="add" className="text-[13px]" /> Connect Storage
+          </Btn>
+        </div>
+
+        <div className="divide-y divide-border rounded-lg border border-border">
+          {targets.map((t) => (
+            <div key={t.name} className="flex flex-wrap items-center justify-between gap-2 p-2.5">
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2">
+                  <p className="text-[11.5px] font-semibold text-foreground">{t.name}</p>
+                  <span className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-[9px] text-muted-foreground">
+                    {t.type}
+                  </span>
+                </div>
+                <p className="font-mono text-[10px] text-muted-foreground">
+                  bucket: {t.bucket} · endpoint: {t.cdn}
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] text-faint">{t.apps}</span>
+                <span className="flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[9.5px] font-medium text-emerald-600 dark:text-emerald-400">
+                  <span className="size-1.5 rounded-full bg-emerald-500" />
+                  {t.status}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </BrowserFrame>
   );

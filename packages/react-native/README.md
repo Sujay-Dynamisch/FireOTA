@@ -296,6 +296,10 @@ Use [`@fireota/cli`](https://www.npmjs.com/package/@fireota/cli):
 npx fireota publish --app YOUR_APP_ID --platform all --runtime 1.3.0 --channel production --rollout 10 --message "Fix checkout crash"
 ```
 
+## Changelog
+
+See the root [CHANGELOG.md](../../CHANGELOG.md) for full version history and release notes.
+
 ## License
 
 MIT

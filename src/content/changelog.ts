@@ -35,6 +35,59 @@ const SUJAL: ChangelogAuthor = {
 
 export const changelog: ChangelogEntry[] = [
   {
+    slug: "multi-cloud-sovereign-storage",
+    date: "2026-10-30",
+    title: "Multi-Cloud Sovereign Storage: Cloudflare R2, AWS S3, MinIO, GCS, Azure, and BYOU",
+    summary:
+      "FireOTA no longer requires Firebase Storage. Connect your own Cloudflare R2 ($0 egress), AWS S3, MinIO, GCS, or Azure bucket with live probe verification, or Bring Your Own URL in CI/CD with 100% code sovereignty.",
+    tags: ["Storage", "Cloudflare R2", "AWS S3", "MinIO", "BYOU", "Docs"],
+    authors: [SUJAL],
+    body: [
+      { type: "h", text: "Total code sovereignty: zero proprietary bundle hosting" },
+      {
+        type: "p",
+        text: "Customer application bundles live exclusively inside your own cloud buckets. FireOTA coordinates release metadata, deterministic rollout percentages, version compatibility and telemetry, but never stores your compiled JavaScript on its servers. Mobile devices stream directly from your storage or CDN with local SHA-256 verification.",
+      },
+      { type: "h", text: "Supported cloud providers" },
+      {
+        type: "list",
+        items: [
+          "Cloudflare R2 — zero data egress fees, perfect for high-volume mobile updates.",
+          "Amazon S3 — native AWS IAM authentication with CloudFront CDN integration.",
+          "MinIO & S3-compatible — self-hosted, air-gapped, on-premise, Wasabi, or DigitalOcean Spaces.",
+          "Google Cloud Storage (GCS) — connect directly via Service Account JSON without OAuth consent screens.",
+          "Azure Blob Storage — Microsoft Azure enterprise shared key authentication.",
+          "Bring Your Own URL (BYOU) — point directly to existing corporate CDNs with no storage credentials required in FireOTA.",
+          "Firebase Storage — legacy Google OAuth flow for existing projects.",
+        ],
+      },
+      { type: "h", text: "Automated 4-stage live health probe test" },
+      {
+        type: "p",
+        text: "When connecting a storage target in the dashboard, FireOTA immediately executes a live probe test in under 300ms: establishes an AWS SigV4 handshake, writes fireota/.healthcheck-probe, verifies byte-for-byte stream integrity, and cleans up the temporary file before activating the target.",
+      },
+      { type: "h", text: "Bring Your Own URL (BYOU) in CI/CD" },
+      {
+        type: "p",
+        text: "Deploying from an automated CI/CD pipeline that already hosts bundles on Akamai, CloudFront or an internal CDN? You can now register and publish updates in milliseconds without providing any storage credentials to FireOTA:",
+      },
+      {
+        type: "code",
+        code: 'npx fireota release \\\n  --app <appId> \\\n  --platform android \\\n  --runtime 1.4.0 \\\n  --channel production \\\n  --bundle-url https://cdn.mycompany.com/updates/v1.4.0.fota \\\n  --bundle-hash 9b1e4c...a07d \\\n  --bundle-size 1928374',
+      },
+      { type: "h", text: "Visual step-by-step guides and diagrams" },
+      {
+        type: "list",
+        items: [
+          "Interactive Zero-Proxy architecture diagrams in the docs.",
+          "Cloudflare R2 console configuration mockups showing zero egress rate settings.",
+          "Live connection wizard walkthroughs with passing probe checkmarks.",
+          "Updated documentation under /docs/storage-targets.",
+        ],
+      },
+    ],
+  },
+  {
     slug: "fireota-cli-0-5-0",
     date: "2026-10-27",
     title: "CLI 0.5.0: Expo Updates without EAS, and Archive / Delete in Releases",

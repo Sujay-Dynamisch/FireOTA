@@ -437,6 +437,7 @@ export type Database = {
           created_by: string | null
           default_channel: string
           firebase_project_id: string | null
+          storage_target_id: string | null
           id: string
           name: string
           organization_id: string
@@ -450,6 +451,7 @@ export type Database = {
           created_by?: string | null
           default_channel?: string
           firebase_project_id?: string | null
+          storage_target_id?: string | null
           id?: string
           name: string
           organization_id: string
@@ -463,6 +465,7 @@ export type Database = {
           created_by?: string | null
           default_channel?: string
           firebase_project_id?: string | null
+          storage_target_id?: string | null
           id?: string
           name?: string
           organization_id?: string
@@ -1177,6 +1180,7 @@ export type Database = {
           runtime_version: string
           status: Database["public"]["Enums"]["release_status"]
           storage_path: string | null
+          external_bundle_url: string | null
           updated_at: string
           version: string
         }
@@ -1209,6 +1213,7 @@ export type Database = {
           runtime_version: string
           status?: Database["public"]["Enums"]["release_status"]
           storage_path?: string | null
+          external_bundle_url?: string | null
           updated_at?: string
           version: string
         }
@@ -1241,6 +1246,7 @@ export type Database = {
           runtime_version?: string
           status?: Database["public"]["Enums"]["release_status"]
           storage_path?: string | null
+          external_bundle_url?: string | null
           updated_at?: string
           version?: string
         }
@@ -1335,6 +1341,62 @@ export type Database = {
             columns: ["release_id"]
             isOneToOne: true
             referencedRelation: "releases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      storage_targets: {
+        Row: {
+          bucket: string | null
+          config_ciphertext: string | null
+          created_at: string
+          endpoint: string | null
+          id: string
+          last_verified_at: string | null
+          name: string
+          organization_id: string
+          provider: Database["public"]["Enums"]["storage_provider_type"]
+          public_cdn_url: string | null
+          region: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          bucket?: string | null
+          config_ciphertext?: string | null
+          created_at?: string
+          endpoint?: string | null
+          id?: string
+          last_verified_at?: string | null
+          name: string
+          organization_id: string
+          provider: Database["public"]["Enums"]["storage_provider_type"]
+          public_cdn_url?: string | null
+          region?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          bucket?: string | null
+          config_ciphertext?: string | null
+          created_at?: string
+          endpoint?: string | null
+          id?: string
+          last_verified_at?: string | null
+          name?: string
+          organization_id?: string
+          provider?: Database["public"]["Enums"]["storage_provider_type"]
+          public_cdn_url?: string | null
+          region?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "storage_targets_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -1483,6 +1545,14 @@ export type Database = {
         | "archived"
         | "failed"
         | "deleted"
+      storage_provider_type:
+        | "s3"
+        | "r2"
+        | "gcs"
+        | "minio"
+        | "azure"
+        | "firebase"
+        | "external"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1639,6 +1709,15 @@ export const Constants = {
         "archived",
         "failed",
         "deleted",
+      ],
+      storage_provider_type: [
+        "s3",
+        "r2",
+        "gcs",
+        "minio",
+        "azure",
+        "firebase",
+        "external",
       ],
     },
   },

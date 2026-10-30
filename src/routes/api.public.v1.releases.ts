@@ -25,6 +25,13 @@ const createSchema = z.object({
   gitCommitSha: z.string().max(64).optional(),
   gitBranch: z.string().max(120).optional(),
   buildNumber: z.string().max(40).optional(),
+  externalBundle: z
+    .object({
+      url: z.string().url(),
+      sha256: z.string().length(64),
+      size: z.number().positive(),
+    })
+    .optional(),
 });
 
 export const Route = createFileRoute("/api/public/v1/releases")({
@@ -71,6 +78,7 @@ export const Route = createFileRoute("/api/public/v1/releases")({
             ...(body.gitCommitSha ? { gitCommitSha: body.gitCommitSha } : {}),
             ...(body.gitBranch ? { gitBranch: body.gitBranch } : {}),
             ...(body.buildNumber ? { buildNumber: body.buildNumber } : {}),
+            ...(body.externalBundle ? { externalBundle: body.externalBundle } : {}),
             ...(idempotencyKey ? { idempotencyKey } : {}),
           });
           return jsonOk(

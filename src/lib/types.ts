@@ -73,6 +73,22 @@ export interface RuntimeGroup {
   updates: { id: string; label: string; platform: Platform; status: string; message: string; createdAt: string }[];
 }
 
+export type StorageProviderType = "s3" | "r2" | "gcs" | "minio" | "azure" | "firebase" | "external";
+
+export interface StorageTargetRecord {
+  id: string;
+  name: string;
+  provider: StorageProviderType;
+  bucket: string | null;
+  endpoint: string | null;
+  region: string | null;
+  publicCdnUrl: string | null;
+  status: "connected" | "permission_error" | "disconnected";
+  lastVerifiedAt: string | null;
+  appsCount?: number;
+  createdAt: string;
+}
+
 export interface FirebaseProject {
   id: string;
   name: string;
@@ -99,6 +115,7 @@ export interface AppRecord {
   currentRelease: string;
   status: "active" | "paused" | "setup";
   firebaseProjectId: string;
+  storageTargetId?: string | null;
   devices: { android: number; ios: number };
   updateRate: { android: number; ios: number };
   codeSigning?: { keyId: string | null; required: boolean };

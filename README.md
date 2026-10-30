@@ -5,7 +5,7 @@
 <h1 align="center">FireOTA</h1>
 
 <p align="center">
-  Over-the-air updates for React Native — served from <strong>your own Firebase project</strong>.<br />
+  Over-the-air updates for React Native — served directly from <strong>your own cloud storage</strong> (Cloudflare R2, AWS S3, MinIO, GCS, Azure, or Firebase).<br />
   Staged rollouts, checksum verification, automatic rollback, audit logs and a CI-ready CLI.
 </p>
 
@@ -21,7 +21,7 @@
 
 Ship JavaScript fixes and features to your React Native app **without a store review**:
 
-1. `npx fireota publish` bundles your JS (Hermes bytecode + images) and uploads it to **your** Firebase Storage bucket.
+1. `npx fireota publish` bundles your JS (Hermes bytecode + images) and uploads it to **your** cloud storage bucket (or publishes via your own CDN URL).
 2. FireOTA records the release — version, runtime, SHA-256, channel, rollout — and writes every action to an audit log.
 3. The SDK in your app checks for a compatible release on launch, downloads it **directly from your bucket**, verifies the checksum, and applies it on the next start.
 4. If the new bundle crashes before starting, the device rolls back to the previous bundle automatically and reports it.
@@ -37,7 +37,7 @@ You own the artifacts and pay Google directly for storage and bandwidth. FireOTA
 | **Safety** | Server-side SHA-256, exact runtime matching, native-version constraints, automatic pause on high failure rates |
 | **Teams** | Organizations, roles (owner, admin, release manager, developer, viewer), Supabase Row Level Security |
 | **Integrations** | Scoped API keys, CI/CD API, HMAC-signed webhooks with retries, notifications, analytics |
-| **Firebase** | Google OAuth (PKCE) per customer project, encrypted refresh tokens, live Storage write verification |
+| **Sovereign Storage** | Cloudflare R2 (zero egress fees), AWS S3, MinIO, Google Cloud Storage, Azure Blob, BYOU, and Firebase with live health probes |
 
 ## Repository layout
 
@@ -183,7 +183,7 @@ Integration tests create and delete throwaway users and organizations in the Sup
 
 ## Status
 
-The SDK and CLI are **beta (0.x)**: verified end to end on Android with React Native 0.87 (publish → download → install on a real device). iOS is implemented but not yet device-tested.
+The SDK and CLI are **beta (0.x)**: verified end to end on Android with React Native 0.87 (publish → download → install on a real device). iOS is implemented but not yet device-tested. See [CHANGELOG.md](CHANGELOG.md) for version release notes and what's new.
 
 ## License
 
