@@ -14,8 +14,11 @@ import {
   AnalyticsEventsMock,
   ApiKeyMock,
   AppIdMock,
+  ByouFlowDiagram,
   ChannelsMock,
   ConnectFirebaseMock,
+  CloudflareR2SetupMock,
+  ConnectStorageMock,
   CustomPromptMock,
   ExpoUpdatesFlowDiagram,
   ReleaseActionsMock,
@@ -26,6 +29,8 @@ import {
   RolloutBucketsDiagram,
   RuntimeMatchDiagram,
   RuntimesMock,
+  StorageArchitectureDiagram,
+  StorageTargetsListMock,
   TerminalFrame,
   ThemeCompareMock,
   UpdateFlowDiagram,
@@ -812,7 +817,7 @@ export const docGroups: DocGroup[] = [
             body: (
               <Steps
                 items={[
-                  <><D to="firebase-setup">Set up Cloud Storage</D> in your Firebase project.</>,
+                  <><D to="storage-targets">Connect your Cloud Storage</D> (Cloudflare R2, AWS S3, MinIO, GCS, Azure, or Firebase).</>,
                   <><D to="workspace">Create your workspace</D> and connect the Firebase project.</>,
                   <><D to="register-app">Register your app</D> and copy its App ID.</>,
                   <><D to="install-sdk">Install the SDK</D> and wire it into <D to="android-setup">Android</D> and <D to="ios-setup">iOS</D>.</>,
@@ -857,6 +862,117 @@ export const docGroups: DocGroup[] = [
     title: "Set up",
     icon: "settings",
     pages: [
+      {
+        slug: "storage-targets",
+        title: "Multi-Cloud Sovereign Storage",
+        badge: "new",
+        description: "Connect your own cloud storage: Cloudflare R2, AWS S3, MinIO, GCS, Azure, or BYOU.",
+        sections: [
+          {
+            id: "sovereignty",
+            title: "Total code sovereignty (Zero-Proxy)",
+            body: (
+              <>
+                <p>
+                  FireOTA enforces <strong>zero proprietary bundle hosting</strong>. Customer application code and OTA bundles live
+                  exclusively in your own cloud buckets. FireOTA coordinates release metadata, deterministic rollout percentages,
+                  version compatibility and telemetry, but never stores your compiled JavaScript on its servers.
+                </p>
+                <p className="my-2"><Figure caption="Zero-Proxy Architecture: FireOTA coordinates metadata and rollout percentages while bundles stream directly from your own cloud bucket to mobile devices with SHA-256 verification.">
+                  <StorageArchitectureDiagram />
+                </Figure>
+                </p>
+                <Callout kind="tip">
+                  <strong>Recommended for OTA: Cloudflare R2</strong>. Cloudflare R2 has <strong>zero data egress fees</strong>,
+                  making it substantially more cost-effective for high-volume mobile updates than standard AWS S3.
+                </Callout>
+              </>
+            ),
+          },
+          {
+            id: "providers",
+            title: "Supported cloud providers",
+            body: (
+              <FieldTable
+                head={["Provider", "Authentication", "Best for"]}
+                rows={[
+                  [<C>Cloudflare R2</C>, "Account ID + Access Key + Secret Key", "Zero egress fees, high-frequency updates"],
+                  [<C>Amazon S3</C>, "Region + IAM Access Key + Secret Key", "AWS native shops, CloudFront CDN"],
+                  [<C>MinIO / S3</C>, "Endpoint URL + Access Key + Secret Key", "On-premise, air-gapped, local dev"],
+                  [<C>Google Cloud (GCS)</C>, "Service Account JSON Key", "GCP teams without OAuth consent screens"],
+                  [<C>Azure Blob</C>, "Account Name + Account Key", "Microsoft Azure enterprise infrastructure"],
+                  [<C>Bring Your Own URL</C>, "None required (SHA-256 validated)", "CI/CD pipelines with existing CDNs"],
+                  [<C>Firebase Storage</C>, "Google OAuth Flow", "Existing Firebase mobile projects"],
+                ]}
+              />
+            ),
+          },
+          {
+            id: "connect",
+            title: "How to connect a storage target",
+            body: (
+              <>
+                <p>Open <A to="/projects">Storage</A> in the sidebar and click <strong>Connect Storage</strong>:</p>
+                <Steps
+                  items={[
+                    <>
+                      Select your cloud provider (e.g. <strong>Cloudflare R2</strong>, <strong>Amazon S3</strong>, <strong>MinIO</strong>, <strong>GCS</strong>, or <strong>Azure</strong>). For Cloudflare R2, generate an API token with <strong>Object Read &amp; Write</strong> permission:
+                      <Figure caption="Cloudflare R2 Console: Bucket configured with custom domain and unlimited zero data egress bandwidth for mobile updates.">
+                        <CloudflareR2SetupMock />
+                      </Figure>
+                    </>,
+                    <>Fill in the bucket name and API credentials. Credentials are encrypted at rest with AES-256-GCM.</>,
+                    <>
+                      Click <strong>Verify &amp; Connect</strong>. FireOTA immediately runs an automated live write, read, and delete test probe:
+                      <Figure caption="Connecting a cloud storage target: Live probe automatically verifies AWS SigV4 handshake, write, read, and delete permissions before saving.">
+                        <ConnectStorageMock />
+                      </Figure>
+                    </>,
+                    <>
+                      When you create an app in <A to="/apps/new">Add Application</A>, select your verified storage target. You can monitor all connected targets, CDN endpoints, and linked apps from the Storage dashboard:
+                      <Figure caption="Storage Targets Dashboard: Monitor and manage connected cloud buckets, custom CDNs, and linked mobile applications.">
+                        <StorageTargetsListMock />
+                      </Figure>
+                    </>,
+                  ]}
+                />
+              </>
+            ),
+          },
+          {
+            id: "byou",
+            title: "Bring Your Own URL (BYOU) in CI/CD",
+            body: (
+              <>
+                <p>
+                  If your CI/CD pipeline already uploads bundles to internal storage or a corporate CDN, you can register and publish
+                  updates in one step without giving FireOTA any cloud credentials:
+                </p>
+                <Figure caption="Bring Your Own URL (BYOU) Pipeline: CI/CD hosts the .fota archive on your corporate CDN and registers the cryptographically signed release with FireOTA in milliseconds.">
+                  <ByouFlowDiagram />
+                </Figure>
+                <p className="my-2">
+                  Publish a release by pointing directly to your CDN URL and providing the bundle SHA-256 hash:
+                </p>
+                <Code
+                  code={`npx fireota release \\
+  --app 83822cef-... \\
+  --platform android \\
+  --runtime 1.4.0 \\
+  --channel production \\
+  --bundle-url https://cdn.mycompany.com/updates/v1.4.0.fota \\
+  --bundle-hash 9b1e4c...a07d \\
+  --bundle-size 1928374`}
+                />
+                <p>
+                  FireOTA distributes the external download URL to devices during <C>updates/check</C>. The client SDK verifies the
+                  SHA-256 hash before running the bundle to ensure 100% cryptographic integrity.
+                </p>
+              </>
+            ),
+          },
+        ],
+      },
       {
         slug: "firebase-setup",
         title: "Prepare your Firebase project",
@@ -2872,7 +2988,7 @@ npx fireota release rollback <releaseId> --reason "Crash on launch on Android 14
               <Code
                 code={`fireota publish  --app <appId> --platform <android|ios|all> --runtime <x.y.z> --message "…"
                  [--channel production] [--rollout 10] [--version <label>] [--mandatory] [--native ">=1.4.0"]
-                 [--file update.fota] [--private-key key.pem] [--json]
+                 [--file update.fota] [--bundle-url <url> --bundle-hash <hash> --bundle-size <bytes>] [--private-key key.pem] [--json]
 fireota bundle   --platform <android|ios> [--entry index.js] [--out update.fota] [--hermes auto|on|off]
 fireota whoami
 fireota signing generate [--out ./fireota-keys]
@@ -2957,6 +3073,90 @@ FIREOTA_SIGNING_KEY / FIREOTA_SIGNING_KEY_PATH (optional)`}
     title: "Help",
     icon: "help",
     pages: [
+      {
+        slug: "changelog",
+        title: "Changelog",
+        badge: "updated",
+        description: "Release history and what's new in FireOTA.",
+        sections: [
+          {
+            id: "v0-5-0",
+            title: "v0.5.0 — Multi-Cloud Sovereign Storage & Visual Guides (2026-10-30)",
+            body: (
+              <>
+                <p>
+                  Major release introducing <strong>Multi-Cloud Sovereign Storage</strong> and total code sovereignty. FireOTA
+                  never stores customer application bundles — bundles live exclusively in your own cloud buckets.
+                </p>
+                <Bullets
+                  items={[
+                    <><strong>Multi-Cloud Storage Targets:</strong> Connect Cloudflare R2, Amazon S3, MinIO, Wasabi, DigitalOcean Spaces, Google Cloud Storage (via Service Account JSON), and Azure Blob Storage.</>,
+                    <><strong>Zero Egress Fees:</strong> Native Cloudflare R2 preset with zero egress bandwidth charges for high-volume updates.</>,
+                    <><strong>Pure AWS SigV4 Signer:</strong> Zero-dependency AWS Signature Version 4 implementation for S3 presigned URLs.</>,
+                    <><strong>Automated 4-Stage Health Check Probes:</strong> Live write, read, and delete test probe completes in under 300ms before activating any bucket.</>,
+                    <><strong>Bring Your Own URL (BYOU):</strong> Publish releases pointing directly to corporate CDNs with <C>--bundle-url</C>, <C>--bundle-hash</C>, and <C>--bundle-size</C>.</>,
+                    <><strong>Visual Step-by-Step Guides:</strong> Added rich interactive architecture diagrams, Cloudflare R2 console mocks, and live connection wizards in docs.</>,
+                  ]}
+                />
+              </>
+            ),
+          },
+          {
+            id: "v0-4-0",
+            title: "v0.4.0 — Expo Config Plugin & CNG Support (2026-10-26)",
+            body: (
+              <Bullets
+                items={[
+                  <><strong>Expo Config Plugin:</strong> Automatic native project patching for Expo Continuous Native Generation (CNG) during <C>expo prebuild</C> and EAS Build.</>,
+                  <><strong>Expo-Aware CLI:</strong> <C>fireota init</C> detects <C>app.json</C> and configures the plugin automatically.</>,
+                  <><strong>Expo Embedding:</strong> Automatic bundling using <C>npx expo export:embed</C>.</>,
+                ]}
+              />
+            ),
+          },
+          {
+            id: "v0-3-0",
+            title: "v0.3.0 — Code Signing, Automated Rollbacks & Webhooks (2026-10-20)",
+            body: (
+              <Bullets
+                items={[
+                  <><strong>Cryptographic Code Signing:</strong> Asymmetric Ed25519 signing and device verification.</>,
+                  <><strong>Automatic Rollback Sentinel:</strong> Instant rollback to previous stable bundle if a new update crashes on start.</>,
+                  <><strong>HMAC-Signed Webhooks:</strong> Webhook delivery engine with retry queues for release lifecycle events.</>,
+                  <><strong>Role-Based Access Control (RBAC):</strong> Multi-tenant organizations with 5 access levels.</>,
+                ]}
+              />
+            ),
+          },
+          {
+            id: "v0-2-0",
+            title: "v0.2.0 — Deterministic Staged Rollouts & Channels (2026-10-10)",
+            body: (
+              <Bullets
+                items={[
+                  <><strong>Deterministic Rollout Bucketing:</strong> Hash-based 0–100% rollout distribution mapped to persistent device installation IDs.</>,
+                  <><strong>Channels:</strong> Support for <C>production</C>, <C>beta</C>, <C>staging</C>, and <C>development</C> channels.</>,
+                  <><strong>Analytics:</strong> Device event telemetry for update checks, downloads, installs, and rollbacks.</>,
+                ]}
+              />
+            ),
+          },
+          {
+            id: "v0-1-0",
+            title: "v0.1.0 — Initial Release (2026-10-01)",
+            body: (
+              <Bullets
+                items={[
+                  <>Initial release of FireOTA over-the-air update server.</>,
+                  <>Core React Native SDK (<C>@fireota/react-native</C>) for Android and iOS.</>,
+                  <>CLI (<C>@fireota/cli</C>) for bundle packaging and release publishing.</>,
+                  <>Firebase Storage integration with Google OAuth.</>,
+                ]}
+              />
+            ),
+          },
+        ],
+      },
       {
         slug: "troubleshooting",
         title: "Troubleshooting",

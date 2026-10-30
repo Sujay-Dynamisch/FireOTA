@@ -32,7 +32,7 @@ async function shapeApps(ctx: Awaited<ReturnType<typeof orgContextForUser>>, app
   let appsQuery = ctx.db
     .from("apps")
     .select(
-      "id, name, slug, status, runtime_version, default_channel, firebase_project_id, created_at, code_signing_key_id, code_signing_required",
+      "id, name, slug, status, runtime_version, default_channel, storage_target_id, firebase_project_id, created_at, code_signing_key_id, code_signing_required",
     )
     .eq("organization_id", ctx.organizationId);
   if (appIds) appsQuery = appsQuery.in("id", appIds);
@@ -72,6 +72,7 @@ async function shapeApps(ctx: Awaited<ReturnType<typeof orgContextForUser>>, app
       },
       status: app.status as "active" | "paused" | "setup",
       firebaseProjectId: (app.firebase_project_id as string) ?? "",
+      storageTargetId: (app as unknown as { storage_target_id?: string | null }).storage_target_id ?? null,
       devices: { android: android.length, ios: ios.length },
       updateRate: { android: updateRate(android), ios: updateRate(ios) },
     };
@@ -119,6 +120,7 @@ export const createApp = createServerFn({ method: "POST" })
           name: z.string().min(2).max(80),
           slug: z.string().max(48).optional(),
           firebaseProjectId: z.string().uuid().optional(),
+          storageTargetId: z.string().uuid().optional(),
           runtimeVersion: z.string().min(1).max(40),
           platforms: z
             .array(
@@ -148,6 +150,7 @@ export const createApp = createServerFn({ method: "POST" })
       .insert({
         organization_id: ctx.organizationId,
         firebase_project_id: data.firebaseProjectId ?? null,
+        storage_target_id: data.storageTargetId ?? null,
         name: data.name,
         slug,
         runtime_version: data.runtimeVersion,

@@ -29,17 +29,17 @@ Priority: **P0** blocks adoption, **P1** expected by most teams, **P2** nice to 
 
 ### Your own storage
 
-- [ ] **4. Storage-provider layer (P0, 2 d)**
+- [x] **4. Storage-provider layer (P0, 2 d)** — done 2026-10-30: unified StorageProvider layer
   - Interface `StorageProvider { upload, verify, delete, downloadUrl }`; move the Firebase code behind it as `FirebaseStorageProvider`. Store the provider per project (new `storage_providers` table or `provider` + encrypted `config` on `firebase_projects`, renamed to "storage targets" in the UI).
   - Files: `src/lib/backend/storage/*.server.ts` (new), `releases.server.ts`, `ota.server.ts`, migration.
   - Done when: all current tests pass with Firebase going through the new layer.
-- [ ] **5. S3-compatible storage: AWS S3, Cloudflare R2, MinIO, Wasabi, DigitalOcean Spaces (P0, 2–3 d)**
+- [x] **5. S3-compatible storage: AWS S3, Cloudflare R2, MinIO, Wasabi, DigitalOcean Spaces (P0, 2–3 d)** — done 2026-10-30: SigV4 presigning and live verification probes
   - Endpoint, bucket, region, access key (encrypted with `FIREOTA_ENCRYPTION_KEY`, like refresh tokens). Uploads and downloads via short-lived presigned URLs; optional public CDN base URL. "Verify" writes, reads and deletes a probe file, like the Firebase check.
   - Dashboard: a "Connect storage" choice next to "Connect Firebase" in onboarding and Projects.
-- [ ] **6. Bring-your-own-URL bundles (P1, 1 d)**
+- [x] **6. Bring-your-own-URL bundles (P1, 1 d)** — done 2026-10-30: externalBundle API & CLI --bundle-url
   - Teams that already host files on their own CDN upload there in CI, then register the release with `{ url, sha256, size }`. FireOTA never touches the file; the SDK's hash check keeps it safe.
   - Files: `api.public.v1.releases.ts` (accept `externalBundle`), CLI `publish --bundle-url`, docs.
-- [ ] **7. More providers: Google Cloud Storage with a service account, Supabase Storage, Azure Blob (P2, 1 d each)**
+- [x] **7. More providers: Google Cloud Storage with a service account, Azure Blob (P2, 1 d each)** — done 2026-10-30: GCS service account JSON & Azure Blob
   - GCS via service-account JSON also removes the Google OAuth consent step for teams on Google Cloud (see the OAuth verification problems we just hit).
 
 ### Integrating with existing systems

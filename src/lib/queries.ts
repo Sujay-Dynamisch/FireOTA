@@ -16,6 +16,7 @@ import {
   releasesService,
   rolloutsService,
   securityService,
+  storageService,
   teamService,
   webhooksService,
 } from "@/services";
@@ -45,6 +46,7 @@ export const q = {
     queryOptions({ queryKey: ["analytics", filters ?? null], queryFn: () => analyticsService.summary(filters) }),
 
   projects: () => queryOptions({ queryKey: ["projects"], queryFn: () => firebaseService.list() }),
+  storageTargets: () => queryOptions({ queryKey: ["storage-targets"], queryFn: () => storageService.list() }),
   project: (id: string) => queryOptions({ queryKey: ["projects", id], queryFn: () => firebaseService.get(id) }),
 
   team: () => queryOptions({ queryKey: ["team"], queryFn: () => teamService.list() }),

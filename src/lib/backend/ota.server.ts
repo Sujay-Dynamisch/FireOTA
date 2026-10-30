@@ -14,6 +14,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { fail } from "./errors";
 import { artifactDownloadUrl } from "./firebase.server";
+import { buildProviderFromRow } from "./storage/factory.server";
 import { isServable, type ReleaseState } from "./release-state";
 import { inRollout, runtimeCompatible, satisfiesConstraint } from "./versions";
 
@@ -54,7 +55,7 @@ export interface UpdateCheckResult {
  * than guessed. Input never reaches a PostgREST filter string.
  */
 export async function resolveApp(db: SupabaseClient, appKey: string) {
-  const columns = "id, organization_id, slug, status, firebase_project_id";
+  const columns = "id, organization_id, slug, status, storage_target_id, firebase_project_id";
   if (isUuid(appKey)) {
     const { data } = await db.from("apps").select(columns).eq("id", appKey).maybeSingle();
     if (!data) fail("RESOURCE_NOT_FOUND", "Unknown application.");
@@ -109,7 +110,7 @@ export async function updateCheck(db: SupabaseClient, input: UpdateCheckInput): 
   const { data: release } = await db
     .from("releases")
     .select(
-      "id, organization_id, app_id, platform, version, runtime_version, native_version_constraint, status, rollout_percentage, mandatory, release_notes, bundle_hash, bundle_size, storage_path, manifest, signature, signature_key_id, group_id, created_at",
+      "id, organization_id, app_id, platform, version, runtime_version, native_version_constraint, status, rollout_percentage, mandatory, release_notes, bundle_hash, bundle_size, storage_path, manifest, signature, signature_key_id, group_id, created_at, external_bundle_url",
     )
     .eq("id", target.release_id)
     .eq("organization_id", app.organization_id)
@@ -138,8 +139,10 @@ export async function updateCheck(db: SupabaseClient, input: UpdateCheckInput): 
 
   const bundleUrl = await signedBundleUrl(db, {
     organizationId: app.organization_id as string,
+    storageTargetId: (app as unknown as { storage_target_id?: string | null }).storage_target_id ?? null,
     firebaseProjectId: app.firebase_project_id as string | null,
     storagePath: release.storage_path as string | null,
+    externalBundleUrl: (release as unknown as { external_bundle_url?: string | null }).external_bundle_url ?? null,
   });
 
   await recordEvent(db, {
@@ -181,9 +184,33 @@ export async function updateCheck(db: SupabaseClient, input: UpdateCheckInput): 
 
 async function signedBundleUrl(
   db: SupabaseClient,
-  input: { organizationId: string; firebaseProjectId: string | null; storagePath: string | null },
+  input: {
+    organizationId: string;
+    storageTargetId?: string | null;
+    firebaseProjectId?: string | null;
+    storagePath: string | null;
+    externalBundleUrl?: string | null;
+  },
 ) {
+  if (input.externalBundleUrl) return input.externalBundleUrl;
   if (!input.storagePath) fail("STORAGE_ERROR", "This release has no stored bundle.");
+  if (input.storagePath.startsWith("http://") || input.storagePath.startsWith("https://")) {
+    return input.storagePath;
+  }
+
+  if (input.storageTargetId) {
+    const { data: target } = await db
+      .from("storage_targets")
+      .select("id, name, provider, bucket, endpoint, region, public_cdn_url, config_ciphertext")
+      .eq("id", input.storageTargetId)
+      .eq("organization_id", input.organizationId)
+      .maybeSingle();
+
+    if (target) {
+      const provider = buildProviderFromRow(target);
+      return provider.getDownloadUrl(input.storagePath);
+    }
+  }
   const { data: project } = await db
     .from("firebase_projects")
     .select("storage_bucket")

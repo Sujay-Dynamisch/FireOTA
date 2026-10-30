@@ -233,6 +233,15 @@ async function createRelease(flags, platform, extra = {}) {
     ...(ci.gitCommitSha ? { gitCommitSha: ci.gitCommitSha.slice(0, 64) } : {}),
     ...(ci.gitBranch ? { gitBranch: ci.gitBranch.slice(0, 120) } : {}),
     ...(ci.buildNumber ? { buildNumber: String(ci.buildNumber).slice(0, 40) } : {}),
+    ...(flags["bundle-url"]
+      ? {
+          externalBundle: {
+            url: String(flags["bundle-url"]),
+            sha256: String(flags["bundle-hash"] || flags.hash || ""),
+            size: Number(flags["bundle-size"] || flags.size || 0),
+          },
+        }
+      : {}),
     ...extra,
   };
   // Same inputs -> same release, so a retried CI job never creates duplicates.
@@ -255,7 +264,7 @@ async function uploadRelease(releaseId, file, signing) {
   }
   log(`Uploading ${(bytes.length / 1024 / 1024).toFixed(2)} MB…`);
   const result = await api("POST", `/releases/${releaseId}/bundle`, form, headers);
-  log(`Verified in your Firebase Storage. SHA-256 ${result.checksum}`);
+  log(`Verified in your cloud storage. SHA-256 ${result.checksum}`);
   return result;
 }
 
@@ -315,7 +324,7 @@ async function uploadExpoRelease(releaseId, exported, config) {
   form.append("expoConfig", JSON.stringify(config));
   log(`Uploading bundle + ${exported.assets.length} assets…`);
   const result = await api("POST", `/releases/${releaseId}/bundle`, form, { "x-bundle-sha256": sha256(bytes) });
-  log(`Verified in your Firebase Storage. SHA-256 ${result.checksum}`);
+  log(`Verified in your cloud storage. SHA-256 ${result.checksum}`);
   return result;
 }
 
@@ -357,7 +366,9 @@ async function releaseAction(releaseId, body) {
 /** Create → upload → publish, skipping steps a retried CI job already completed. */
 async function publishOne(flags, platform, file, extra, privateKey) {
   const release = await createRelease(flags, platform, extra);
-  if (["draft", "failed", "uploading"].includes(release.status)) {
+  if (flags["bundle-url"]) {
+    log(`Using external bundle URL: ${flags["bundle-url"]}`);
+  } else if (["draft", "failed", "uploading"].includes(release.status)) {
     await uploadRelease(release.id, file, privateKey ? { key: privateKey, runtimeVersion: runtimeFor(flags, platform), platform } : null);
   } else {
     log(`Bundle already uploaded (status ${release.status}); skipping upload.`);

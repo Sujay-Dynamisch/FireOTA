@@ -14,6 +14,7 @@ import {
 import { base64UrlSha256, expoContentType, type ExpoAsset, type ExpoManifestTemplate } from "./expo";
 import { buildManifest, isFireOtaPackage, storagePrefix } from "./manifest";
 import { withDownloadToken } from "./ota.server";
+import { resolveStorageForApp } from "./storage/factory.server";
 import { assertTransition, canTransition, type ReleaseState } from "./release-state";
 import { signatureMessage, verifyUpdateSignature } from "./signing";
 import { isValidVersion } from "./versions";
@@ -51,7 +52,7 @@ export interface ReleaseRow {
 }
 
 const RELEASE_COLUMNS =
-  "id, organization_id, app_id, channel_id, number, platform, environment, version, runtime_version, native_version_constraint, status, rollout_percentage, mandatory, release_notes, bundle_hash, bundle_size, compressed_size, storage_path, manifest, git_commit_sha, git_branch, build_number, created_by_label, published_at, created_at, signature, signature_key_id, group_id";
+  "id, organization_id, app_id, channel_id, number, platform, environment, version, runtime_version, native_version_constraint, status, rollout_percentage, mandatory, release_notes, bundle_hash, bundle_size, compressed_size, storage_path, manifest, git_commit_sha, git_branch, build_number, created_by_label, published_at, created_at, signature, signature_key_id, group_id, external_bundle_url";
 
 export { RELEASE_COLUMNS };
 
@@ -116,6 +117,7 @@ export async function createRelease(
     gitBranch?: string;
     buildNumber?: string;
     idempotencyKey?: string;
+    externalBundle?: { url: string; sha256: string; size: number };
   },
 ) {
   requirePermission(ctx, "release.create");
@@ -182,7 +184,11 @@ export async function createRelease(
           group_id: input.groupId ?? null,
           runtime_version: input.runtimeVersion,
           native_version_constraint: input.nativeVersionConstraint ?? "*",
-          status: "draft",
+          status: input.externalBundle ? "ready" : "draft",
+          bundle_hash: input.externalBundle?.sha256 ?? null,
+          bundle_size: input.externalBundle?.size ?? null,
+          external_bundle_url: input.externalBundle?.url ?? null,
+          storage_path: input.externalBundle?.url ?? null,
           rollout_percentage: 0,
           mandatory: input.mandatory ?? false,
           release_notes: input.releaseNotes ?? "",
@@ -282,7 +288,7 @@ export async function uploadReleaseBundle(
   await ctx.db.from("releases").update({ status: "uploading" }).eq("id", release.id);
 
   try {
-    const target = await firebaseTargetForApp(ctx, release.app_id);
+    const storage = await resolveStorageForApp(ctx, release.app_id);
     const prefix = storagePrefix({
       appId: release.app_id,
       platform: release.platform,
@@ -290,9 +296,9 @@ export async function uploadReleaseBundle(
       releaseId: release.id,
     });
 
-    const uploaded = await uploadArtifact({
-      accessToken: target.accessToken,
-      bucket: target.bucket,
+    const uploaded = await storage.upload({
+
+
       path: `${prefix}/bundle.hbc`,
       body: input.bundle.bytes,
       contentType: input.bundle.contentType || "application/octet-stream",
@@ -304,15 +310,15 @@ export async function uploadReleaseBundle(
     const expoAssets: ExpoAsset[] = [];
     for (const asset of input.assets ?? []) {
       const safeName = asset.name.replace(/[^A-Za-z0-9._-]/g, "_");
-      const stored = await uploadArtifact({
-        accessToken: target.accessToken,
-        bucket: target.bucket,
+      const stored = await storage.upload({
+  
+  
         path: `${prefix}/assets/${safeName}`,
         body: asset.bytes,
         contentType: asset.contentType || "application/octet-stream",
       });
       const assetHash = sha256Hex(asset.bytes);
-      const assetUrl = artifactDownloadUrl(target.bucket, stored.path, stored.downloadToken);
+      const assetUrl = stored.downloadUrl;
       assetRows.push({ name: safeName, url: assetUrl, hash: assetHash, size: stored.size });
       if (input.expo) {
         const ext = input.expo.assets.find((a) => a.name === asset.name)?.ext ?? "";
@@ -336,7 +342,7 @@ export async function uploadReleaseBundle(
       });
     }
 
-    const bundleUrl = artifactDownloadUrl(target.bucket, uploaded.path, uploaded.downloadToken);
+    const bundleUrl = uploaded.downloadUrl;
     const baseManifest = buildManifest({
       releaseId: release.id,
       appId: release.app_id,
@@ -385,7 +391,7 @@ export async function uploadReleaseBundle(
         bundle_hash: hash,
         bundle_size: uploaded.size,
         compressed_size: uploaded.size,
-        storage_path: withDownloadToken(uploaded.path, uploaded.downloadToken),
+        storage_path: uploaded.path,
         manifest,
         signature: signing.signature,
         signature_key_id: signing.keyId,
@@ -399,7 +405,7 @@ export async function uploadReleaseBundle(
       resourceType: "release",
       resourceId: release.id,
       appId: release.app_id,
-      appName: target.appName,
+      appName: storage.name,
       after: { hash, size: uploaded.size, signed: Boolean(signing.signature) },
     });
 
@@ -793,8 +799,8 @@ export async function deleteRelease(ctx: OrgContext, input: { releaseId: string 
       .limit(1);
     if (!sharing || sharing.length === 0) {
       try {
-        const target = await firebaseTargetForApp(ctx, release.app_id);
-        await deleteArtifact({ accessToken: target.accessToken, bucket: target.bucket, path });
+        const storage = await resolveStorageForApp(ctx, release.app_id);
+        await storage.delete(path);
       } catch (error) {
         // Bundle cleanup is best-effort (same as app deletion): the release is still removed
         // and the file stays in the customer's bucket.
@@ -842,10 +848,10 @@ export async function deleteAppArtifacts(ctx: OrgContext, appId: string) {
   if (paths.length === 0) return { removed: 0, kept: 0 };
   let removed = 0;
   try {
-    const target = await firebaseTargetForApp(ctx, appId);
+    const storage = await resolveStorageForApp(ctx, appId);
     for (const path of paths) {
       try {
-        await deleteArtifact({ accessToken: target.accessToken, bucket: target.bucket, path });
+        await storage.delete(path);
         removed += 1;
       } catch {
         // already gone, or no longer reachable — keep going

@@ -70,7 +70,7 @@ fireota publish  --app <appId> --platform <android|ios|all> [--runtime <x.y.z>] 
 fireota bundle   --platform <android|ios> [--entry index.js] [--out update.fota] [--hermes auto|on|off]
 fireota whoami
 fireota signing generate [--out ./fireota-keys]
-fireota release create   --app <appId> --platform <p> --runtime <r> [--message m] [--version v] [--channel c]
+fireota release create   --app <appId> --platform <p> --runtime <r> [--bundle-url <url>] [--bundle-hash <sha256>] [--bundle-size <bytes>] [--message m] [--version v] [--channel c]
 fireota release upload   <releaseId> --file update.fota [--private-key key.pem]
 fireota release publish  <releaseId> [--rollout 100]
 fireota release rollout  <releaseId> --percentage <0-100>
@@ -111,6 +111,10 @@ script:
   - npm ci
   - npx fireota publish --app "$FIREOTA_APP_ID" --platform android --runtime 1.3.0 --message "$(git log -1 --pretty=%s)"
 ```
+
+## Changelog
+
+See the root [CHANGELOG.md](../../CHANGELOG.md) for version release notes and update history.
 
 ## License
 
