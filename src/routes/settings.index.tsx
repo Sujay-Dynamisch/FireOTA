@@ -30,6 +30,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePermissions } from "@/hooks/use-permissions";
 import { q } from "@/lib/queries";
+import { initials } from "@/lib/utils";
 import { authService, notificationsService, organizationService } from "@/services";
 
 export const Route = createFileRoute("/settings/")({
@@ -280,12 +281,7 @@ function SettingsPage() {
   const channelNames = Array.from(
     new Set([...(channels.data ?? []).map((channel) => channel.name), ...(org?.defaultChannel ? [org.defaultChannel] : [])]),
   );
-  const initials = String(user?.name || user?.email || "?")
-    .split(/[\s@.]+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part: string) => part[0]?.toUpperCase())
-    .join("");
+  const avatarInitials = initials(user?.name, user?.email);
 
   return (
     <AppShell breadcrumb={[{ label: "Helio Labs", to: "/dashboard" }, { label: "Settings" }]}>
@@ -297,7 +293,7 @@ function SettingsPage() {
             <img src={user.avatarUrl} alt="" className="size-14 rounded-2xl object-cover ring-2 ring-background" />
           ) : (
             <span className="grid size-14 place-items-center rounded-2xl bg-brand font-display text-[20px] font-bold text-white ring-2 ring-background">
-              {initials}
+              {avatarInitials}
             </span>
           )}
           <div className="min-w-0 flex-1">

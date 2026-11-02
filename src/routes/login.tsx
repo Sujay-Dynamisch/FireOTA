@@ -3,15 +3,18 @@ import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useAuthUser } from "@/hooks/use-auth-user";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { z } from "zod";
 
 import { AuthLayout, GoogleButton } from "@/components/layout/auth-layout";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { safeRedirect } from "@/lib/safe-redirect";
 import { ServiceError, authService } from "@/services";
 
 export const Route = createFileRoute("/login")({
+  validateSearch: (search) => z.object({ redirectTo: z.string().max(512).optional() }).parse(search),
   head: () => ({
     meta: [
       { title: "Sign in — FireOTA" },
@@ -26,10 +29,12 @@ export const Route = createFileRoute("/login")({
 function LoginPage() {
   const navigate = useNavigate();
   const { user } = useAuthUser();
+  const { redirectTo } = Route.useSearch();
+  const target = safeRedirect(redirectTo, "/dashboard");
   // Already signed in: there is nothing to do here.
   useEffect(() => {
-    if (user) void navigate({ to: "/dashboard", replace: true });
-  }, [user, navigate]);
+    if (user) void navigate({ to: target as "/dashboard", replace: true });
+  }, [user, navigate, target]);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [pending, setPending] = useState(false);
@@ -44,7 +49,7 @@ function LoginPage() {
     try {
       await authService.signIn(email, password);
       toast.success("Signed in to FireOTA.");
-      void navigate({ to: "/dashboard" });
+      void navigate({ to: target as "/dashboard" });
     } catch (failure) {
       // Unconfirmed accounts get their own message and a way to resend the link.
       if (failure instanceof ServiceError && failure.code === "unverified") {
@@ -71,7 +76,7 @@ function LoginPage() {
           onClick={async () => {
             // The browser leaves for Google here and comes back to /dashboard signed in.
             try {
-              await authService.signInWithGoogle("/dashboard");
+              await authService.signInWithGoogle(target);
             } catch (error) {
               toast.error(friendlyError(error, "Google sign-in failed. Try again."));
             }
@@ -142,7 +147,7 @@ function LoginPage() {
 
       <p className="mt-5 text-[12px] text-muted-foreground">
         New to FireOTA?{" "}
-        <Link to="/signup" className="text-foreground underline underline-offset-2">
+        <Link to="/signup" search={{ redirectTo }} className="text-foreground underline underline-offset-2">
           Create an account
         </Link>
       </p>

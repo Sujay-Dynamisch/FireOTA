@@ -3,15 +3,19 @@ import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useAuthUser } from "@/hooks/use-auth-user";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { z } from "zod";
 
 import { AuthLayout, GoogleButton } from "@/components/layout/auth-layout";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { safeRedirect } from "@/lib/safe-redirect";
 import { authService } from "@/services";
 
 export const Route = createFileRoute("/signup")({
+  validateSearch: (search) =>
+    z.object({ email: z.string().max(320).optional(), redirectTo: z.string().max(512).optional() }).parse(search),
   head: () => ({
     meta: [
       { title: "Create your FireOTA account" },
@@ -26,12 +30,13 @@ export const Route = createFileRoute("/signup")({
 function SignupPage() {
   const navigate = useNavigate();
   const { user } = useAuthUser();
+  const { email: invitedEmail, redirectTo } = Route.useSearch();
   // Already signed in: there is nothing to do here.
   useEffect(() => {
-    if (user) void navigate({ to: "/dashboard", replace: true });
-  }, [user, navigate]);
+    if (user) void navigate({ to: safeRedirect(redirectTo, "/dashboard") as "/dashboard", replace: true });
+  }, [user, navigate, redirectTo]);
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(invitedEmail ?? "");
   const [password, setPassword] = useState("");
   const [accepted, setAccepted] = useState(false);
   const [pending, setPending] = useState(false);
@@ -50,7 +55,7 @@ function SignupPage() {
           onClick={async () => {
             // The browser leaves for Google here and comes back to /onboarding signed in.
             try {
-              await authService.signInWithGoogle("/onboarding");
+              await authService.signInWithGoogle(safeRedirect(redirectTo, "/onboarding"));
             } catch (error) {
               toast.error(friendlyError(error, "Google sign-in failed. Try again."));
             }
@@ -71,7 +76,7 @@ function SignupPage() {
           setPending(true);
           setError(null);
           try {
-            await authService.signUp(name, email, password);
+            await authService.signUp(name, email, password, safeRedirect(redirectTo, "/onboarding"));
             toast.info("Check your inbox to verify your email address.");
             void navigate({ to: "/verify-email", search: { email } });
           } catch (failure) {
@@ -155,7 +160,7 @@ function SignupPage() {
 
       <p className="mt-5 text-[12px] text-muted-foreground">
         Already have an account?{" "}
-        <Link to="/login" className="text-foreground underline underline-offset-2">
+        <Link to="/login" search={{ redirectTo }} className="text-foreground underline underline-offset-2">
           Sign in
         </Link>
       </p>

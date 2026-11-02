@@ -10,9 +10,19 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { admin, audit, hasPermission, log, newRequestId, orgContextForUser, ownedRow, requirePermission } from "@/lib/backend/context.server";
 import { describeLive, liveReleases } from "@/lib/backend/delete-guards.server";
 import { ApiError, fail } from "@/lib/backend/errors";
-import { acceptPendingInvites, deliverInvite } from "@/lib/backend/invites.server";
+import {
+  acceptInvitation,
+  acceptPendingInvites,
+  assertUserCanBeInvited,
+  declineInvitation,
+  deliverInvite,
+  hashInviteToken,
+  newInvite,
+  verifyInvitationToken,
+} from "@/lib/backend/invites.server";
 import { NOTIFICATION_PREFS, prefEnabled } from "@/lib/backend/notifications";
 import { ALL_PERMISSIONS, ROLE_PERMISSIONS, type OrgRole } from "@/lib/backend/rbac";
+import { initials } from "@/lib/utils";
 
 const slugify = (value: string) =>
   value
@@ -20,15 +30,6 @@ const slugify = (value: string) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 48) || "workspace";
-
-function initials(name: string) {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase() ?? "")
-    .join("");
-}
 
 function ago(value: string | null) {
   if (!value) return "never";
@@ -46,7 +47,7 @@ export const getSession = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const db = await admin();
-    // An invited person joins their workspace the first time they sign in with that email.
+    // Invitations from before secure links join on first sign-in; newer ones are accepted from their link.
     await acceptPendingInvites(db, context.userId);
     const { data: profile } = await db
       .from("profiles")
@@ -340,12 +341,23 @@ export const listTeam = createServerFn({ method: "GET" })
       status: m.status as "active" | "invited" | "suspended",
       lastActive: ago(m.last_active_at as string | null),
       joined: new Date(m.created_at as string).toISOString().slice(0, 10),
-      initials: initials((m.name as string) || (m.email as string)),
+      initials: initials(m.name as string, m.email as string),
       customRoleId: (m.custom_role_id as string | null) ?? null,
       customRoleName: (m.custom_roles as { name?: string } | null)?.name ?? null,
       isYou: m.user_id === context.userId,
     }));
   });
+
+/** Public site base URL for invitation links */
+function appBaseUrl() {
+  const envUrl = process.env["FIREOTA_PUBLIC_URL"];
+  if (envUrl) return envUrl.replace(/\/+$/, "");
+  try {
+    return new URL(getRequest().url).origin;
+  } catch {
+    return "http://localhost:8080";
+  }
+}
 
 export const inviteMember = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -362,39 +374,72 @@ export const inviteMember = createServerFn({ method: "POST" })
     const ctx = await orgContextForUser(context.userId);
     requirePermission(ctx, "team.manage");
     if (data.role === "owner" && ctx.role !== "owner") fail("AUTHORIZATION_ERROR", "Only an owner can invite another owner.");
-    if (data.customRoleId) await ownedRow(ctx, "custom_roles", data.customRoleId, "id");
+    const customRole = data.customRoleId
+      ? await ownedRow<{ name: string }>(ctx, "custom_roles", data.customRoleId, "name")
+      : null;
 
-    const { error } = await ctx.db.from("organization_members").insert({
-      organization_id: ctx.organizationId,
-      email: data.email.toLowerCase(),
-      name: data.email.split("@")[0] ?? data.email,
-      role: data.customRoleId ? "viewer" : data.role,
+    const email = data.email.trim().toLowerCase();
+
+    // Cross-organization validation: ensure the user is not associated with another organization
+    await assertUserCanBeInvited(ctx.db, ctx.organizationId, email);
+
+    const { data: inviterProfile } = await ctx.db.from("profiles").select("name, email").eq("id", context.userId).maybeSingle();
+    const inviterName = inviterProfile?.name || ctx.actorLabel;
+    const inviterEmail = inviterProfile?.email || "";
+
+    // Saved before sending, so a failed write can never leave someone holding a dead link.
+    const invite = newInvite();
+    const row = {
+      name: email.split("@")[0] ?? email,
+      role: data.customRoleId ? "viewer" : (data.role as OrgRole),
       custom_role_id: data.customRoleId ?? null,
       status: "invited",
       invited_by: context.userId,
-    });
-    if (error) fail("CONFLICT", "That person is already a member or invited.");
+      invite_token: hashInviteToken(invite.token),
+      invite_expires_at: invite.expiresAt,
+    };
+    // Someone who declined earlier keeps their row (one per email), so it is reused.
+    const { data: declined } = await ctx.db
+      .from("organization_members")
+      .select("id")
+      .eq("organization_id", ctx.organizationId)
+      .eq("email", email)
+      .eq("status", "declined")
+      .maybeSingle();
+    const { error } = declined
+      ? await ctx.db.from("organization_members").update(row).eq("id", declined.id)
+      : await ctx.db.from("organization_members").insert({ organization_id: ctx.organizationId, email, ...row });
+    if (error) {
+      // Only a duplicate row means they are already here; anything else must not be reported as that.
+      if (error.code === "23505") fail("CONFLICT", "That person is already a member or invited.");
+      console.error(JSON.stringify({ level: "error", requestId: ctx.requestId, invite: error.message, code: error.code }));
+      // Missing column: PostgREST reports PGRST204, Postgres reports 42703.
+      if (error.code === "PGRST204" || error.code === "42703") {
+        throw new ApiError("INTERNAL_ERROR", "The invitation could not be saved: the database is missing the latest migration.");
+      }
+      throw new ApiError("INTERNAL_ERROR", "The invitation could not be saved. Try again.");
+    }
 
     const delivery = await deliverInvite(ctx.db, {
-      email: data.email.toLowerCase(),
-      redirectTo: inviteRedirect(),
+      email,
+      role: data.role as OrgRole,
+      roleLabel: customRole?.name,
       organizationId: ctx.organizationId,
       organizationName: ctx.organizationName,
-      inviterLabel: ctx.actorLabel,
+      inviterName,
+      inviterEmail,
+      appBaseUrl: appBaseUrl(),
+      token: invite.token,
+      expiresAt: invite.expiresAt,
     });
+
     await audit(ctx, {
       action: "team.invited",
       resourceType: "member",
-      after: { email: data.email, role: data.role, emailSent: delivery.emailSent },
+      after: { email, role: data.role, emailSent: delivery.emailSent, expiresAt: delivery.expiresAt },
     });
-    return { email: data.email, role: data.role, status: "invited" as const, ...delivery };
+    return { email, role: data.role, status: "invited" as const, ...delivery };
   });
-
-/** Where invite links land: the public site URL when configured, else this request's origin. */
-function inviteRedirect() {
-  const base = process.env["FIREOTA_PUBLIC_URL"] ?? new URL(getRequest().url).origin;
-  return `${base.replace(/\/+$/, "")}/dashboard`;
-}
 
 /** Sends the invitation again (or produces a fresh link) for a pending member. */
 export const resendInvite = createServerFn({ method: "POST" })
@@ -403,16 +448,98 @@ export const resendInvite = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const ctx = await orgContextForUser(context.userId);
     requirePermission(ctx, "team.manage");
-    const member = await ownedRow<{ email: string; status: string }>(ctx, "organization_members", data.id, "email, status");
-    if (member.status !== "invited") fail("CONFLICT", "This member has already joined.");
+    const member = await ownedRow<{ email: string; status: string; role: OrgRole; custom_roles: { name: string } | null }>(
+      ctx,
+      "organization_members",
+      data.id,
+      "email, status, role, custom_roles(name)",
+    );
+    if (member.status !== "invited" && member.status !== "declined") fail("CONFLICT", "This member has already joined.");
+
+    // Re-verify that user has not joined another organization since the first invite
+    await assertUserCanBeInvited(ctx.db, ctx.organizationId, member.email, { resending: true });
+
+    const { data: inviterProfile } = await ctx.db.from("profiles").select("name, email").eq("id", context.userId).maybeSingle();
+    const inviterName = inviterProfile?.name || ctx.actorLabel;
+    const inviterEmail = inviterProfile?.email || "";
+
+    // The new link replaces the old one, which stops working.
+    const invite = newInvite();
+    const { error } = await ctx.db
+      .from("organization_members")
+      .update({ status: "invited", invite_token: hashInviteToken(invite.token), invite_expires_at: invite.expiresAt })
+      .eq("id", data.id)
+      .eq("organization_id", ctx.organizationId);
+    if (error) throw new ApiError("INTERNAL_ERROR", "Could not renew the invitation.");
+
     const delivery = await deliverInvite(ctx.db, {
       email: member.email,
-      redirectTo: inviteRedirect(),
+      role: member.role,
+      roleLabel: member.custom_roles?.name,
       organizationId: ctx.organizationId,
       organizationName: ctx.organizationName,
-      inviterLabel: ctx.actorLabel,
+      inviterName,
+      inviterEmail,
+      appBaseUrl: appBaseUrl(),
+      token: invite.token,
+      expiresAt: invite.expiresAt,
     });
+    await audit(ctx, {
+      action: "team.invite_resent",
+      resourceType: "member",
+      resourceId: data.id,
+      after: { email: member.email, emailSent: delivery.emailSent, expiresAt: delivery.expiresAt },
+    });
+
     return { email: member.email, ...delivery };
+  });
+
+/** Public query: retrieves and verifies invitation details by secure token */
+export const getInvitationDetailsFn = createServerFn({ method: "GET" })
+  .inputValidator((input: { token: string }) => z.object({ token: z.string().min(10).max(128) }).parse(input))
+  .handler(async ({ data }) => {
+    const db = await admin();
+    return await verifyInvitationToken(db, data.token);
+  });
+
+/** Authenticated mutation: accepts an invitation */
+export const acceptInvitationFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { token: string }) => z.object({ token: z.string().min(10).max(128) }).parse(input))
+  .handler(async ({ data, context }) => {
+    const db = await admin();
+    // The auth record, not the editable profile, decides who this account is.
+    const { data: auth } = await db.auth.admin.getUserById(context.userId);
+    const user = auth?.user;
+    if (!user?.email || !user.email_confirmed_at) {
+      fail("AUTHORIZATION_ERROR", "Verify your email address before accepting this invitation.");
+    }
+    const result = await acceptInvitation(db, data.token, context.userId, user.email);
+    if (!result.alreadyMember) {
+      const ctx = await orgContextForUser(context.userId, result.organizationId);
+      await audit(ctx, { action: "team.invite_accepted", resourceType: "member", after: { email: user.email } });
+    }
+    return result;
+  });
+
+/** Public mutation: declines an invitation */
+export const declineInvitationFn = createServerFn({ method: "POST" })
+  .inputValidator((input: { token: string }) => z.object({ token: z.string().min(10).max(128) }).parse(input))
+  .handler(async ({ data }) => {
+    const db = await admin();
+    const result = await declineInvitation(db, data.token);
+    await db.from("audit_logs").insert({
+      organization_id: result.organizationId,
+      actor_id: null,
+      actor_label: result.email,
+      action: "team.invite_declined",
+      resource_type: "member",
+      resource_id: result.memberId,
+      app_name: "",
+      result: "success",
+      request_id: newRequestId(),
+    });
+    return { success: true };
   });
 
 export const changeMemberRole = createServerFn({ method: "POST" })
@@ -445,7 +572,8 @@ export const changeMemberRole = createServerFn({ method: "POST" })
         .from("organization_members")
         .select("id", { count: "exact", head: true })
         .eq("organization_id", ctx.organizationId)
-        .eq("role", "owner");
+        .eq("role", "owner")
+        .eq("status", "active");
       if ((count ?? 0) <= 1) fail("CONFLICT", "An organization must keep at least one owner.");
     }
 
@@ -503,7 +631,7 @@ export const setMemberStatus = createServerFn({ method: "POST" })
     );
     if (member.role === "owner") fail("CONFLICT", "An owner cannot be suspended.");
     if (member.user_id === context.userId) fail("CONFLICT", "You cannot suspend yourself.");
-    if (member.status === "invited") fail("CONFLICT", "Remove a pending invitation instead.");
+    if (member.status === "invited" || member.status === "declined") fail("CONFLICT", "Remove the invitation instead.");
     await ctx.db
       .from("organization_members")
       .update({ status: data.status })
@@ -785,6 +913,8 @@ export const listActivity = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const ctx = await orgContextForUser(context.userId);
+    // The feed comes from the audit log, so it follows the same permission as the audit page.
+    if (!hasPermission(ctx, "audit.read")) return [];
     const { data } = await ctx.db
       .from("audit_logs")
       .select("id, action, actor_label, app_name, resource_id, created_at")

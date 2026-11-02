@@ -38,6 +38,7 @@ import { Route as DocsIndexRouteImport } from './routes/docs.index'
 import { Route as DocsSlugRouteImport } from './routes/docs.$slug'
 import { Route as HealthLiveRouteImport } from './routes/health.live'
 import { Route as HealthReadyRouteImport } from './routes/health.ready'
+import { Route as InviteTokenRouteImport } from './routes/invite.$token'
 import { Route as ProjectsIndexRouteImport } from './routes/projects.index'
 import { Route as ProjectsConnectRouteImport } from './routes/projects.connect'
 import { Route as ReleasesIndexRouteImport } from './routes/releases.index'
@@ -205,6 +206,11 @@ const HealthReadyRoute = HealthReadyRouteImport.update({
   path: '/ready',
   getParentRoute: () => HealthRoute,
 } as any)
+const InviteTokenRoute = InviteTokenRouteImport.update({
+  id: '/invite/$token',
+  path: '/invite/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ProjectsIndexRoute = ProjectsIndexRouteImport.update({
   id: '/projects/',
   path: '/projects/',
@@ -344,6 +350,7 @@ export interface FileRoutesByFullPath {
   '/docs/$slug': typeof DocsSlugRoute
   '/health/live': typeof HealthLiveRoute
   '/health/ready': typeof HealthReadyRoute
+  '/invite/$token': typeof InviteTokenRoute
   '/projects/connect': typeof ProjectsConnectRoute
   '/releases/$releaseId': typeof ReleasesReleaseIdRoute
   '/rollouts/$rolloutId': typeof RolloutsRolloutIdRoute
@@ -395,6 +402,7 @@ export interface FileRoutesByTo {
   '/docs/$slug': typeof DocsSlugRoute
   '/health/live': typeof HealthLiveRoute
   '/health/ready': typeof HealthReadyRoute
+  '/invite/$token': typeof InviteTokenRoute
   '/projects/connect': typeof ProjectsConnectRoute
   '/releases/$releaseId': typeof ReleasesReleaseIdRoute
   '/rollouts/$rolloutId': typeof RolloutsRolloutIdRoute
@@ -448,6 +456,7 @@ export interface FileRoutesById {
   '/docs/$slug': typeof DocsSlugRoute
   '/health/live': typeof HealthLiveRoute
   '/health/ready': typeof HealthReadyRoute
+  '/invite/$token': typeof InviteTokenRoute
   '/projects/connect': typeof ProjectsConnectRoute
   '/releases/$releaseId': typeof ReleasesReleaseIdRoute
   '/rollouts/$rolloutId': typeof RolloutsRolloutIdRoute
@@ -502,6 +511,7 @@ export interface FileRouteTypes {
     | '/docs/$slug'
     | '/health/live'
     | '/health/ready'
+    | '/invite/$token'
     | '/projects/connect'
     | '/releases/$releaseId'
     | '/rollouts/$rolloutId'
@@ -553,6 +563,7 @@ export interface FileRouteTypes {
     | '/docs/$slug'
     | '/health/live'
     | '/health/ready'
+    | '/invite/$token'
     | '/projects/connect'
     | '/releases/$releaseId'
     | '/rollouts/$rolloutId'
@@ -605,6 +616,7 @@ export interface FileRouteTypes {
     | '/docs/$slug'
     | '/health/live'
     | '/health/ready'
+    | '/invite/$token'
     | '/projects/connect'
     | '/releases/$releaseId'
     | '/rollouts/$rolloutId'
@@ -655,6 +667,7 @@ export interface RootRouteChildren {
   VerifyEmailRoute: typeof VerifyEmailRoute
   AppsNewRoute: typeof AppsNewRoute
   ChangelogSlugRoute: typeof ChangelogSlugRoute
+  InviteTokenRoute: typeof InviteTokenRoute
   ProjectsConnectRoute: typeof ProjectsConnectRoute
   ReleasesReleaseIdRoute: typeof ReleasesReleaseIdRoute
   RolloutsRolloutIdRoute: typeof RolloutsRolloutIdRoute
@@ -883,6 +896,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof HealthReadyRouteImport
       parentRoute: typeof HealthRoute
     }
+    '/invite/$token': {
+      id: '/invite/$token'
+      path: '/invite/$token'
+      fullPath: '/invite/$token'
+      preLoaderRoute: typeof InviteTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/projects/': {
       id: '/projects/'
       path: '/projects'
@@ -1097,6 +1117,7 @@ const rootRouteChildren: RootRouteChildren = {
   VerifyEmailRoute: VerifyEmailRoute,
   AppsNewRoute: AppsNewRoute,
   ChangelogSlugRoute: ChangelogSlugRoute,
+  InviteTokenRoute: InviteTokenRoute,
   ProjectsConnectRoute: ProjectsConnectRoute,
   ReleasesReleaseIdRoute: ReleasesReleaseIdRoute,
   RolloutsRolloutIdRoute: RolloutsRolloutIdRoute,

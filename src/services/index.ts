@@ -9,6 +9,9 @@
 import { friendlyError } from "@/lib/friendly-error";
 import { supabase } from "@/integrations/supabase/client";
 import {
+  acceptInvitationFn,
+  declineInvitationFn,
+  getInvitationDetailsFn,
   changeMemberRole,
   createOrganization,
   deleteAccount,
@@ -180,7 +183,7 @@ export const authService = {
    * where the Supabase client picks the session up from the URL. `next` must be listed
    * under Authentication -> URL Configuration -> Redirect URLs in Supabase.
    */
-  signInWithGoogle: async (next: "/dashboard" | "/onboarding" = "/dashboard") => {
+  signInWithGoogle: async (next = "/dashboard") => {
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo: `${window.location.origin}${next}` },
@@ -190,11 +193,11 @@ export const authService = {
     // The browser is leaving for Google; stay pending so the button keeps its loader.
     return await new Promise<never>(() => {});
   },
-  signUp: async (name: string, email: string, password: string) => {
+  signUp: async (name: string, email: string, password: string, next = "/onboarding") => {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { name }, emailRedirectTo: `${window.location.origin}/onboarding` },
+      options: { data: { name }, emailRedirectTo: `${window.location.origin}${next}` },
     });
     if (error) throw new ServiceError(error.message, "invalid");
     // For an address that is already registered Supabase "succeeds" without sending an email,
@@ -556,6 +559,9 @@ export const teamService = {
     changeMemberRole({ data: { id, role, customRoleId: customRoleId ?? null } }),
   remove: (id: string) => removeMember({ data: { id } }),
   resendInvite: (id: string) => resendInvite({ data: { id } }),
+  getInvitation: (token: string) => getInvitationDetailsFn({ data: { token } }),
+  acceptInvitation: (token: string) => acceptInvitationFn({ data: { token } }),
+  declineInvitation: (token: string) => declineInvitationFn({ data: { token } }),
   setStatus: (id: string, status: "active" | "suspended") => setMemberStatus({ data: { id, status } }),
   roles: (): Promise<CustomRole[]> => listRoles() as Promise<CustomRole[]>,
   saveRole: (input: { id?: string; name: string; description?: string; permissions: string[] }) => saveRole({ data: input }),
