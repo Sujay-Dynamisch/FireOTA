@@ -8,7 +8,8 @@ import { toast } from "sonner";
 import { AppShell } from "@/components/layout/app-shell";
 import { ConfirmAction } from "@/components/fireota/confirm-dialog";
 import { DataTable, type Column } from "@/components/fireota/data-table";
-import { CopyButton, EmptyState, PageHeader, SectionCard } from "@/components/fireota/primitives";
+import { InviteDeliveryDialog, type InviteDelivery } from "@/components/fireota/invite-delivery-dialog";
+import { EmptyState, PageHeader, SectionCard } from "@/components/fireota/primitives";
 import { Field } from "@/components/fireota/wizard";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -238,13 +239,8 @@ function TeamPage() {
     onSuccess: (result) => showDelivery(result),
     onError,
   });
-  const [delivery, setDelivery] = useState<{ email: string; link: string; problem: string | null } | null>(null);
-  /** Email sent → toast; otherwise show the link the admin can share and why the email failed. */
-  const showDelivery = (result: { email: string; emailSent: boolean; link: string | null; problem: string | null }) => {
-    if (result.emailSent) toast.success(`Invitation email sent to ${result.email}.`);
-    else if (result.link) setDelivery({ email: result.email, link: result.link, problem: result.problem });
-    else toast.error(result.problem ?? "The invitation could not be delivered.");
-  };
+  const [delivery, setDelivery] = useState<InviteDelivery | null>(null);
+  const showDelivery = (result: InviteDelivery) => setDelivery(result);
   const changeRole = useMutation({
     mutationFn: ({ id, value }: { id: string; value: string }) => {
       const parsed = parseRoleValue(value);
@@ -425,31 +421,7 @@ function TeamPage() {
         }
       />
 
-      <Dialog open={delivery !== null} onOpenChange={(open) => !open && setDelivery(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Share the invitation with {delivery?.email}</DialogTitle>
-          </DialogHeader>
-          {delivery?.problem ? (
-            <p className="rounded-md border border-warning/30 bg-warning/10 p-2 text-[12px] text-warning">
-              {delivery.problem}
-            </p>
-          ) : null}
-          <p className="text-[12px] text-muted-foreground">
-            Send this one-time link to them (e.g. on Slack). Opening it signs them in and they join this workspace
-            automatically.
-          </p>
-          <div className="flex items-center gap-2 rounded-md border border-border bg-surface-2/50 p-3">
-            <code className="min-w-0 flex-1 break-all font-mono text-[11px]">{delivery?.link}</code>
-            {delivery ? <CopyButton value={delivery.link} label="Copy link" /> : null}
-          </div>
-          <DialogFooter>
-            <Button size="sm" onClick={() => setDelivery(null)}>
-              Done
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <InviteDeliveryDialog delivery={delivery} onClose={() => setDelivery(null)} />
 
       <Dialog open={editing !== null} onOpenChange={(open) => !open && setEditing(null)}>
         <DialogContent className="max-w-2xl">
@@ -496,7 +468,7 @@ function TeamPage() {
             rowActions={(row) =>
               row.role === "owner" || !manage || row.isYou ? null : (
                 <span className="flex gap-1">
-                  {row.status === "invited" ? (
+                  {row.status === "invited" || row.status === "declined" ? (
                     <Button
                       variant="ghost"
                       size="sm"
@@ -505,10 +477,10 @@ function TeamPage() {
                       loading={resend.isPending && resend.variables === row.id}
                       onClick={() => resend.mutate(row.id)}
                     >
-                      Resend invite
+                      {row.status === "declined" ? "Invite again" : "Resend invite"}
                     </Button>
                   ) : null}
-                  {row.status !== "invited" ? (
+                  {row.status === "active" || row.status === "suspended" ? (
                     <Button
                       variant="ghost"
                       size="sm"

@@ -9,6 +9,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Search,
+  ShieldAlert,
   Sun,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
@@ -28,10 +29,11 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { CommandPalette, useCommandPalette } from "@/components/layout/command-palette";
-import { navGroups } from "@/components/layout/nav";
+import { getRequiredPermissionForPath, navGroups } from "@/components/layout/nav";
+import { ROLE_LABELS, type OrgRole } from "@/lib/backend/rbac";
 import { q } from "@/lib/queries";
 import { authService, notificationsService } from "@/services";
-import { cn } from "@/lib/utils";
+import { cn, initials } from "@/lib/utils";
 import { SDK_VERSION } from "@/lib/version";
 
 export interface Crumb {
@@ -42,12 +44,12 @@ export interface Crumb {
 function SidebarNav({ collapsed, onNavigate }: { collapsed?: boolean; onNavigate?: () => void }) {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const session = useQuery(q.session());
-  const permissions = session.data?.user.permissions;
+  const permissions = session.data?.user.permissions ?? [];
   // Items behind a permission are hidden from members who cannot use them (the server enforces it anyway).
   const groups = navGroups
     .map((group) => ({
       ...group,
-      items: group.items.filter((item) => !item.permission || !permissions || permissions.includes(item.permission)),
+      items: group.items.filter((item) => !item.permission || permissions.includes(item.permission)),
     }))
     .filter((group) => group.items.length > 0);
   return (
@@ -114,12 +116,6 @@ function useTheme() {
     document.documentElement.classList.toggle("light", !next);
   };
   return { dark, toggle };
-}
-
-function initials(name: string, email: string) {
-  const source = name.trim() || email.split("@")[0] || "";
-  const parts = source.split(/[s._-]+/).filter(Boolean);
-  return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase() || "?";
 }
 
 /** Profile photo from the sign-in provider (e.g. Google), with initials as the fallback. */
@@ -218,14 +214,56 @@ function NotificationBell() {
   );
 }
 
-export function AppShell({ breadcrumb, children }: { breadcrumb: Crumb[]; children: ReactNode }) {
+function AccessRestrictedCard({ requiredPermission, role }: { requiredPermission: string; role: OrgRole | string }) {
+  const roleDisplay = ROLE_LABELS[role as OrgRole] ?? role;
+  return (
+    <div className="flex min-h-[50vh] items-center justify-center py-12">
+      <div className="max-w-md rounded-xl border border-danger/30 bg-surface-2/60 p-8 text-center shadow-lg">
+        <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-danger/10 text-danger">
+          <ShieldAlert className="size-6" />
+        </div>
+        <h2 className="mt-4 font-display text-[20px] font-bold tracking-tight text-foreground">
+          Access Restricted
+        </h2>
+        <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground">
+          You don't have permission to access this page. Your role (
+          <strong className="text-foreground capitalize">{roleDisplay}</strong>) is not granted the{" "}
+          <code className="rounded bg-surface-3 px-1.5 py-0.5 font-mono text-[11px] text-danger">
+            {requiredPermission}
+          </code>{" "}
+          permission.
+        </p>
+        <div className="mt-6 flex justify-center">
+          <Button asChild size="sm">
+            <Link to="/dashboard">Back to Dashboard</Link>
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function AppShell({
+  breadcrumb,
+  children,
+  requirePermission,
+}: {
+  breadcrumb: Crumb[];
+  children: ReactNode;
+  requirePermission?: string;
+}) {
   const [collapsed, setCollapsed] = useState(false);
   const { open, setOpen } = useCommandPalette();
   const { dark, toggle } = useTheme();
   const navigate = useNavigate();
-  const session = useQuery(q.session());
+  // Polled so a role change made by an admin reaches an open tab without a reload.
+  const session = useQuery({ ...q.session(), refetchInterval: 60_000 });
   const org = session.data?.organization ?? null;
   const user = session.data?.user ?? null;
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const permissions = session.data?.user.permissions ?? [];
+  const requiredPermission = requirePermission ?? getRequiredPermissionForPath(pathname);
+  const hasAccess = !requiredPermission || permissions.includes(requiredPermission);
   const queryClient = useQueryClient();
 
   // Ends the Supabase session and drops every cached query so no data survives the sign-out.
@@ -389,7 +427,13 @@ export function AppShell({ breadcrumb, children }: { breadcrumb: Crumb[]; childr
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 sm:p-5">
-          <div className="mx-auto max-w-[1240px] space-y-4">{children}</div>
+          <div className="mx-auto max-w-[1240px] space-y-4">
+            {session.isLoading && requiredPermission ? null : hasAccess ? (
+              children
+            ) : (
+              <AccessRestrictedCard requiredPermission={requiredPermission!} role={user?.role ?? "viewer"} />
+            )}
+          </div>
         </main>
       </div>
 

@@ -35,7 +35,7 @@ export interface User {
   name: string;
   email: string;
   role: Role;
-  status: "active" | "invited" | "suspended";
+  status: "active" | "invited" | "suspended" | "declined";
   lastActive: string;
   joined: string;
   initials: string;
