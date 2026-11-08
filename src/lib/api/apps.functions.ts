@@ -140,8 +140,48 @@ export const createApp = createServerFn({ method: "POST" })
     requirePermission(ctx, "app.create");
     if (!isValidVersion(data.runtimeVersion)) fail("INVALID_RUNTIME", "Runtime version must look like 1.2.3.");
 
-    if (data.firebaseProjectId) {
-      await ownedRow(ctx, "firebase_projects", data.firebaseProjectId, "id");
+    let storageTargetId = data.storageTargetId ?? data.firebaseProjectId;
+    let firebaseProjectId = data.firebaseProjectId;
+
+    if (storageTargetId) {
+      const { data: stRow } = await ctx.db
+        .from("storage_targets")
+        .select("id, provider")
+        .eq("id", storageTargetId)
+        .eq("organization_id", ctx.organizationId)
+        .maybeSingle();
+
+      if (stRow) {
+        if (stRow.provider === "firebase") {
+          firebaseProjectId = stRow.id;
+        }
+      } else {
+        const { data: fbRow } = await ctx.db
+          .from("firebase_projects")
+          .select("id, display_name, storage_bucket, status, last_verified_at, created_at")
+          .eq("id", storageTargetId)
+          .eq("organization_id", ctx.organizationId)
+          .maybeSingle();
+
+        if (fbRow) {
+          firebaseProjectId = fbRow.id;
+          await ctx.db.from("storage_targets").upsert(
+            {
+              id: fbRow.id,
+              organization_id: ctx.organizationId,
+              name: fbRow.display_name,
+              provider: "firebase",
+              bucket: fbRow.storage_bucket,
+              status: fbRow.status || "connected",
+              last_verified_at: fbRow.last_verified_at || new Date().toISOString(),
+              created_at: fbRow.created_at,
+            },
+            { onConflict: "id" },
+          );
+        } else {
+          fail("RESOURCE_NOT_FOUND", "The selected storage target was not found in your organization.");
+        }
+      }
     }
 
     const slug = slugify(data.slug ?? data.name) || `app-${Date.now()}`;
@@ -149,8 +189,8 @@ export const createApp = createServerFn({ method: "POST" })
       .from("apps")
       .insert({
         organization_id: ctx.organizationId,
-        firebase_project_id: data.firebaseProjectId ?? null,
-        storage_target_id: data.storageTargetId ?? null,
+        firebase_project_id: firebaseProjectId ?? null,
+        storage_target_id: storageTargetId ?? null,
         name: data.name,
         slug,
         runtime_version: data.runtimeVersion,
@@ -159,9 +199,12 @@ export const createApp = createServerFn({ method: "POST" })
       })
       .select("id, name, slug")
       .single();
-    if (error) fail("CONFLICT", "An application with that identifier already exists.");
+    if (error) {
+      if (error.code === "23505") fail("CONFLICT", "An application with that identifier already exists.");
+      fail("INTERNAL_ERROR", error.message || "Failed to create application.");
+    }
 
-    await ctx.db.from("app_platforms").insert(
+    const { error: platformError } = await ctx.db.from("app_platforms").insert(
       data.platforms.map((p) => ({
         organization_id: ctx.organizationId,
         app_id: app.id,
@@ -172,6 +215,12 @@ export const createApp = createServerFn({ method: "POST" })
         runtime_version: data.runtimeVersion,
       })),
     );
+
+    if (platformError) {
+      await ctx.db.from("apps").delete().eq("id", app.id);
+      if (platformError.code === "23505") fail("CONFLICT", "An application with this package name or bundle identifier already exists.");
+      fail("INTERNAL_ERROR", platformError.message || "Failed to configure platforms.");
+    }
 
     await ctx.db.from("channels").insert(
       DEFAULT_CHANNELS.map((c) => ({

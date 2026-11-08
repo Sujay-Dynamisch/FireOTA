@@ -189,19 +189,21 @@ function ProjectsPage() {
                     <ConfirmAction
                       title={`Remove ${target.name}?`}
                       description="This removes the storage target from FireOTA. Any files in your cloud bucket will NOT be deleted."
-                      confirmText="Remove target"
+                      confirmLabel="Remove target"
+                      destructive
                       onConfirm={() => removeTarget.mutate(target.id)}
-                    >
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 text-[11px] text-destructive hover:bg-destructive/10 hover:text-destructive"
-                        disabled={removeTarget.isPending}
-                      >
-                        <Trash2 className="mr-1.5 size-3" />
-                        Remove
-                      </Button>
-                    </ConfirmAction>
+                      trigger={
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-[11px] text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          disabled={removeTarget.isPending}
+                        >
+                          <Trash2 className="mr-1.5 size-3" />
+                          Remove
+                        </Button>
+                      }
+                    />
                   )}
                 </div>
               </SectionCard>

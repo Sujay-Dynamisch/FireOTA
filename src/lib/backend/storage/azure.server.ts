@@ -26,7 +26,7 @@ export class AzureBlobStorageProvider implements StorageProvider {
     name: string;
     bucket: string;
     credentials: AzureCredentials;
-    endpoint?: string;
+    endpoint?: string | undefined;
   }) {
     this.id = input.id;
     this.name = input.name;

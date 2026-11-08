@@ -76,24 +76,24 @@ export interface StorageProvider {
 export interface S3Credentials {
   accessKeyId: string;
   secretAccessKey: string;
-  endpoint?: string;
-  region?: string;
-  forcePathStyle?: boolean;
-  publicCdnUrl?: string;
+  endpoint?: string | undefined;
+  region?: string | undefined;
+  forcePathStyle?: boolean | undefined;
+  publicCdnUrl?: string | undefined;
 }
 
 export interface GCSCredentials {
-  serviceAccountJson?: string;
-  clientEmail?: string;
-  privateKey?: string;
-  projectId?: string;
+  serviceAccountJson?: string | undefined;
+  clientEmail?: string | undefined;
+  privateKey?: string | undefined;
+  projectId?: string | undefined;
 }
 
 export interface AzureCredentials {
   accountName: string;
   accountKey: string;
-  containerName?: string;
-  endpoint?: string;
+  containerName?: string | undefined;
+  endpoint?: string | undefined;
 }
 
 export interface StorageTargetRecordData {

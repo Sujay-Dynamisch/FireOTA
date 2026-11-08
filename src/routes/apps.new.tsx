@@ -11,6 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { q } from "@/lib/queries";
+import { friendlyError } from "@/lib/friendly-error";
 import { appsService } from "@/services";
 
 export const Route = createFileRoute("/apps/new")({
@@ -121,11 +122,13 @@ function NewAppPage() {
                     {t.name} ({t.provider.toUpperCase()}{t.bucket ? ` · ${t.bucket}` : ""})
                   </SelectItem>
                 ))}
-                {(projects.data ?? []).map((option) => (
-                  <SelectItem key={option.id} value={option.id}>
-                    {option.name} (Firebase · {option.storageBucket})
-                  </SelectItem>
-                ))}
+                {(projects.data ?? [])
+                  .filter((p) => !(storageTargets.data ?? []).some((t) => t.id === p.id))
+                  .map((option) => (
+                    <SelectItem key={option.id} value={option.id}>
+                      {option.name} (Firebase · {option.storageBucket})
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </Field>
@@ -287,7 +290,12 @@ function NewAppPage() {
                       name,
                       slug,
                       runtimeVersion: runtime,
-                      ...(project ? { storageTargetId: project, firebaseProjectId: project } : {}),
+                      ...(project
+                        ? {
+                            storageTargetId: project,
+                            ...(projects.data?.some((p) => p.id === project) ? { firebaseProjectId: project } : {}),
+                          }
+                        : {}),
                       platforms: [
                         ...(android
                           ? [{ platform: "android" as const, packageName: androidPackage, nativeVersion: runtime }]
@@ -297,6 +305,8 @@ function NewAppPage() {
                     });
                     toast.success(`${name} created. Upload your first bundle to publish a release.`);
                     void navigate({ to: "/apps" });
+                  } catch (error) {
+                    toast.error(friendlyError(error, "An application with that name or identifier already exists."));
                   } finally {
                     setPending(false);
                   }

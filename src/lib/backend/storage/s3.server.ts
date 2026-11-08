@@ -22,24 +22,24 @@ export class S3StorageProvider implements StorageProvider {
   readonly region: string;
   readonly endpoint: string;
   readonly credentials: S3Credentials;
-  readonly publicCdnUrl?: string;
+  readonly publicCdnUrl?: string | undefined;
 
   constructor(input: {
     id: string;
     name: string;
     bucket: string;
-    provider?: StorageProviderType;
+    provider?: StorageProviderType | undefined;
     credentials: S3Credentials;
-    endpoint?: string;
-    region?: string;
-    publicCdnUrl?: string;
+    endpoint?: string | undefined;
+    region?: string | undefined;
+    publicCdnUrl?: string | undefined;
   }) {
     this.id = input.id;
     this.name = input.name;
     this.bucket = input.bucket.trim();
     this.provider = input.provider ?? "s3";
     this.credentials = input.credentials;
-    this.publicCdnUrl = input.publicCdnUrl?.trim() || input.credentials.publicCdnUrl?.trim();
+    this.publicCdnUrl = (input.publicCdnUrl?.trim() || input.credentials.publicCdnUrl?.trim()) || undefined;
     this.region = input.region?.trim() || input.credentials.region?.trim() || (this.provider === "r2" ? "auto" : "us-east-1");
 
     // Endpoint resolution:

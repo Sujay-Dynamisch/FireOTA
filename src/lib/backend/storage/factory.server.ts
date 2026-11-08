@@ -24,11 +24,11 @@ import type {
 export interface CreateStorageTargetInput {
   name: string;
   provider: StorageProviderType;
-  bucket?: string;
-  endpoint?: string;
-  region?: string;
-  publicCdnUrl?: string;
-  credentials?: S3Credentials | GCSCredentials | AzureCredentials | Record<string, unknown>;
+  bucket?: string | undefined;
+  endpoint?: string | undefined;
+  region?: string | undefined;
+  publicCdnUrl?: string | undefined;
+  credentials?: S3Credentials | GCSCredentials | AzureCredentials | Record<string, unknown> | undefined;
 }
 
 export function buildProviderFromRow(row: {
