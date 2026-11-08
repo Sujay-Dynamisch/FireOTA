@@ -16,7 +16,7 @@ import type {
 interface ParsedServiceAccount {
   client_email: string;
   private_key: string;
-  project_id?: string;
+  project_id?: string | undefined;
 }
 
 export class GCSStorageProvider implements StorageProvider {

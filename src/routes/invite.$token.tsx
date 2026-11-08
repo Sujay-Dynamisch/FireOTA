@@ -158,7 +158,7 @@ function InviteAcceptancePage() {
   const signedInEmail = user?.email;
   // Opened from the email's decline link: a click must confirm it, because mail scanners follow links.
   const confirmingDecline = action === "decline";
-  const isTargetAccount = !signedInEmail || signedInEmail.toLowerCase() === details.email.toLowerCase();
+  const isTargetAccount = !signedInEmail || signedInEmail.toLowerCase() === (details.email ?? "").toLowerCase();
 
   return (
     <AuthLayout>

@@ -17,9 +17,9 @@ export class ExternalUrlStorageProvider implements StorageProvider {
   readonly name: string;
   readonly provider: StorageProviderType = "external";
   readonly bucket: string | null = null;
-  readonly publicCdnUrl?: string;
+  readonly publicCdnUrl?: string | undefined;
 
-  constructor(input: { id: string; name: string; publicCdnUrl?: string }) {
+  constructor(input: { id: string; name: string; publicCdnUrl?: string | undefined }) {
     this.id = input.id;
     this.name = input.name;
     this.publicCdnUrl = input.publicCdnUrl;

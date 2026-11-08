@@ -156,6 +156,19 @@ export const connectProject = createServerFn({ method: "POST" })
       after: { projectId: data.firebaseProjectId, displayName: health.displayName, storage: health.storage },
     });
 
+    await ctx.db.from("storage_targets").upsert(
+      {
+        id: row.id,
+        organization_id: ctx.organizationId,
+        name: health.displayName,
+        provider: "firebase",
+        bucket: health.storageBucket,
+        status: health.status,
+        last_verified_at: new Date().toISOString(),
+      },
+      { onConflict: "id" },
+    );
+
     return { id: row.id, firebaseProjectId: row.firebase_project_id, name: row.display_name, status: health.status };
   });
 

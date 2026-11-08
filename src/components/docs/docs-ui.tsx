@@ -76,22 +76,24 @@ export function PhoneShots({ shots }: { shots: { src: string; alt: string; label
   );
 }
 
-/** Two-column reference table (field → meaning), scrolls sideways on phones. */
-export function FieldTable({ head = ["Field", "What it does"], rows }: { head?: [string, string]; rows: [ReactNode, ReactNode][] }) {
+/** Multi-column reference table (field → meaning), scrolls sideways on phones. */
+export function FieldTable({ head = ["Field", "What it does"], rows }: { head?: string[]; rows: ReactNode[][] }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-border">
       <table className="w-full min-w-[480px] text-left text-[13px]">
         <thead className="bg-surface-2/70 text-[11px] uppercase tracking-wider text-faint">
           <tr>
-            <th className="px-4 py-2.5 font-semibold">{head[0]}</th>
-            <th className="px-4 py-2.5 font-semibold">{head[1]}</th>
+            {head.map((h, i) => (
+              <th key={i} className="px-4 py-2.5 font-semibold">{h}</th>
+            ))}
           </tr>
         </thead>
         <tbody className="divide-y divide-border">
-          {rows.map(([key, value], i) => (
+          {rows.map((row, i) => (
             <tr key={i} className="align-top">
-              <td className="whitespace-nowrap px-4 py-2.5 font-medium text-foreground">{key}</td>
-              <td className="px-4 py-2.5 text-foreground/85">{value}</td>
+              {row.map((cell, j) => (
+                <td key={j} className={cn("px-4 py-2.5", j === 0 ? "whitespace-nowrap font-medium text-foreground" : "text-foreground/85")}>{cell}</td>
+              ))}
             </tr>
           ))}
         </tbody>

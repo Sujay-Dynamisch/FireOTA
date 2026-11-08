@@ -346,11 +346,11 @@ export const storageService = {
   create: (input: {
     name: string;
     provider: "s3" | "r2" | "gcs" | "minio" | "azure" | "firebase" | "external";
-    bucket?: string;
-    endpoint?: string;
-    region?: string;
-    publicCdnUrl?: string;
-    credentials?: Record<string, unknown>;
+    bucket?: string | undefined;
+    endpoint?: string | undefined;
+    region?: string | undefined;
+    publicCdnUrl?: string | undefined;
+    credentials?: Record<string, unknown> | undefined;
   }) => createStorageTargetFn({ data: input }),
   test: (id: string) => testStorageTargetFn({ data: { id } }),
   remove: (id: string) => deleteStorageTargetFn({ data: { id } }),

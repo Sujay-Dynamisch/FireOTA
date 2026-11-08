@@ -513,7 +513,7 @@ function ConnectStoragePage() {
                         <SelectContent>
                           {(firebaseSelectable.data ?? []).map((p) => (
                             <SelectItem key={p.id} value={p.id}>
-                              {p.firebaseId} · {p.name}
+                              {p.id} · {p.name}
                             </SelectItem>
                           ))}
                         </SelectContent>
