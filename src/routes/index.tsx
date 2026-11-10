@@ -50,13 +50,13 @@ import { cn } from "@/lib/utils";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "FireOTA — Firebase-Powered OTA Releases for React Native" },
+      { title: "FireOTA — Firebase-Powered OTA Releases for React Native & Flutter" },
       {
         name: "description",
         content:
-          "FireOTA brings Expo-grade Over-The-Air releases to React Native using your own Firebase Storage. Staged rollouts, deterministic bucketing, instant 1-click rollback, and zero platform cost.",
+          "FireOTA brings Expo-grade Over-The-Air releases to React Native and Flutter using your own Firebase Storage. Staged rollouts, deterministic bucketing, instant 1-click rollback, and zero platform cost.",
       },
-      { property: "og:title", content: "FireOTA — Sovereign OTA Releases for React Native" },
+      { property: "og:title", content: "FireOTA — Sovereign OTA Releases for React Native & Flutter" },
       {
         property: "og:description",
         content:
@@ -75,7 +75,7 @@ export const Route = createFileRoute("/")({
           applicationCategory: "DeveloperApplication",
           operatingSystem: "Android, iOS",
           description:
-            "FireOTA manages React Native OTA releases inside your own Firebase project: channels, staged rollouts, instant rollback and audit logs.",
+            "FireOTA manages React Native and Flutter OTA releases inside your own Firebase project: channels, staged rollouts, instant rollback and audit logs.",
           offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
         }),
       },
@@ -138,6 +138,7 @@ const CI_TOOLS: CiTool[] = [
 
 const ECOSYSTEM_BRANDS: { id: EcosystemId; name: string; tag: string }[] = [
   { id: "react-native", name: "React Native", tag: "Native Runtime" },
+  { id: "flutter", name: "Flutter", tag: "Dart Code Push" },
   { id: "firebase", name: "Firebase Storage", tag: "Private Bucket" },
   { id: "google-cloud", name: "Google Cloud", tag: "Global CDN" },
   { id: "expo", name: "Expo Config Plugins", tag: "Managed & Bare" },
@@ -273,7 +274,7 @@ function Landing() {
             <div className="mx-auto max-w-4xl text-center">
               <Reveal delay={80}>
                 <h1 className="mt-6 font-display text-[42px] font-extrabold leading-[1.08] tracking-tight sm:text-[62px] lg:text-[70px]">
-                  Ship React Native updates{" "}
+                  Ship React Native & Flutter updates{" "}
                   <span className="bg-gradient-to-r from-[#FF5A1F] via-[#FF8A1F] to-[#FFB21E] bg-clip-text text-transparent">
                     in minutes
                   </span>
@@ -432,7 +433,7 @@ function Landing() {
             {/* Infinite Ecosystem Marquee */}
             <div className="mt-12 pt-8 border-t border-border/50">
               <p className="text-center font-mono text-[11px] uppercase tracking-[0.16em] text-faint">
-                Seamlessly integrated with modern React Native & DevOps tooling
+                Seamlessly integrated with modern React Native, Flutter & DevOps tooling
               </p>
               <div className="relative mt-6 overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_15%,black_85%,transparent)]">
                 <div className="flex w-max animate-marquee gap-6 py-3 pr-6 hover:[animation-play-state:paused]">
@@ -939,7 +940,7 @@ function Landing() {
                 Four steps from commit to every phone
               </h2>
               <p className="mt-4 text-[15px] leading-relaxed text-muted-foreground">
-                Get up and running in under five minutes with your standard React Native or Expo
+                Get up and running in under five minutes with your standard React Native, Expo or Flutter
                 project.
               </p>
             </Reveal>
@@ -1021,7 +1022,7 @@ function Landing() {
               <BrandMark className="mx-auto size-16 drop-shadow-[0_10px_25px_rgba(255,90,31,0.5)]" />
 
               <h2 className="mt-6 font-display text-[32px] font-extrabold tracking-tight sm:text-[46px]">
-                Your next React Native fix can be live today.
+                Your next React Native or Flutter fix can be live today.
               </h2>
               <p className="mx-auto mt-4 max-w-xl text-[15px] sm:text-[16px] text-muted-foreground">
                 Free at the platform level. Your Firebase, your files, your rules. Connect your
@@ -1068,7 +1069,7 @@ function Landing() {
                 <span className="font-display text-[18px] font-bold">FireOTA</span>
               </div>
               <p className="mt-3 text-[13px] leading-relaxed text-muted-foreground">
-                Firebase-native OTA release management for modern React Native and Expo
+                Firebase-native OTA release management for modern React Native, Expo and Flutter
                 applications.
               </p>
               <div className="mt-4 flex items-center gap-2 font-mono text-[11px] text-faint">
@@ -1169,7 +1170,7 @@ function Landing() {
 
           <div className="mt-10 border-t border-border/50 pt-6 flex flex-wrap items-center justify-between gap-4 font-mono text-[11px] text-faint">
             <div>
-              © {new Date().getFullYear()} FireOTA. Built for React Native & Expo developers.
+              © {new Date().getFullYear()} FireOTA. Built for React Native, Expo & Flutter developers.
             </div>
             <div>Storage hosted strictly on your own Google Cloud Firebase tenant.</div>
           </div>
@@ -1377,7 +1378,7 @@ const STEPS = [
   },
   {
     title: "Install the SDK",
-    copy: "Drop the lightweight React Native SDK into your app. It verifies updates on launch and applies them smoothly on restart.",
+    copy: "Drop the lightweight React Native or Flutter SDK into your app. It verifies updates on launch and applies them smoothly on restart.",
     code: "npm install @fireota/react-native\n# or with bun / pnpm\nbun add @fireota/react-native\ncd ios && pod install",
   },
   {

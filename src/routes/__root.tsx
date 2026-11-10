@@ -89,13 +89,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "FireOTA — OTA release management for React Native" },
+      { title: "FireOTA — OTA release management for React Native & Flutter" },
       {
         name: "description",
         content:
-          "FireOTA manages React Native over-the-air releases inside your own Firebase project: channels, rollouts, rollbacks and audit trails.",
+          "FireOTA manages React Native and Flutter over-the-air releases inside your own Firebase project: channels, rollouts, rollbacks and audit trails.",
       },
-      { property: "og:title", content: "FireOTA — OTA release management for React Native" },
+      { property: "og:title", content: "FireOTA — OTA release management for React Native & Flutter" },
       {
         property: "og:description",
         content: "Connect your Firebase project and manage OTA releases from one place.",
@@ -104,7 +104,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:site_name", content: "FireOTA" },
       { property: "og:image", content: "/media/fireota-demo-poster.jpg" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: "FireOTA — OTA release management for React Native" },
+      { name: "twitter:title", content: "FireOTA — OTA release management for React Native & Flutter" },
       { name: "twitter:image", content: "/media/fireota-demo-poster.jpg" },
       { name: "robots", content: "index, follow" },
       { name: "application-name", content: "FireOTA" },
@@ -112,7 +112,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       {
         name: "keywords",
         content:
-          "React Native OTA, over-the-air updates, CodePush alternative, Firebase OTA, React Native hot updates, staged rollouts, Expo updates alternative",
+          "React Native OTA, over-the-air updates, CodePush alternative, Firebase OTA, React Native hot updates, Flutter code push, Flutter OTA updates, staged rollouts, Expo updates alternative",
       },
     ],
     links: [

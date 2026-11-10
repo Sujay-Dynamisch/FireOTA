@@ -348,7 +348,7 @@ export function StorageArchitectureDiagram() {
             </span>
             <div>
               <p className="text-[12px] font-semibold">3. Mobile Applications</p>
-              <p className="text-[10px] text-muted-foreground">React Native / Expo SDK</p>
+              <p className="text-[10px] text-muted-foreground">React Native, Expo or Flutter SDK</p>
             </div>
           </div>
           <div className="mt-3 flex-1 space-y-1.5 rounded-lg border border-border bg-surface-2/50 p-2 text-[10.5px]">

@@ -14,7 +14,7 @@ export const Route = createFileRoute("/apps/")({
   head: () => ({
     meta: [
       { title: "Applications — FireOTA" },
-      { name: "description", content: "Manage the React Native applications receiving OTA updates from your Firebase project." },
+      { name: "description", content: "Manage the React Native and Flutter applications receiving OTA updates from your Firebase project." },
       { property: "og:title", content: "Applications — FireOTA" },
       { property: "og:description", content: "Platforms, runtimes, channels and current release for every app." },
     ],
@@ -68,7 +68,7 @@ function AppsPage() {
     <AppShell breadcrumb={[{ label: "Helio Labs", to: "/dashboard" }, { label: "Applications" }]}>
       <PageHeader
         title="Applications"
-        description="Manage your React Native applications."
+        description="Manage your React Native and Flutter applications."
         actions={
           <>
             <div className="flex rounded-md border border-border">
@@ -113,7 +113,7 @@ function AppsPage() {
           emptyState={
             <EmptyState
               icon={Boxes}
-              title="No React Native apps yet."
+              title="No apps yet."
               description="Register an application to start publishing OTA releases."
               actions={
                 <Button size="sm" asChild>

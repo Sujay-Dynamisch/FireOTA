@@ -80,6 +80,13 @@ const ROWS: Row[] = [
     clouds: { label: "Varies by vendor", tone: "partial" },
   },
   {
+    feature: "Flutter support",
+    icon: Cloud,
+    fireota: { label: "Flutter SDK", detail: "Dart code push on Android, assets on iOS", tone: "yes" },
+    codepush: { label: "Not supported", tone: "no" },
+    clouds: { label: "Varies by vendor", tone: "partial" },
+  },
+  {
     feature: "AI monitoring",
     icon: Bot,
     fireota: { label: "Permissioned agents", detail: "Risky actions need approval", tone: "yes" },

@@ -21,7 +21,7 @@ export const Route = createFileRoute("/onboarding")({
   head: () => ({
     meta: [
       { title: "Set up FireOTA" },
-      { name: "description", content: "Create your organization, connect Firebase and register your first React Native application." },
+      { name: "description", content: "Create your organization, connect Firebase and register your first React Native or Flutter app." },
       { property: "og:title", content: "Set up FireOTA" },
       { property: "og:description", content: "Six short steps from account to first OTA release." },
     ],
@@ -113,7 +113,7 @@ function OnboardingPage() {
             <span className="font-display text-[20px] font-bold tracking-tight">FireOTA</span>
           </div>
           <h1 className="mt-8 font-display text-[34px] font-bold leading-[1.15] tracking-tight">
-            Ship React Native updates from <span className="text-brand">your own Firebase</span>.
+            Ship React Native and Flutter updates from <span className="text-brand">your own Firebase</span>.
           </h1>
           <p className="mt-3 max-w-md text-[14px] leading-relaxed text-muted-foreground">
             Over-the-air updates with staged rollouts and instant rollback. Your bundles never leave your Google Firebase project.
@@ -149,7 +149,7 @@ function OnboardingPage() {
             steps={steps}
             current={0}
             title="Let's set up FireOTA."
-            description="Six short steps: create an organization, connect your Firebase project, verify access and register your first React Native application."
+            description="Six short steps: create an organization, connect your Firebase project, verify access and register your first React Native or Flutter app."
             footer={
               <>
                 <span className="font-mono text-[10px] text-faint">Takes about three minutes</span>
@@ -355,7 +355,7 @@ function OnboardingPage() {
           <WizardShell
             steps={steps}
             current={4}
-            title="Register your first React Native app"
+            title="Register your first app"
             description="Platform identifiers let FireOTA match update requests from your app to the right release."
             footer={
               <>
@@ -412,7 +412,7 @@ function OnboardingPage() {
             steps={steps}
             current={5}
             title="Your FireOTA workspace is ready."
-            description="Next: install the SDK in your React Native app, then upload your first bundle."
+            description="Next: install the SDK in your React Native or Flutter app, then publish your first update."
             footer={
               <>
                 <Button variant="outline" size="sm" onClick={back}>

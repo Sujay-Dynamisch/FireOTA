@@ -17,7 +17,7 @@ export const Route = createFileRoute("/docs")({
       {
         name: "description",
         content:
-          "Add over-the-air updates to a React Native app with FireOTA: Firebase setup, SDK installation, native wiring, publishing, rollouts, rollback and CI.",
+          "Add over-the-air updates to a React Native or Flutter app with FireOTA: Firebase setup, SDK installation, native wiring, publishing, rollouts, rollback and CI.",
       },
       { property: "og:title", content: "FireOTA Documentation" },
     ],

@@ -15,7 +15,7 @@ export function AuthLayout({ children }: { children: ReactNode }) {
 
         <div className="max-w-md">
           <h1 className="font-display text-[28px] font-bold leading-tight tracking-tight">
-            Ship React Native updates without owning the infrastructure.
+            Ship React Native and Flutter updates without owning the infrastructure.
           </h1>
           <p className="mt-3 text-[13px] text-muted-foreground">
             Connect your Firebase project and manage OTA releases from one place.
@@ -36,7 +36,7 @@ export function AuthLayout({ children }: { children: ReactNode }) {
         </div>
 
         <p className="font-mono text-[10px] text-faint">
-          React Native OTA · Firebase Storage · no vendor lock-in
+          React Native & Flutter OTA · your own storage · no vendor lock-in
         </p>
       </div>
 

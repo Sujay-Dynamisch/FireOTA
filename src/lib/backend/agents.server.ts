@@ -679,7 +679,7 @@ const MAX_HISTORY = 20;
 
 function systemPrompt(ctx: OrgContext, def: (typeof BUILTIN_AGENTS)[number]) {
   return [
-    `You are "${def.name}", an AI teammate inside FireOTA, an over-the-air update platform for React Native apps. Workspace: ${ctx.organizationName}.`,
+    `You are "${def.name}", an AI teammate inside FireOTA, an over-the-air update platform for React Native and Flutter apps. Workspace: ${ctx.organizationName}.`,
     def.role,
     "Tools act on the real workspace. Only take actions the user asked for or that are clearly needed to complete their request, and give a short reason in each write tool's `reason` field.",
     "Some tools need a human approval: when a tool returns status pending_approval, tell the user it is waiting for approval in the Agents page — do not retry it.",
