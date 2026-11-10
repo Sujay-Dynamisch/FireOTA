@@ -35,6 +35,52 @@ const SUJAL: ChangelogAuthor = {
 
 export const changelog: ChangelogEntry[] = [
   {
+    slug: "flutter-sdk",
+    date: "2026-11-10",
+    title: "FireOTA for Flutter: Dart code push on Android, asset updates on iOS",
+    summary:
+      "The new fireota package brings FireOTA to Flutter. Ship Dart code patches to Android users without a Play Store release, update assets and remote config on Android and iOS, with signing, staged rollouts and automatic rollback.",
+    tags: ["Flutter", "SDK 0.1.0", "CLI 0.7.0", "Android", "iOS", "Docs"],
+    authors: [SUJAL],
+    body: [
+      { type: "h", text: "Dart code push on Android" },
+      {
+        type: "p",
+        text: "Change Dart code, run one command, and users get the new code on their next app start. A code patch is your app's compiled Dart code, built with the same Flutter version as the store build it targets. It works with the standard Flutter engine: no forked Flutter or custom toolchain.",
+      },
+      {
+        type: "code",
+        code: "flutter pub add fireota\nfireota init --app <appId> --server-url https://fireota.example.com\n\n# once per store release\nfireota flutter release android\n\n# later, after changing Dart code\nfireota flutter patch android --app <appId> \\\n  --private-key fireota-private.pem --message \"Fix checkout total\" --rollout 10",
+      },
+      { type: "h", text: "Safe by default" },
+      {
+        type: "list",
+        items: [
+          "Code patches are always signed, and the server refuses unsigned ones.",
+          "A patch only reaches devices running the exact store build it was compiled for, checked by version, build number and a fingerprint of the compiled code.",
+          "A patch that crashes before its first frame is rolled back on the next launch.",
+          "If the engine cannot load a patch, the SDK notices that the old code is running, rolls back and reports patch_not_loaded.",
+          "Failed patches are never downloaded again on that device, and a new store build clears all patches.",
+          "The CLI refuses to build a patch when your Flutter version, engine or native plugins differ from the store build.",
+        ],
+      },
+      { type: "h", text: "Asset and config updates on Android and iOS" },
+      {
+        type: "p",
+        text: "Replace images and ship remote config without a store release. FireOTAImage shows the updated file, falling back to the bundled asset, and FireOTA.config reads your config.json. On iOS these are the only updates the SDK installs; code push needs a modified Flutter engine, which the package does not include.",
+      },
+      {
+        type: "code",
+        code: "fireota flutter assets --platform all --app <appId> \\\n  --assets ./ota-assets --config ./config.json --message \"Holiday theme\"",
+      },
+      { type: "h", text: "Store policy" },
+      {
+        type: "p",
+        text: "Google Play only allows downloaded code that runs in a virtual machine or interpreter, so Android code push is off by default (allowCodePush: false). Turn it on for enterprise, MDM or sideloaded apps, or after your own policy review. The new Flutter page in the docs explains the details.",
+      },
+    ],
+  },
+  {
     slug: "multi-cloud-sovereign-storage",
     date: "2026-10-30",
     title: "Multi-Cloud Sovereign Storage: Cloudflare R2, AWS S3, MinIO, GCS, Azure, and BYOU",
