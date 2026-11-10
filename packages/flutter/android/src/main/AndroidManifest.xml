@@ -1,0 +1,12 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- Update checks and downloads. New Flutter apps only add this to debug builds. -->
+  <uses-permission android:name="android.permission.INTERNET" />
+  <application>
+    <!-- Kills and relaunches the app so a downloaded patch applies (see FireOTARestartActivity). -->
+    <activity
+      android:name="dev.fireota.flutter.FireOTARestartActivity"
+      android:exported="false"
+      android:process=":fireota_restart"
+      android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+  </application>
+</manifest>

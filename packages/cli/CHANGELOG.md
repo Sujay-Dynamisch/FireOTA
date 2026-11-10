@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.7.0] - 2026-11-10
+
+### Added
+- **Flutter support** for the new `fireota` package on pub.dev:
+  - `fireota init` sets up Flutter projects: writes `lib/fireota_config.dart`, starts FireOTA in `main.dart` and makes `MainActivity` extend `FireOTAFlutterActivity`.
+  - `fireota flutter release android` builds the store build and records its fingerprint in `.fireota/flutter/`.
+  - `fireota flutter patch android` builds a signed Dart code patch for that store build, and refuses unsigned patches or a different Flutter version or native plugin set.
+  - `fireota flutter assets` publishes asset and remote-config updates for Android and iOS.
+- In Flutter projects, the default runtime version is the `pubspec.yaml` version, including the build number (`1.4.0+12`).
+
 ## [0.5.0] - 2026-10-30
 
 ### Added

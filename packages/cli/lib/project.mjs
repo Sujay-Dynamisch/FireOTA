@@ -1,6 +1,8 @@
-/** Reads facts about the React Native project the CLI runs in. */
+/** Reads facts about the React Native or Flutter project the CLI runs in. */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+
+import { flutterRuntime, isFlutterProject } from "./flutter.mjs";
 
 /** android/app/build.gradle(.kts): versionName "1.3.3" / versionName = "1.3.3" */
 export function androidVersionName(root = ".") {
@@ -57,6 +59,8 @@ export function expoVersion(root = ".") {
 
 /** The app's store version for a platform — FireOTA's default runtime version. */
 export function storeVersion(platform, root = ".") {
+  // Flutter: pubspec.yaml `version: 1.2.0+7` sets both stores' version, and the SDK reports "1.2.0+7".
+  if (isFlutterProject(root)) return flutterRuntime(root);
   const native = platform === "ios" ? iosMarketingVersion(root) : androidVersionName(root);
   // Expo projects without android/ or ios/ yet (Continuous Native Generation): use app.json.
   return native ?? (isExpoProject(root) ? expoVersion(root) : undefined);

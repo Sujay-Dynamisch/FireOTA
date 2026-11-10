@@ -279,6 +279,46 @@ export function SettingsScreen() {
   );
 }`;
 
+const FLUTTER_INSTALL = `flutter pub add fireota
+npm install -g @fireota/cli
+fireota init --app YOUR_APP_ID --server-url https://fireota.example.com`;
+
+const FLUTTER_MAIN = `import 'package:fireota/fireota.dart';
+import 'package:flutter/material.dart';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await FireOTA.init(const FireOTAConfig(
+    appId: 'YOUR_APP_ID',
+    serverUrl: 'https://fireota.example.com',
+    allowCodePush: true, // Android code patches; read "Store policy" first
+    codeSigningCertificate: '''-----BEGIN PUBLIC KEY-----
+...
+-----END PUBLIC KEY-----''',
+  ));
+  runApp(const MyApp());
+}`;
+
+const FLUTTER_ACTIVITY = `// android/app/src/main/kotlin/.../MainActivity.kt
+import dev.fireota.flutter.FireOTAFlutterActivity
+
+class MainActivity : FireOTAFlutterActivity()`;
+
+const FLUTTER_RELEASE = `# Once per store release: build it and record its fingerprint
+fireota flutter release android
+git add .fireota/flutter && git commit -m "Record store build 1.4.0+12"`;
+
+const FLUTTER_PATCH = `export FIREOTA_URL=https://fireota.example.com
+export FIREOTA_API_KEY=fota_sk_...
+fireota flutter patch android --app YOUR_APP_ID \\
+  --private-key fireota-private.pem --message "Fix checkout total" --rollout 10`;
+
+const FLUTTER_ASSETS = `fireota flutter assets --platform all --app YOUR_APP_ID \\
+  --assets ./ota-assets --config ./config.json --message "Holiday theme"`;
+
+const FLUTTER_ASSETS_DART = `FireOTAImage('assets/banner.png')        // updated file, or the bundled asset
+final theme = FireOTA.config['theme'];   // remote config from config.json`;
+
 const EXPO_INSTALL = `npx expo install @fireota/react-native
 npm install --save-dev @fireota/cli
 npx fireota init --app YOUR_APP_ID --server-url https://fireota.example.com`;
@@ -1771,6 +1811,146 @@ function UpdateBadge() {
                   ["What happens to users on an old build?", <>They keep checking the old <C>updates.url</C> until they install the new build.</>],
                   ["Does it cost anything?", "You pay Firebase for storage and downloads in your own project. There's no per-update fee from FireOTA."],
                   ["Web support?", <>No. <C>expo-updates</C> only updates Android and iOS apps.</>],
+                ]}
+              />
+            ),
+          },
+        ],
+      },
+      {
+        slug: "flutter",
+        title: "Flutter",
+        badge: "new",
+        description:
+          "Use FireOTA in a Flutter app with the fireota package: Dart code patches on Android, asset and config updates on Android and iOS.",
+        sections: [
+          {
+            id: "what-you-get",
+            title: "What you get",
+            body: (
+              <>
+                <FieldTable
+                  head={["", "Android", "iOS"]}
+                  rows={[
+                    ["Dart code patches", "Yes (opt-in)", "No"],
+                    ["Asset and remote-config updates", "Yes", "Yes"],
+                    ["Signing, staged rollouts, automatic rollback", "Yes", "Yes"],
+                  ]}
+                />
+                <p>
+                  A code patch is your app's compiled Dart code, built with the same Flutter version as the store build it
+                  targets. On the next cold start the SDK hands it to the Flutter engine. If the patch doesn't load or
+                  crashes before its first frame, the app goes back to its previous code and reports it on the dashboard.
+                </p>
+              </>
+            ),
+          },
+          {
+            id: "install",
+            title: "Install",
+            body: (
+              <>
+                <Code code={FLUTTER_INSTALL} />
+                <Bullets
+                  items={[
+                    <>Writes <C>lib/fireota_config.dart</C> with your app ID, server URL and channel.</>,
+                    <>Starts FireOTA in <C>main()</C> before <C>runApp</C>.</>,
+                    <>Makes <C>MainActivity</C> extend <C>FireOTAFlutterActivity</C>, which starts the engine with the installed patch.</>,
+                  ]}
+                />
+                <p>Or set it up by hand:</p>
+                <Code language="dart" code={FLUTTER_MAIN} />
+                <Code language="kotlin" code={FLUTTER_ACTIVITY} />
+                <Callout kind="note">
+                  The runtime version is your <C>pubspec.yaml</C> version with its build number, for example{" "}
+                  <C>1.4.0+12</C>. A patch only reaches devices running that exact store build, so bump the version for every
+                  store release.
+                </Callout>
+              </>
+            ),
+          },
+          {
+            id: "code-push",
+            title: "Ship a Dart code patch (Android)",
+            body: (
+              <>
+                <Steps
+                  items={[
+                    <>Create a signing key with <C>fireota signing generate</C>. Add the public key under <D to="code-signing">Code signing</D> and to <C>codeSigningCertificate</C>. Code patches are always signed.</>,
+                    <>Build the store build and record its fingerprint. Commit the file under <C>.fireota/flutter/</C>: patches built later, for example in CI, are checked against it.<Code code={FLUTTER_RELEASE} /></>,
+                    <>Upload <C>build/app/outputs/bundle/release/app-release.aab</C> to Google Play as usual.</>,
+                    <>Change Dart code and publish a patch. Start with a small rollout and raise it from the dashboard.<Code code={FLUTTER_PATCH} /></>,
+                  ]}
+                />
+                <p>
+                  <C>fireota flutter patch</C> refuses to build when your Flutter version or engine differs from the store build,
+                  or when plugins with native code were added, removed or upgraded. Those changes need a store release.
+                </p>
+              </>
+            ),
+          },
+          {
+            id: "assets",
+            title: "Asset and config updates (Android and iOS)",
+            body: (
+              <>
+                <Code code={FLUTTER_ASSETS} />
+                <Code language="dart" code={FLUTTER_ASSETS_DART} />
+                <p>
+                  Asset updates apply on the next start on Android. On iOS, <C>FireOTA.restart()</C> switches them in place.
+                </p>
+              </>
+            ),
+          },
+          {
+            id: "store-policy",
+            title: "Store policy",
+            body: (
+              <>
+                <Callout kind="important">
+                  Google Play forbids downloading executable code from outside Google Play, except code that runs in a virtual
+                  machine or interpreter. A code patch is compiled Dart code that runs in the Dart VM. Whether that falls under
+                  the exception is your call, so code push is <strong>off by default</strong>
+                  (<C>allowCodePush: false</C>).
+                </Callout>
+                <Bullets
+                  items={[
+                    "Turn it on for enterprise, MDM or sideloaded apps, or after your own policy review.",
+                    "For Play apps that can't take the risk, use asset and config updates only.",
+                    "Never change what the app is for through a patch; ship features through the store.",
+                    "On iOS the SDK only installs assets and config, which App Store guideline 3.3.2 allows.",
+                  ]}
+                />
+              </>
+            ),
+          },
+          {
+            id: "limits",
+            title: "Limits",
+            body: (
+              <Bullets
+                items={[
+                  "iOS code push needs a modified Flutter engine and a Dart interpreter, which the package doesn't include.",
+                  "Native code (Kotlin, Java, Swift, Objective-C) and plugins with native code can't be patched.",
+                  <>Patches include <C>arm64-v8a</C> by default; add others with <C>--abis</C>. Devices with other ABIs keep the store build's code.</>,
+                  "A patch is the whole compiled Dart library, compressed: often 3–10 MB.",
+                ]}
+              />
+            ),
+          },
+          {
+            id: "troubleshooting",
+            title: "Troubleshooting",
+            body: (
+              <FieldTable
+                head={["Reason on the dashboard", "Meaning"]}
+                rows={[
+                  [<C>base_mismatch</C>, "The device runs a different store build than the one recorded for the patch."],
+                  [<C>code_push_disabled</C>, <><C>allowCodePush</C> is off in this build.</>],
+                  [<C>code_push_not_configured</C>, <><C>MainActivity</C> doesn't extend <C>FireOTAFlutterActivity</C>.</>],
+                  [<C>patch_not_loaded</C>, "The engine couldn't load the patch, so the app rolled back."],
+                  [<C>launch_not_confirmed</C>, "The patch crashed before its first frame and was rolled back."],
+                  [<C>signing_not_configured</C>, <>The app has no <C>codeSigningCertificate</C>.</>],
                 ]}
               />
             ),

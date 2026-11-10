@@ -109,3 +109,95 @@ export async function isFireOtaPackage(bytes: Uint8Array): Promise<boolean> {
     return false;
   }
 }
+
+/**
+ * Reads one small file out of a FireOTA package, inflating only as far as that file. Returns
+ * null when the package does not contain it.
+ */
+export async function readPackageFile(bytes: Uint8Array, path: string, maxSize = 64 * 1024): Promise<string | null> {
+  const reader = new Blob([bytes as BlobPart]).stream().pipeThrough(new DecompressionStream("gzip")).getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  const fill = async (length: number) => {
+    while (total < length) {
+      const { value, done } = await reader.read();
+      if (done || !value) return false;
+      chunks.push(value);
+      total += value.byteLength;
+    }
+    return true;
+  };
+  const slice = (start: number, end: number) => {
+    const out = new Uint8Array(end - start);
+    let offset = 0;
+    for (const chunk of chunks) {
+      const from = Math.max(start - offset, 0);
+      const to = Math.min(end - offset, chunk.byteLength);
+      if (from < to) out.set(chunk.subarray(from, to), offset + from - start);
+      offset += chunk.byteLength;
+      if (offset >= end) break;
+    }
+    return out;
+  };
+  try {
+    if (!(await fill(10))) return null;
+    const head = slice(0, 10);
+    if (new TextDecoder().decode(head.subarray(0, 6)) !== "FOTA1\n") return null;
+    const headerLength = new DataView(head.buffer, head.byteOffset).getUint32(6);
+    if (headerLength <= 0 || headerLength > 4 * 1024 * 1024 || !(await fill(10 + headerLength))) return null;
+    const header = JSON.parse(new TextDecoder().decode(slice(10, 10 + headerLength))) as { files?: { path: string; size: number }[] };
+    let offset = 10 + headerLength;
+    for (const file of header.files ?? []) {
+      if (file.path === path) {
+        if (file.size > maxSize || !(await fill(offset + file.size))) return null;
+        return new TextDecoder().decode(slice(offset, offset + file.size));
+      }
+      offset += file.size;
+    }
+    return null;
+  } catch {
+    return null;
+  } finally {
+    await reader.cancel().catch(() => undefined);
+  }
+}
+
+/** The `fireota.json` descriptor of a Flutter update, as the CLI writes it. */
+export interface FlutterDescriptor {
+  version: number;
+  kind: "flutter-aot" | "flutter-assets";
+  runtimeVersion: string;
+  buildId?: string;
+  flutterVersion?: string;
+  engineRevision?: string;
+  pluginsHash?: string;
+  /** SHA-256 of the store build's libapp.so per ABI that a code patch was compiled against. */
+  base?: Record<string, string>;
+}
+
+/**
+ * The Flutter descriptor of a package, or null for a React Native package. Throws when a Flutter
+ * package is malformed or built for another runtime.
+ */
+export async function flutterDescriptor(bytes: Uint8Array, release: { runtime_version: string; platform: string }) {
+  const raw = await readPackageFile(bytes, "fireota.json");
+  if (raw === null) return null;
+  let value: Partial<FlutterDescriptor>;
+  try {
+    value = JSON.parse(raw) as Partial<FlutterDescriptor>;
+  } catch {
+    throw new Error("The package's fireota.json is not valid JSON.");
+  }
+  if (value.kind !== "flutter-aot" && value.kind !== "flutter-assets") throw new Error("Unknown Flutter update kind.");
+  if (value.runtimeVersion !== release.runtime_version) {
+    throw new Error(`This update was built for runtime ${value.runtimeVersion}, but the release is for ${release.runtime_version}.`);
+  }
+  if (value.kind === "flutter-aot") {
+    if (release.platform !== "android") throw new Error("Flutter code patches are Android only.");
+    const base = value.base ?? {};
+    if (!value.buildId || !Object.keys(base).length || !Object.values(base).every((h) => /^[0-9a-f]{64}$/i.test(String(h)))) {
+      throw new Error("The code patch has no valid build ID or base fingerprints; build it with `fireota flutter patch`.");
+    }
+  }
+  return value as FlutterDescriptor;
+}
