@@ -94,6 +94,8 @@ function satisfiesSingle(version: string, token: string): boolean {
  * version. Runtime equality is exact by design: never ship incompatible JS.
  */
 export function runtimeCompatible(deviceRuntime: string, releaseRuntime: string): boolean {
+  // Build metadata ("1.4.0+12", Flutter's version+build) names one exact store build.
+  if (deviceRuntime.includes("+") || releaseRuntime.includes("+")) return deviceRuntime.trim() === releaseRuntime.trim();
   return compareVersions(deviceRuntime, releaseRuntime) === 0;
 }
 

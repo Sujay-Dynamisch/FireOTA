@@ -12,7 +12,7 @@ import {
   uploadArtifact,
 } from "./firebase.server";
 import { base64UrlSha256, expoContentType, type ExpoAsset, type ExpoManifestTemplate } from "./expo";
-import { buildManifest, isFireOtaPackage, storagePrefix } from "./manifest";
+import { buildManifest, flutterDescriptor, isFireOtaPackage, storagePrefix, type FlutterDescriptor } from "./manifest";
 import { withDownloadToken } from "./ota.server";
 import { resolveStorageForApp } from "./storage/factory.server";
 import { assertTransition, canTransition, type ReleaseState } from "./release-state";
@@ -281,9 +281,25 @@ export async function uploadReleaseBundle(
     fail("CHECKSUM_MISMATCH", "The uploaded bundle does not match the supplied checksum.");
   }
 
+  let flutter: FlutterDescriptor | null = null;
+  if (!input.expo) {
+    try {
+      flutter = await flutterDescriptor(input.bundle.bytes, release);
+    } catch (error) {
+      fail("INVALID_RELEASE", error instanceof Error ? error.message : "Invalid Flutter update package.");
+    }
+  }
+
   const signing = input.expo
     ? await allowUnsignedExpoUpload(ctx, release)
     : await verifySignatureForUpload(ctx, release, hash, input.signature);
+  // A code patch replaces the app's compiled Dart code, so it is never accepted unsigned.
+  if (flutter?.kind === "flutter-aot" && !signing.signature) {
+    fail(
+      "SIGNATURE_REQUIRED",
+      "Flutter code patches must be signed. Add your public key under Code signing in the dashboard and publish with --private-key.",
+    );
+  }
 
   await ctx.db.from("releases").update({ status: "uploading" }).eq("id", release.id);
 
@@ -371,7 +387,11 @@ export async function uploadReleaseBundle(
           expoClient: input.expo.config,
         }
       : null;
-    const manifest = expo ? { ...baseManifest, format: "expo", expo } : baseManifest;
+    const manifest = expo
+      ? { ...baseManifest, format: "expo", expo }
+      : flutter
+        ? { ...baseManifest, format: flutter.kind, flutter }
+        : baseManifest;
 
     await ctx.db.from("release_assets").insert({
       organization_id: ctx.organizationId,

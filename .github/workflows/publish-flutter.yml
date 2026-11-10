@@ -1,0 +1,46 @@
+# Publishes packages/flutter (pub.dev package `fireota`) when a tag like `fireota-v0.1.0` is pushed.
+#
+# One-time setup:
+#   1. Publish the first version by hand: cd packages/flutter && flutter pub publish
+#   2. pub.dev → fireota → Admin → "Enable publishing from GitHub Actions":
+#      repository Sujay-Dynamisch/FireOTA, tag pattern `fireota-v{{version}}`,
+#      and "Require GitHub Actions environment" = pub.dev
+#   3. GitHub → Settings → Environments → create `pub.dev` (optionally with required reviewers).
+name: Publish Flutter SDK
+
+on:
+  push:
+    tags:
+      - "fireota-v[0-9]+.[0-9]+.[0-9]+*"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: pub.dev
+    permissions:
+      contents: read
+      id-token: write # pub.dev authenticates the upload with GitHub's OIDC token
+    defaults:
+      run:
+        working-directory: packages/flutter
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      # Writes the OIDC credentials that `pub publish` uses.
+      - uses: dart-lang/setup-dart@v1
+
+      - name: Tag must match pubspec.yaml
+        run: |
+          version=$(grep -E '^version:' pubspec.yaml | awk '{print $2}')
+          test "fireota-v${version}" = "${GITHUB_REF_NAME}" || { echo "Tag ${GITHUB_REF_NAME} does not match pubspec version ${version}"; exit 1; }
+
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+      - run: flutter pub publish --dry-run
+      - run: flutter pub publish --force

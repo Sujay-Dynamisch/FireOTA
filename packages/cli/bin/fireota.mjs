@@ -9,15 +9,33 @@
  */
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { createRequire } from "node:module";
 import { join, relative, resolve } from "node:path";
 
 import { detectCi } from "../lib/ci.mjs";
+import {
+  buildPatchApk,
+  buildStore,
+  flutter as runFlutter,
+  flutterConfigSource,
+  flutterVersionInfo,
+  isFlutterProject,
+  libappByAbi,
+  newBuildId,
+  patchCompatibilityProblems,
+  patchFlutterActivity,
+  patchFlutterMain,
+  pluginsHash,
+  readBaseRecord,
+  readPubspec,
+  sha256 as sha256Hex,
+  writeBaseRecord,
+} from "../lib/flutter.mjs";
 import { runInit } from "../lib/init.mjs";
 import { packDirectory } from "../lib/package.mjs";
-import { isExpoProject, readExpoAppJson, storeVersion } from "../lib/project.mjs";
+import { findFile, isExpoProject, readExpoAppJson, storeVersion } from "../lib/project.mjs";
 import { generateKeys, loadPrivateKey, signUpdate } from "../lib/signing.mjs";
 
 const HELP = `FireOTA CLI
@@ -43,6 +61,21 @@ Usage:
   fireota release pause    <releaseId>
   fireota release rollback <releaseId> --reason "..." [--target <releaseId>]
   fireota releases [--app <appId>] [--json]
+
+Flutter (pub.dev package \`fireota\`):
+  fireota init     In a Flutter project: writes lib/fireota_config.dart, starts FireOTA in main.dart
+                   and makes MainActivity extend FireOTAFlutterActivity.
+  fireota flutter release android [--apk] [-- <flutter build args>]
+                   Builds the store build (app bundle, or --apk) and records its fingerprints in
+                   .fireota/flutter/ — commit that file; patches are checked against it.
+  fireota flutter patch android --app <appId> --message "What changed" --private-key key.pem
+                   [--abis arm64-v8a,x86_64] [--assets <dir>] [--config config.json] [--channel c]
+                   [--rollout 10] [--mandatory] [--out patch.fota --dry-run] [--force] [-- <flutter build args>]
+                   Compiles your current Dart code into a signed code patch for the recorded store
+                   build and publishes it. Android only; code patches must be signed.
+  fireota flutter assets --platform <android|ios|all> --app <appId> --assets <dir> [--config config.json]
+                   [--message m] [--private-key key.pem] [--channel c] [--rollout 10]
+                   Publishes asset and remote-config updates (Android and iOS).
 
 Updates are identified by their ID (like Expo): --version is only an optional label, and
 --runtime must equal the runtime version of the store build the update is for. Without
@@ -383,6 +416,225 @@ async function publishOne(flags, platform, file, extra, privateKey) {
   return { id: release.id, number: release.number, platform, rollout: result.rollout, status: "published" };
 }
 
+// ---------- Flutter ----------
+
+/** Arguments after a bare `--` go to `flutter build` unchanged. */
+function passthroughArgs() {
+  const index = process.argv.indexOf("--");
+  return index >= 0 ? process.argv.slice(index + 1) : [];
+}
+
+function flutterOnly() {
+  if (!isFlutterProject()) fail("Run this from your Flutter project root (pubspec.yaml with a flutter section).");
+}
+
+/** Builds the store build and records what a code patch has to match. */
+function flutterRelease(flags) {
+  flutterOnly();
+  const runtime = runtimeFor(flags, "android");
+  const buildId = newBuildId();
+  const versions = flutterVersionInfo();
+  log(`Building the Android store build ${runtime} (build ID ${buildId})…`);
+  const artifact = buildStore({ buildId, apk: Boolean(flags.apk), extra: passthroughArgs() });
+  const libs = libappByAbi(artifact);
+  if (!Object.keys(libs).length) fail(`${artifact} contains no libapp.so; is this a release build?`);
+  const record = {
+    platform: "android",
+    runtimeVersion: runtime,
+    buildId,
+    ...versions,
+    pluginsHash: pluginsHash(),
+    base: Object.fromEntries(Object.entries(libs).map(([abi, bytes]) => [abi, sha256Hex(bytes)])),
+    artifact: artifact.split("\\").join("/"),
+    createdAt: new Date().toISOString(),
+  };
+  const file = writeBaseRecord(record);
+  if (jsonMode) {
+    console.log(JSON.stringify({ ok: true, ...record, record: file }));
+    return;
+  }
+  log(`
+Store build: ${artifact}
+ABIs:        ${Object.keys(record.base).join(", ")}
+Recorded:    ${file}
+
+Next:
+  1. Commit ${file}: CI needs it to build patches for this store build.
+  2. Ship ${artifact} to Google Play (or your distribution channel) as usual.
+  3. Later, change Dart code and run:  fireota flutter patch android --app <appId> --private-key fireota-private.pem --message "What changed"`);
+}
+
+function stageDescriptor(dir, descriptor, flags) {
+  if (flags.assets && flags.assets !== true) {
+    if (!existsSync(String(flags.assets))) fail(`Assets folder not found: ${flags.assets}`);
+    cpSync(String(flags.assets), join(dir, "assets"), { recursive: true });
+  }
+  if (flags.config && flags.config !== true) {
+    const text = readFileSync(String(flags.config), "utf8");
+    try {
+      JSON.parse(text);
+    } catch {
+      fail(`${flags.config} is not valid JSON.`);
+    }
+    writeFileSync(join(dir, "config.json"), text);
+  }
+  writeFileSync(join(dir, "fireota.json"), `${JSON.stringify(descriptor, null, 2)}\n`);
+}
+
+function signingKey(flags, required) {
+  let key = null;
+  try {
+    key = loadPrivateKey(flags["private-key"] && flags["private-key"] !== true ? String(flags["private-key"]) : undefined);
+  } catch (error) {
+    fail(`Could not read the signing key: ${error instanceof Error ? error.message : error}`);
+  }
+  if (required && !key) {
+    fail("Code patches must be signed: pass --private-key fireota-private.pem (or set FIREOTA_SIGNING_KEY). Create keys with `fireota signing generate`.");
+  }
+  return key;
+}
+
+/** Compiles the current Dart code into a code patch for the recorded store build and publishes it. */
+async function flutterPatch(flags) {
+  flutterOnly();
+  const runtime = runtimeFor(flags, "android");
+  const base = readBaseRecord(runtime);
+  if (!base) {
+    fail(`No store build is recorded for runtime ${runtime}. Run \`fireota flutter release android\` for the build you shipped (or pass --runtime).`);
+  }
+  const current = { ...flutterVersionInfo(), pluginsHash: pluginsHash() };
+  const problems = patchCompatibilityProblems(base, current);
+  if (problems.length && !flags.force) fail(`This patch would not fit store build ${runtime}:\n  - ${problems.join("\n  - ")}`);
+  const abis = String(flags.abis && flags.abis !== true ? flags.abis : "arm64-v8a").split(",").map((a) => a.trim()).filter(Boolean);
+  const missing = abis.filter((abi) => !base.base?.[abi]);
+  if (missing.length) fail(`The store build has no ${missing.join(", ")} code. Recorded ABIs: ${Object.keys(base.base ?? {}).join(", ")}`);
+  const dryRun = Boolean(flags["dry-run"]);
+  const key = signingKey(flags, !dryRun);
+
+  const buildId = newBuildId();
+  log(`Building code patch ${buildId} for store build ${runtime} (${abis.join(", ")})…`);
+  const apk = buildPatchApk({ buildId, abis, extra: passthroughArgs() });
+  const libs = libappByAbi(apk);
+  const dir = mkdtempSync(join(tmpdir(), "fireota-patch-"));
+  try {
+    for (const abi of abis) {
+      if (!libs[abi]) fail(`The patch build has no ${abi} libapp.so.`);
+      mkdirSync(join(dir, "lib", abi), { recursive: true });
+      writeFileSync(join(dir, "lib", abi, "libapp.so"), libs[abi]);
+    }
+    stageDescriptor(
+      dir,
+      {
+        version: 1,
+        kind: "flutter-aot",
+        runtimeVersion: runtime,
+        buildId,
+        flutterVersion: current.flutterVersion,
+        engineRevision: current.engineRevision,
+        pluginsHash: current.pluginsHash,
+        base: Object.fromEntries(abis.map((abi) => [abi, base.base[abi]])),
+      },
+      flags,
+    );
+    const file = flags.out && flags.out !== true ? String(flags.out) : join(dir, "..", `fireota-patch-${buildId}.fota`);
+    writeFileSync(file, packDirectory(dir));
+    log(`Packed ${file} (${(readFileSync(file).length / 1024 / 1024).toFixed(2)} MB).`);
+    if (dryRun) {
+      if (jsonMode) console.log(JSON.stringify({ ok: true, file, buildId }));
+      return;
+    }
+    const result = await publishOne(flags, "android", file, {}, key);
+    if (jsonMode) console.log(JSON.stringify({ ok: true, buildId, updates: [result] }));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/** Publishes asset and remote-config updates. */
+async function flutterAssets(flags) {
+  flutterOnly();
+  const platform = need(flags, "platform");
+  if (!["android", "ios", "all"].includes(platform)) fail("--platform must be android, ios or all");
+  if (!flags.assets && !flags.config) fail("Pass --assets <dir> and/or --config config.json.");
+  const key = signingKey(flags, false);
+  const platforms = platform === "all" ? ["android", "ios"] : [platform];
+  const results = [];
+  for (const p of platforms) {
+    const dir = mkdtempSync(join(tmpdir(), "fireota-assets-"));
+    try {
+      stageDescriptor(dir, { version: 1, kind: "flutter-assets", runtimeVersion: runtimeFor(flags, p) }, flags);
+      const file = join(dir, "..", `fireota-assets-${p}-${Date.now()}.fota`);
+      writeFileSync(file, packDirectory(dir));
+      results.push(await publishOne(flags, p, file, {}, key));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+  if (jsonMode) console.log(JSON.stringify({ ok: true, updates: results }));
+}
+
+/** `fireota init` in a Flutter project. */
+function flutterInit(flags) {
+  const appId = flags.app && flags.app !== true ? String(flags.app) : process.env.FIREOTA_APP_ID;
+  const serverUrl = flags["server-url"] && flags["server-url"] !== true ? String(flags["server-url"]) : process.env.FIREOTA_URL;
+  if (!appId || !serverUrl) fail("Pass --app <appId> and --server-url <url> (or set FIREOTA_APP_ID and FIREOTA_URL).");
+  const channel = String(flags.channel && flags.channel !== true ? flags.channel : "production");
+  const dry = Boolean(flags["dry-run"]);
+  const results = [];
+  const write = (file, text) => {
+    if (!dry) writeFileSync(file, text);
+  };
+
+  if (readPubspec().hasFireOTA) results.push(["✓", "fireota is already a dependency"]);
+  else if (dry) results.push(["+", "would run: flutter pub add fireota"]);
+  else {
+    try {
+      runFlutter(["pub", "add", "fireota"]);
+      results.push(["✓", "added fireota to pubspec.yaml"]);
+    } catch {
+      results.push(["!", "could not add fireota; run: flutter pub add fireota"]);
+    }
+  }
+
+  const configFile = join("lib", "fireota_config.dart");
+  if (existsSync(configFile) && !flags.force) results.push(["✓", `${configFile} already exists (use --force to rewrite)`]);
+  else {
+    write(configFile, flutterConfigSource({ appId, serverUrl: serverUrl.replace(/\/+$/, ""), channel }));
+    results.push(["+", `wrote ${configFile}`]);
+  }
+
+  const mainFile = join("lib", "main.dart");
+  const mainSource = existsSync(mainFile) ? readFileSync(mainFile, "utf8") : null;
+  const patchedMain = mainSource === null ? null : patchFlutterMain(mainSource);
+  if (patchedMain === null) results.push(["!", "add to main(): WidgetsFlutterBinding.ensureInitialized(); await FireOTA.init(fireotaConfig);"]);
+  else if (patchedMain === mainSource) results.push(["✓", "main.dart already starts FireOTA"]);
+  else {
+    write(mainFile, patchedMain);
+    results.push(["+", "main.dart starts FireOTA before runApp"]);
+  }
+
+  const activity = findFile(join("android", "app", "src", "main"), (name) => /^MainActivity\.(kt|java)$/.test(name));
+  const activitySource = activity ? readFileSync(activity, "utf8") : null;
+  const patchedActivity = activitySource === null ? null : patchFlutterActivity(activitySource, activity.endsWith(".kt"));
+  if (patchedActivity === null) results.push(["!", "make MainActivity extend dev.fireota.flutter.FireOTAFlutterActivity (needed for code patches)"]);
+  else if (patchedActivity === activitySource) results.push(["✓", "MainActivity already uses FireOTAFlutterActivity"]);
+  else {
+    write(activity, patchedActivity);
+    results.push(["+", `${activity} extends FireOTAFlutterActivity`]);
+  }
+
+  console.log(dry ? "\nFireOTA init (dry run — nothing written):\n" : "\nFireOTA is set up for Flutter:\n");
+  for (const [mark, text] of results) console.log(`  ${mark} ${text}`);
+  console.log(`
+Runtime version: ${storeVersion("android") ?? "unknown"} (pubspec.yaml version — bump it for every store release).
+
+Next:
+  1. Optional, Android code push: fireota signing generate, paste the public key into
+     lib/fireota_config.dart and the dashboard, and set allowCodePush: true.
+  2. Build and record the store build:  fireota flutter release android
+  3. Ship a patch:  fireota flutter patch android --app ${appId} --private-key fireota-private.pem --message "What changed"`);
+}
+
 async function main() {
   const [command, sub, ...rest] = process.argv.slice(2);
   const { positional, flags } = parseArgs([sub, ...rest].filter((v) => v !== undefined));
@@ -394,6 +646,26 @@ async function main() {
   }
   if (command === "bundle") {
     bundle(parseArgs(process.argv.slice(3)).flags);
+    return;
+  }
+  if (command === "flutter") {
+    const all = parseArgs(process.argv.slice(4, process.argv.includes("--") ? process.argv.indexOf("--") : undefined)).flags;
+    jsonMode = Boolean(all.json);
+    const target = process.argv[4] && !process.argv[4].startsWith("--") ? process.argv[4] : undefined;
+    const flagsAfterTarget = target ? parseArgs(process.argv.slice(5, process.argv.includes("--") ? process.argv.indexOf("--") : undefined)).flags : all;
+    if (sub === "release") {
+      if (target !== "android") fail("usage: fireota flutter release android [--apk]  (iOS store builds need no recording: iOS gets asset updates only)");
+      return flutterRelease(flagsAfterTarget);
+    }
+    if (sub === "patch") {
+      if (target !== "android") fail("usage: fireota flutter patch android …  (code patches are Android only)");
+      return flutterPatch(flagsAfterTarget);
+    }
+    if (sub === "assets") return flutterAssets(all);
+    fail("usage: fireota flutter <release|patch|assets> … (see fireota help)");
+  }
+  if (command === "init" && isFlutterProject()) {
+    flutterInit(parseArgs(process.argv.slice(3)).flags);
     return;
   }
   if (command === "init") {
