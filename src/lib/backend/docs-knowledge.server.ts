@@ -9,7 +9,7 @@ import CLI_SOURCE from "../../../packages/cli/bin/fireota.mjs?raw";
 
 const OVERVIEW = `# FireOTA product knowledge
 
-FireOTA ships over-the-air (OTA) JavaScript bundle updates to React Native apps without a store release. Website and dashboard: https://fireota.creoai.in. Docs: /docs. Source: https://github.com/Sujay-Dynamisch/FireOTA.
+FireOTA ships over-the-air (OTA) updates without a store release to React Native apps (JavaScript bundles) and Flutter apps (Dart code patches on Android; asset and config updates on Android and iOS). Website and dashboard: https://fireota.creoai.in. Docs: /docs. Source: https://github.com/Sujay-Dynamisch/FireOTA.
 
 ## Packages
 - @fireota/react-native: the SDK inside the app. Checks for updates, downloads and verifies them, applies them on restart, rolls back a crashing update automatically, and has a built-in update UI plus ready-made screens (RequiredUpdateScreen, UpdateDialog, UpdateSheet, UpdatesSettingsCard in node_modules/@fireota/react-native/templates).
@@ -21,7 +21,7 @@ FireOTA ships over-the-air (OTA) JavaScript bundle updates to React Native apps 
 - Different customers never share buckets; a test Firebase project is only for testing.
 
 ## Core concepts
-- Workspace → apps (one per React Native app, with an App ID) → channels (production, beta, staging, development, or custom). A build listens to one channel.
+- Workspace → apps (one per React Native or Flutter app, with an App ID) → channels (production, beta, staging, development, or custom). A build listens to one channel.
 - Runtime version: an update only reaches builds whose runtime version is exactly equal. Default runtime = the store version (Android versionName, iOS MARKETING_VERSION; Expo: expo.version). Bump it whenever native code changes and ship a new store build.
 - Updates are identified by ID; --version is only a label. --native ">=1.4.0" limits by native app version.
 - Release statuses: draft → uploading → ready → published; also paused, rolled_back, failed, archived. Archive a live release (ready/published/paused/rolled_back) first; delete works for draft, failed, ready, uploading and archived releases and also removes the bundle from Firebase Storage. Both are available from the Releases list and the release page.
@@ -37,8 +37,12 @@ Two options, pick one per app:
 2. Keep expo-updates, no EAS Update (CLI 0.5.0+): FireOTA implements the Expo Updates protocol. Set app.json updates.url to <FIREOTA_URL>/api/public/v1/expo/<appId>/manifest and requestHeaders {"expo-channel-name": "<channel>"}, make one store build, then publish with "fireota publish --expo". No native change or FireOTA SDK is needed. Updates apply on the next app launch (or call Updates.reloadAsync()). Expo updates cannot be code-signed yet. With no update to serve, FireOTA sends noUpdateAvailable, or rollBackToEmbedded after a rollback. EAS Build can still be used for builds.
 
 ## Platform support
-- Supported: React Native apps on Android and iOS (bare React Native and Expo).
-- Not supported: Flutter, fully native Kotlin/Java or Swift/Objective-C apps, and the web. OTA here means replacing the React Native JavaScript bundle and assets; native code always needs a store release (this is also what app store rules allow).
+- Supported: React Native apps on Android and iOS (bare React Native and Expo), and Flutter apps with the "fireota" package from pub.dev.
+- Flutter setup: "flutter pub add fireota", then "fireota init" (writes lib/fireota_config.dart, starts FireOTA.init in main.dart, makes MainActivity extend FireOTAFlutterActivity). The runtime version is the pubspec version with its build number, e.g. 1.4.0+12.
+- Flutter on Android: Dart code patches. "fireota flutter release android" builds the store build and records its fingerprint in .fireota/flutter/ (commit it); "fireota flutter patch android --private-key ..." builds and publishes a signed patch. Code push must be enabled with allowCodePush: true and codeSigningCertificate. Patches must use the same Flutter version and native plugins as the store build. A patch that crashes before its first frame, or that the engine cannot load (patch_not_loaded), is rolled back automatically.
+- Flutter on iOS and Android: asset and remote-config updates with "fireota flutter assets" (FireOTAImage, FireOTA.config). iOS Dart code push is not supported.
+- Google Play only allows downloaded code that runs in a VM or interpreter, so Flutter code push is off by default; asset/config updates are always fine.
+- Not supported: fully native Kotlin/Java or Swift/Objective-C apps, and the web. Native code always needs a store release (this is also what app store rules allow).
 
 ## Self-hosting
 FireOTA can be self-hosted; see the Self-hosting and deployment page. Point FIREOTA_URL (CLI) and the SDK server URL at your own deployment.`;

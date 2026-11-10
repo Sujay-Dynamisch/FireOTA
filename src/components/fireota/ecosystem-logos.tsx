@@ -2,6 +2,7 @@ import { cn } from "@/lib/utils";
 
 export type EcosystemId =
   | "react-native"
+  | "flutter"
   | "firebase"
   | "google-cloud"
   | "expo"
@@ -14,6 +15,7 @@ export type EcosystemId =
 
 const NAMES: Record<EcosystemId, string> = {
   "react-native": "React Native",
+  flutter: "Flutter",
   firebase: "Firebase",
   "google-cloud": "Google Cloud",
   expo: "Expo",

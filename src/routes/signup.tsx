@@ -19,7 +19,7 @@ export const Route = createFileRoute("/signup")({
   head: () => ({
     meta: [
       { title: "Create your FireOTA account" },
-      { name: "description", content: "Create a FireOTA account to manage React Native OTA releases in your own Firebase project." },
+      { name: "description", content: "Create a FireOTA account to manage React Native and Flutter OTA releases in your own cloud storage." },
       { property: "og:title", content: "Create your FireOTA account" },
       { property: "og:description", content: "Free at the platform level. Your bundles stay in your Firebase project." },
     ],

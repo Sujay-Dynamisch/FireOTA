@@ -18,9 +18,9 @@ export const Route = createFileRoute("/apps/new")({
   head: () => ({
     meta: [
       { title: "Add application — FireOTA" },
-      { name: "description", content: "Register a React Native application, choose platforms and configure its runtime and channels." },
+      { name: "description", content: "Register a React Native or Flutter application, choose platforms and configure its runtime and channels." },
       { property: "og:title", content: "Add application — FireOTA" },
-      { property: "og:description", content: "Register a React Native application for OTA releases." },
+      { property: "og:description", content: "Register a React Native or Flutter application for OTA releases." },
     ],
   }),
   component: NewAppPage,
@@ -56,7 +56,7 @@ function NewAppPage() {
         { label: "New application" },
       ]}
     >
-      <PageHeader title="Add application" description="Register a React Native application for OTA releases." />
+      <PageHeader title="Add application" description="Register a React Native or Flutter application for OTA releases." />
 
       {step === 0 && (
         <WizardShell

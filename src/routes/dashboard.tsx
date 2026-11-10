@@ -25,7 +25,7 @@ export const Route = createFileRoute("/dashboard")({
   head: () => ({
     meta: [
       { title: "Dashboard — FireOTA" },
-      { name: "description", content: "Release health, active rollouts and recent OTA activity across your React Native applications." },
+      { name: "description", content: "Release health, active rollouts and recent OTA activity across your React Native and Flutter applications." },
       { property: "og:title", content: "Dashboard — FireOTA" },
       { property: "og:description", content: "Release health, active rollouts and recent OTA activity in one view." },
     ],
@@ -54,7 +54,7 @@ function DashboardPage() {
     <AppShell breadcrumb={[{ label: "Helio Labs", to: "/dashboard" }, { label: "Dashboard" }]}>
       <PageHeader
         title={`${dashboardService.greeting()}, ${summary.data?.greetingName ?? "there"}`}
-        description="Here's what's happening across your React Native applications."
+        description="Here's what's happening across your React Native and Flutter applications."
         actions={
           <>
             <Button variant="outline" size="sm" asChild>
@@ -81,7 +81,7 @@ function DashboardPage() {
             <EmptyState
               icon={Boxes}
               title="Firebase is connected. Add your first app."
-              description={`Register a React Native application to start publishing OTA releases to ${firebase?.name}.`}
+              description={`Register a React Native or Flutter app to start publishing OTA releases to ${firebase?.name}.`}
               actions={
                 <>
                   <Button size="sm" asChild>
@@ -97,7 +97,7 @@ function DashboardPage() {
             <EmptyState
               icon={Boxes}
               title="Your OTA workspace is empty."
-              description="Connect Firebase and add your first React Native application."
+              description="Connect Firebase and add your first React Native or Flutter app."
               actions={
                 <>
                   <Button size="sm" asChild>
@@ -314,7 +314,7 @@ function DashboardPage() {
           <ol className="space-y-3 p-4">
             {[
               ["Firebase project connected", firebaseConnected, "/projects/connect"],
-              ["React Native application registered", hasApps, "/apps/new"],
+              ["Application registered", hasApps, "/apps/new"],
               ["First OTA release published", hasPublished, firstAppId ? `/apps/${firstAppId}/releases/new` : "/apps/new"],
               ["CI/CD pipeline connected", hasApiKey, "/settings/ci-cd"],
             ].map(([label, done, to]) => (

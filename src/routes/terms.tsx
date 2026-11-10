@@ -30,7 +30,7 @@ function TermsPage() {
           title: "The Service",
           body: (
             <p>
-              FireOTA lets you publish, roll out, pause and roll back over-the-air JavaScript updates for React Native apps. Update packages
+              FireOTA lets you publish, roll out, pause and roll back over-the-air updates for React Native and Flutter apps. Update packages
               are stored in, and served from, a Firebase project that you own and connect. FireOTA does not charge for its core OTA
               management features; Google bills your Firebase project directly for storage and bandwidth.
             </p>

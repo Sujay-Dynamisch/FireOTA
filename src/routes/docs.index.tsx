@@ -13,7 +13,7 @@ function DocsHome() {
     <main className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
       <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-brand">Documentation</p>
       <h1 className="mt-2 font-display text-[34px] font-bold leading-tight tracking-tight sm:text-[40px]">
-        Over-the-air updates for React Native
+        Over-the-air updates for React Native and Flutter
       </h1>
       <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-muted-foreground">
         Ship JavaScript fixes and features without a store review, from your own Firebase project —

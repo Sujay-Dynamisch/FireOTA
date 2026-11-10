@@ -11,7 +11,7 @@ export const Route = createFileRoute("/changelog/")({
       { title: "Changelog — FireOTA" },
       {
         name: "description",
-        content: "New features, fixes and releases of FireOTA, the React Native SDK and the CLI.",
+        content: "New features, fixes and releases of FireOTA, the React Native and Flutter SDKs and the CLI.",
       },
       { property: "og:title", content: "FireOTA Changelog" },
       { property: "og:description", content: "Everything new in FireOTA." },

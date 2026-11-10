@@ -18,7 +18,7 @@ export const Route = createFileRoute("/login")({
   head: () => ({
     meta: [
       { title: "Sign in — FireOTA" },
-      { name: "description", content: "Sign in to FireOTA to manage React Native OTA releases in your Firebase project." },
+      { name: "description", content: "Sign in to FireOTA to manage React Native and Flutter OTA releases from your own cloud storage." },
       { property: "og:title", content: "Sign in — FireOTA" },
       { property: "og:description", content: "Manage OTA releases, channels and rollouts from one place." },
     ],

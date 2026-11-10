@@ -19,7 +19,7 @@ export const Route = createFileRoute("/releases/")({
   head: () => ({
     meta: [
       { title: "Releases — FireOTA" },
-      { name: "description", content: "Every OTA release across your React Native applications, with channel, rollout and status." },
+      { name: "description", content: "Every OTA release across your React Native and Flutter applications, with channel, rollout and status." },
       { property: "og:title", content: "Releases — FireOTA" },
       { property: "og:description", content: "Search, filter and inspect every OTA release." },
     ],

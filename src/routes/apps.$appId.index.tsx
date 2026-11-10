@@ -29,10 +29,10 @@ export const Route = createFileRoute("/apps/$appId/")({
       { title: "Application — FireOTA" },
       {
         name: "description",
-        content: "Channels, releases, device adoption and SDK configuration for a single React Native application.",
+        content: "Channels, releases, device adoption and SDK configuration for a single React Native or Flutter application.",
       },
       { property: "og:title", content: "Application — FireOTA" },
-      { property: "og:description", content: "Channels, releases and device adoption for a React Native app." },
+      { property: "og:description", content: "Channels, releases and device adoption for a React Native or Flutter app." },
     ],
   }),
   component: AppDetailPage,
