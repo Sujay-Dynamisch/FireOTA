@@ -1,17 +1,23 @@
-# fireota_example
+# fireota example
 
-Demonstrates how to use the fireota plugin.
+A minimal app that shows the update status and tries Dart code push on Android.
 
-## Getting Started
+## Run it
 
-This project is a starting point for a Flutter application.
+```sh
+flutter run --release \
+  --dart-define=FIREOTA_APP_ID=<your app ID> \
+  --dart-define=FIREOTA_URL=https://<your FireOTA deployment> \
+  --dart-define=FIREOTA_CERTIFICATE="$(cat fireota-public.pem)"
+```
 
-A few resources to get you started if this is your first Flutter project:
+`MainActivity` extends `FireOTAFlutterActivity`, so the engine starts with the installed code patch.
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+## Try code push
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+1. Record the store build: `fireota flutter release android --apk`, then install the APK.
+2. Change `message` in `lib/main.dart`.
+3. Publish a patch: `fireota flutter patch android --app <your app ID> --private-key fireota-private.pem --message "New text"`.
+4. Open the app (it downloads the patch), then close and open it again. The new text appears.
+
+See the [package README](https://pub.dev/packages/fireota) for setup, store policy and limits.

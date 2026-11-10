@@ -2,7 +2,7 @@ name: fireota
 description: >-
   Over-the-air updates for Flutter with FireOTA: Dart code push on Android, asset and config
   updates on Android and iOS, signed releases, staged rollouts and automatic rollback.
-version: 0.1.0
+version: 0.1.1
 homepage: https://fireota.creoai.in
 repository: https://github.com/Sujay-Dynamisch/FireOTA/tree/main/packages/flutter
 issue_tracker: https://github.com/Sujay-Dynamisch/FireOTA/issues

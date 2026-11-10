@@ -1,3 +1,8 @@
+## 0.1.1
+
+- Documentation: the example app now explains how to run it and try code push.
+- First release published automatically from GitHub Actions.
+
 ## 0.1.0
 
 First release.
