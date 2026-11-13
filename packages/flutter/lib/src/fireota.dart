@@ -44,8 +44,11 @@ abstract final class FireOTA {
   static Future<File?> assetFile(String path) => _instance.assetFile(path);
 }
 
+/// Largest server reply the SDK reads; update metadata is a few KB.
+const _maxResponseBytes = 1024 * 1024;
+
 /// The updater. Use [FireOTA] unless you need several instances (tests).
-class FireOTAUpdater {
+class FireOTAUpdater with WidgetsBindingObserver {
   FireOTAUpdater({FireOTANative? native, http.Client? httpClient, String? buildId, String? platform})
       : _native = native ?? MethodChannelFireOTANative(),
         _http = httpClient ?? http.Client(),
@@ -84,6 +87,21 @@ class FireOTAUpdater {
   Future<void> _init(FireOTAConfig config) async {
     if (config.appId.isEmpty || config.serverUrl.isEmpty) {
       throw ArgumentError('FireOTA.init needs appId and serverUrl.');
+    }
+    // Update metadata decides what code runs: never fetch it over plain HTTP in a release build.
+    final server = Uri.tryParse(config.serverUrl);
+    final insecureAllowed = config.allowInsecureServer && !kReleaseMode;
+    if (server == null || !server.hasAuthority || (server.scheme != 'https' && !(insecureAllowed && server.scheme == 'http'))) {
+      throw ArgumentError('FireOTA serverUrl must be an https:// URL (got ${config.serverUrl}).');
+    }
+    // Fail at startup rather than refusing every update later.
+    final certificate = config.codeSigningCertificate;
+    if (certificate != null && certificate.isNotEmpty) {
+      try {
+        publicKeyForPlatform(certificate, 'ios');
+      } on Object {
+        throw ArgumentError('FireOTA codeSigningCertificate is not a valid PEM public key.');
+      }
     }
     _config = config;
     await _native.setCodePushEnabled(config.allowCodePush && _os == 'android');
@@ -134,6 +152,21 @@ class FireOTAUpdater {
       debugPrint('FireOTA: could not confirm this launch: $error');
     }
     if (_config.checkOnAppStart) unawaited(sync());
+    if (_config.checkOnResume) WidgetsBinding.instance.addObserver(this);
+  }
+
+  DateTime? _lastSyncAt;
+
+  /// Stops listening for app lifecycle changes. Only needed for updaters you create yourself.
+  void dispose() => WidgetsBinding.instance.removeObserver(this);
+
+  /// Checks again when the app comes back to the foreground, at most once per minCheckInterval.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    final last = _lastSyncAt;
+    if (last != null && DateTime.now().difference(last) < _config.minCheckInterval) return;
+    unawaited(sync());
   }
 
   /// Asks FireOTA whether a compatible update exists for this device.
@@ -170,6 +203,7 @@ class FireOTAUpdater {
   String? _refusalFor(FireOTARelease release, NativeState device) {
     if (release.runtimeVersion != _runtimeVersion) return 'runtime_incompatible';
     if (device.blockedReleaseIds.contains(release.id)) return 'blocked';
+    if (release.bundleSize > _config.maxDownloadBytes) return 'too_large';
     if (release.kind == PatchKind.code) {
       if (_os != 'android') return 'unsupported_platform';
       if (!_config.allowCodePush) return 'code_push_disabled';
@@ -186,14 +220,34 @@ class FireOTAUpdater {
     if (!RegExp(r'^[0-9a-fA-F]{64}$').hasMatch(release.bundleHash)) {
       throw StateError('The update has no valid checksum.');
     }
+    if (!release.bundleUrl.startsWith('https://')) throw StateError('Updates must be downloaded over HTTPS.');
+    if (release.bundleSize > _config.maxDownloadBytes) {
+      unawaited(_report('install_failed', release.id, {'reason': 'too_large'}));
+      throw StateError('The update is larger than maxDownloadBytes.');
+    }
     await _assertSigned(release);
     _setStatus(UpdateStatus.downloading, releaseId: release.id);
     unawaited(_report('download_started', release.id));
+    final progress = _native.progress().where((event) => event['releaseId'] == release.id).listen((event) {
+      final received = (event['received'] as num?)?.toDouble() ?? 0;
+      final total = (event['total'] as num?)?.toDouble() ?? release.bundleSize.toDouble();
+      if (total > 0) _state.value = _state.value.copyWith(downloadProgress: () => (received / total).clamp(0.0, 1.0));
+    });
     try {
-      await _native.download(url: release.bundleUrl, sha256: release.bundleHash.toLowerCase(), releaseId: release.id);
+      await _native.download(
+        url: release.bundleUrl,
+        sha256: release.bundleHash.toLowerCase(),
+        releaseId: release.id,
+        expectedSize: release.bundleSize,
+        maxBytes: _config.maxDownloadBytes,
+      );
     } on PlatformException catch (error) {
       unawaited(_report('install_failed', release.id, {'reason': error.code}));
       rethrow;
+    } finally {
+      // Not awaited: an event channel cancel round-trips to the platform and nothing depends on it.
+      unawaited(progress.cancel());
+      _state.value = _state.value.copyWith(downloadProgress: () => null);
     }
     unawaited(_report('download_completed', release.id));
     _setStatus(UpdateStatus.downloaded, releaseId: release.id);
@@ -243,6 +297,7 @@ class FireOTAUpdater {
   /// Never throws: the app keeps running the code it already has.
   Future<CheckResult> sync() {
     return _running ??= () async {
+      _lastSyncAt = DateTime.now();
       try {
         final result = await checkForUpdate();
         final release = result.release;
@@ -322,11 +377,16 @@ class FireOTAUpdater {
     final response = await _http
         .post(
           Uri.parse('$base$path'),
-          headers: {'content-type': 'application/json', 'x-fireota-sdk': 'flutter/$protocolVersion'},
+          headers: {
+            ..._config.headers,
+            'content-type': 'application/json',
+            'x-fireota-sdk': 'flutter/$protocolVersion',
+          },
           body: jsonEncode(body),
         )
         .timeout(const Duration(seconds: 15));
-    final json = jsonDecode(response.body) as Map<String, Object?>;
+    if (response.bodyBytes.length > _maxResponseBytes) throw StateError('The FireOTA server reply is too large.');
+    final json = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, Object?>;
     if (json['success'] != true) {
       final error = (json['error'] as Map?)?.cast<String, Object?>();
       throw StateError('${error?['message'] ?? 'FireOTA request failed (${response.statusCode})'}');
@@ -336,6 +396,11 @@ class FireOTAUpdater {
 
   /// Telemetry never blocks or fails an update.
   Future<void> _report(String event, String releaseId, [Map<String, Object?>? metadata]) async {
+    try {
+      _config.onEvent?.call(FireOTAEvent(name: event, releaseId: releaseId, metadata: metadata ?? const {}));
+    } catch (error) {
+      debugPrint('FireOTA: onEvent threw: $error');
+    }
     try {
       final device = _device ?? await _native.getState();
       await _post('/api/public/v1/updates/events', {

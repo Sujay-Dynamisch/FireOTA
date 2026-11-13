@@ -125,6 +125,43 @@ FireOTABuilder(builder: (context, state) => Text(state.status.name))
 await FireOTA.sync()                           // check, download and install now
 ```
 
+## Configuration
+
+| Option | Default | What it does |
+| --- | --- | --- |
+| `appId`, `serverUrl` | required | Your app and FireOTA deployment. `serverUrl` must use `https://`. |
+| `channel` | `production` | The release channel this build follows. |
+| `runtimeVersion` | `<version>+<build>` | The store build this app is. |
+| `allowCodePush` | `false` | Allows Dart code patches on Android. |
+| `codeSigningCertificate` | none | PEM public key. Required for code patches; when set, every update must be signed. |
+| `checkOnAppStart` | `true` | Checks for an update after the first frame. |
+| `checkOnResume`, `minCheckInterval` | `true`, 10 min | Checks again when the app returns to the foreground. |
+| `installMode`, `mandatoryInstallMode` | next restart, immediate | When downloaded updates apply. |
+| `maxDownloadBytes` | 200 MB | Updates announced as larger are refused before downloading. |
+| `headers` | none | Extra request headers, for example for an API gateway. |
+| `onEvent` | none | Receives every update event; forward it to Sentry, Datadog or Firebase Analytics. |
+| `onStatusChange` | none | Called when the update status changes. |
+| `allowInsecureServer` | `false` | Allows `http://` in debug and profile builds, for local testing. Ignored in release builds. |
+
+```dart
+FireOTAConfig(
+  appId: 'my-app',
+  serverUrl: 'https://ota.example.com',
+  headers: {'x-api-gateway-key': gatewayKey},
+  onEvent: (event) => Sentry.addBreadcrumb(Breadcrumb(message: '$event')),
+)
+```
+
+`FireOTA.state.value.downloadProgress` goes from 0.0 to 1.0 while an update downloads (Android).
+
+## Security
+
+- **Signed code.** Code patches are signed with your RSA key and verified on the device before download, and the server refuses unsigned code patches.
+- **Integrity.** Every download is checked against its SHA-256. It must be exactly the size the server announced, and is never larger than `maxDownloadBytes` (512 MB absolute). Packages are unpacked only inside the app's private storage, with path checks and a cap on unpacked size and file count. Downloads stop when the device is low on storage.
+- **Transport.** The server URL and every download must use HTTPS in release builds, and server replies over 1 MB are refused.
+- **Right build only.** A code patch runs only on the exact store build it was compiled for (runtime version and a fingerprint of the compiled code), and only when the build ID compiled into the running code matches the patch.
+- **Recovery.** A patch that crashes before its first frame, or that does not load, is rolled back and never downloaded again on that device. A new store build removes every patch.
+
 ## Store policy
 
 **Google Play** forbids apps from downloading executable code, such as `.so` files, from outside Google Play. Code that runs in a virtual machine or interpreter is exempt. A FireOTA code patch is compiled Dart code that runs in the Dart VM, the same position Shorebird takes. It is still a judgement call whether that is allowed, so code push is **off by default**:

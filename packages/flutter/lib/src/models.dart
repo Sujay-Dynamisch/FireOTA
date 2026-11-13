@@ -91,6 +91,7 @@ class FireOTASnapshot {
     this.error,
     this.lastCheckedAt,
     this.revision = 0,
+    this.downloadProgress,
   });
 
   final bool configured;
@@ -111,6 +112,9 @@ class FireOTASnapshot {
   /// Increases whenever assets or config change, so widgets can rebuild.
   final int revision;
 
+  /// 0.0 to 1.0 while an update downloads (Android), otherwise null.
+  final double? downloadProgress;
+
   FireOTASnapshot copyWith({
     bool? configured,
     UpdateStatus? status,
@@ -123,6 +127,7 @@ class FireOTASnapshot {
     String? Function()? error,
     DateTime? lastCheckedAt,
     int? revision,
+    double? Function()? downloadProgress,
   }) {
     return FireOTASnapshot(
       configured: configured ?? this.configured,
@@ -136,6 +141,7 @@ class FireOTASnapshot {
       error: error != null ? error() : this.error,
       lastCheckedAt: lastCheckedAt ?? this.lastCheckedAt,
       revision: revision ?? this.revision,
+      downloadProgress: downloadProgress != null ? downloadProgress() : this.downloadProgress,
     );
   }
 }

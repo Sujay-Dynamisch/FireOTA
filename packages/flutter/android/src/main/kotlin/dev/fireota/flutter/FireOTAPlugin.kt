@@ -10,6 +10,7 @@ import android.util.Base64
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
+import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.security.KeyFactory
@@ -20,6 +21,8 @@ import java.util.concurrent.Executors
 /** Bridges the Dart API to the patch store. Blocking work runs off the main thread. */
 class FireOTAPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware {
   private lateinit var channel: MethodChannel
+  private lateinit var progressChannel: EventChannel
+  @Volatile private var progressSink: EventChannel.EventSink? = null
   private lateinit var context: Context
   private var activity: Activity? = null
   private val io = Executors.newSingleThreadExecutor()
@@ -29,12 +32,24 @@ class FireOTAPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAw
     context = binding.applicationContext
     channel = MethodChannel(binding.binaryMessenger, "dev.fireota/flutter")
     channel.setMethodCallHandler(this)
+    progressChannel = EventChannel(binding.binaryMessenger, "dev.fireota/flutter/progress")
+    progressChannel.setStreamHandler(object : EventChannel.StreamHandler {
+      override fun onListen(arguments: Any?, events: EventChannel.EventSink) {
+        progressSink = events
+      }
+
+      override fun onCancel(arguments: Any?) {
+        progressSink = null
+      }
+    })
     // Counts this launch even when the app did not route the engine through FireOTA.
     FireOTA.launch(context)
   }
 
   override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
     channel.setMethodCallHandler(null)
+    progressChannel.setStreamHandler(null)
+    progressSink = null
   }
 
   override fun onAttachedToActivity(binding: ActivityPluginBinding) {
@@ -62,7 +77,16 @@ class FireOTAPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAw
         result.success(null)
       }
       "download" -> background(result) {
-        store.download(call.argument<String>("url")!!, call.argument<String>("sha256")!!, call.argument<String>("releaseId")!!)
+        val releaseId = call.argument<String>("releaseId")!!
+        store.download(
+          url = call.argument<String>("url")!!,
+          expectedSha256 = call.argument<String>("sha256")!!,
+          releaseId = releaseId,
+          expectedSize = call.argument<Number>("expectedSize")?.toLong() ?: 0,
+          maxBytes = call.argument<Number>("maxBytes")?.toLong() ?: 0,
+        ) { received, total ->
+          main.post { progressSink?.success(mapOf("releaseId" to releaseId, "received" to received, "total" to total)) }
+        }
         null
       }
       "verifySignature" -> result.success(

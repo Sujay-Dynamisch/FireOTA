@@ -22,6 +22,12 @@ class FireOTAConfig {
     this.installMode = InstallMode.nextRestart,
     this.mandatoryInstallMode = InstallMode.immediate,
     this.onStatusChange,
+    this.onEvent,
+    this.headers = const {},
+    this.checkOnResume = true,
+    this.minCheckInterval = const Duration(minutes: 10),
+    this.maxDownloadBytes = 200 * 1024 * 1024,
+    this.allowInsecureServer = false,
   });
 
   /// The FireOTA app ID or slug, from the dashboard.
@@ -56,4 +62,40 @@ class FireOTAConfig {
 
   /// Called whenever the update status changes.
   final void Function(UpdateStatus status, {String? releaseId, String? error})? onStatusChange;
+
+  /// Called for every update event the SDK reports (download_started, install_succeeded,
+  /// rollback, ...), even when the report cannot reach the server. Forward it to Sentry,
+  /// Datadog, Firebase Analytics or your own logging.
+  final void Function(FireOTAEvent event)? onEvent;
+
+  /// Extra headers sent with every request to the FireOTA server, for example for an API
+  /// gateway. They cannot replace the SDK's own `content-type` and `x-fireota-sdk` headers.
+  final Map<String, String> headers;
+
+  /// Checks again when the app returns to the foreground, at most once per [minCheckInterval].
+  final bool checkOnResume;
+
+  final Duration minCheckInterval;
+
+  /// Updates larger than this are refused before they are downloaded.
+  final int maxDownloadBytes;
+
+  /// Allows an `http://` server URL in debug and profile builds, for local testing.
+  /// Release builds always require HTTPS.
+  final bool allowInsecureServer;
+}
+
+/// An update event, as reported to the FireOTA server and to [FireOTAConfig.onEvent].
+class FireOTAEvent {
+  const FireOTAEvent({required this.name, required this.releaseId, this.metadata = const {}});
+
+  /// download_started, download_completed, install_succeeded, install_failed or rollback.
+  final String name;
+  final String releaseId;
+
+  /// For failures, `reason` holds the code shown on the dashboard (for example `patch_not_loaded`).
+  final Map<String, Object?> metadata;
+
+  @override
+  String toString() => 'FireOTAEvent($name, $releaseId${metadata.isEmpty ? '' : ', $metadata'})';
 }

@@ -8,8 +8,18 @@ abstract class FireOTANative {
   Future<void> setCodePushEnabled(bool enabled);
 
   /// Downloads, verifies the SHA-256 and unpacks a patch. Throws [PlatformException] with a
-  /// stable `code` (checksum_mismatch, base_mismatch, abi_unsupported, blocked, ...).
-  Future<void> download({required String url, required String sha256, required String releaseId});
+  /// stable `code` (checksum_mismatch, base_mismatch, abi_unsupported, blocked, too_large, ...).
+  /// A positive [expectedSize] must match the downloaded bytes exactly; [maxBytes] caps it.
+  Future<void> download({
+    required String url,
+    required String sha256,
+    required String releaseId,
+    int expectedSize = 0,
+    int maxBytes = 0,
+  });
+
+  /// Download progress events: `{releaseId, received, total}`. Empty where unsupported.
+  Stream<Map<String, Object?>> progress();
   Future<bool> verifySignature({required String message, required String signature, required String publicKey});
   Future<void> install(String releaseId);
 
@@ -35,8 +45,30 @@ class MethodChannelFireOTANative implements FireOTANative {
   Future<void> setCodePushEnabled(bool enabled) => _channel.invokeMethod('setCodePushEnabled', {'enabled': enabled});
 
   @override
-  Future<void> download({required String url, required String sha256, required String releaseId}) =>
-      _channel.invokeMethod('download', {'url': url, 'sha256': sha256, 'releaseId': releaseId});
+  Future<void> download({
+    required String url,
+    required String sha256,
+    required String releaseId,
+    int expectedSize = 0,
+    int maxBytes = 0,
+  }) =>
+      _channel.invokeMethod('download', {
+        'url': url,
+        'sha256': sha256,
+        'releaseId': releaseId,
+        'expectedSize': expectedSize,
+        'maxBytes': maxBytes,
+      });
+
+  static const _progress = EventChannel('dev.fireota/flutter/progress');
+
+  @override
+  Stream<Map<String, Object?>> progress() => _progress
+      .receiveBroadcastStream()
+      .where((event) => event is Map)
+      .map((event) => (event as Map).cast<String, Object?>())
+      // Platforms without progress events (iOS) answer with an error; there is simply no progress.
+      .handleError((Object _) {});
 
   @override
   Future<bool> verifySignature({required String message, required String signature, required String publicKey}) async =>

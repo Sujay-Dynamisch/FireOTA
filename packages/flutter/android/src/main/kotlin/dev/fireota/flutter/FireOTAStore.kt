@@ -155,11 +155,28 @@ internal class FireOTAStore(context: Context) {
     edit.commit()
   }
 
-  /** Streams the package to disk, verifies its SHA-256, checks it fits this build, then unpacks it atomically. */
-  fun download(url: String, expectedSha256: String, releaseId: String) {
+  /**
+   * Streams the package to disk, verifies its size and SHA-256, checks it fits this build, then
+   * unpacks it atomically. A positive [expectedSize] must match exactly; nothing larger than
+   * [maxBytes] (and never more than [HARD_LIMIT]) is written to disk.
+   */
+  fun download(
+    url: String,
+    expectedSha256: String,
+    releaseId: String,
+    expectedSize: Long = 0,
+    maxBytes: Long = 0,
+    onProgress: (received: Long, total: Long) -> Unit = { _, _ -> },
+  ) {
     if (!url.startsWith("https://")) throw FireOTAException("insecure_url", "Updates must be downloaded over HTTPS.")
     if (releaseId in blocked()) throw FireOTAException("blocked", "This patch failed on this device before.")
+    val limit = if (maxBytes in 1 until HARD_LIMIT) maxBytes else HARD_LIMIT
+    if (expectedSize > limit) throw FireOTAException("too_large", "The update is larger than the download limit.")
     root.mkdirs()
+    // Room for the package plus its unpacked copy, with headroom so the app keeps working.
+    val needed = (if (expectedSize > 0) expectedSize else limit / 4) * 3
+    val free = root.usableSpace // 0 when the system cannot tell
+    if (free in 1 until needed) throw FireOTAException("insufficient_storage", "Not enough free storage for the update.")
     val tmp = File(root, ".${safe(releaseId)}.download")
     val staging = File(root, ".${safe(releaseId)}.staging")
     val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
@@ -170,8 +187,36 @@ internal class FireOTAStore(context: Context) {
       if (connection.responseCode !in 200..299) {
         throw FireOTAException("download_failed", "Download failed: HTTP ${connection.responseCode}")
       }
+      val declared = connection.contentLengthLong
+      if (declared > limit) throw FireOTAException("too_large", "The update is larger than the download limit.")
+      val total = if (expectedSize > 0) expectedSize else declared
       val digest = MessageDigest.getInstance("SHA-256")
-      connection.inputStream.use { input -> FileOutputStream(tmp).use { output -> copy(input, output, digest) } }
+      var received = 0L
+      var reported = 0L
+      val step = maxOf(total / 50, 256L * 1024)
+      connection.inputStream.use { input ->
+        FileOutputStream(tmp).use { output ->
+          val buffer = ByteArray(64 * 1024)
+          while (true) {
+            val read = input.read(buffer)
+            if (read < 0) break
+            received += read
+            if (received > limit || (expectedSize > 0 && received > expectedSize)) {
+              throw FireOTAException("too_large", "The update is larger than announced.")
+            }
+            digest.update(buffer, 0, read)
+            output.write(buffer, 0, read)
+            if (received - reported >= step) {
+              reported = received
+              onProgress(received, total)
+            }
+          }
+        }
+      }
+      if (expectedSize > 0 && received != expectedSize) {
+        throw FireOTAException("size_mismatch", "The update is smaller than announced.")
+      }
+      onProgress(received, if (total > 0) total else received)
       val actual = hex(digest.digest())
       if (!actual.equals(expectedSha256, ignoreCase = true)) {
         throw FireOTAException("checksum_mismatch", "Checksum mismatch: the update was rejected.")
@@ -255,6 +300,15 @@ internal class FireOTAStore(context: Context) {
       val header = ByteArray(headerLength)
       input.readFully(header)
       val files = JSONObject(String(header, Charsets.UTF_8)).getJSONArray("files")
+      // Refuse decompression bombs before writing anything.
+      if (files.length() > MAX_FILES) throw FireOTAException("invalid_package", "The update package has too many files.")
+      var unpacked = 0L
+      for (i in 0 until files.length()) {
+        val size = files.getJSONObject(i).getLong("size")
+        if (size < 0) throw FireOTAException("invalid_package", "Invalid package header.")
+        unpacked += size
+      }
+      if (unpacked > UNPACKED_LIMIT) throw FireOTAException("too_large", "The update unpacks to more than the limit.")
       val base = into.canonicalFile
       base.mkdirs()
       for (i in 0 until files.length()) {
@@ -317,15 +371,10 @@ internal class FireOTAStore(context: Context) {
     const val KEY_FINGERPRINT = "baseFingerprint"
     const val KEY_BLOCKED = "blocked"
 
-    private fun copy(input: InputStream, output: FileOutputStream, digest: MessageDigest) {
-      val buffer = ByteArray(64 * 1024)
-      while (true) {
-        val read = input.read(buffer)
-        if (read < 0) break
-        digest.update(buffer, 0, read)
-        output.write(buffer, 0, read)
-      }
-    }
+    /** Absolute caps, whatever the app configures. */
+    const val HARD_LIMIT = 512L * 1024 * 1024
+    const val UNPACKED_LIMIT = 1024L * 1024 * 1024
+    const val MAX_FILES = 20_000
 
     private fun sha256(input: InputStream): String {
       val digest = MessageDigest.getInstance("SHA-256")

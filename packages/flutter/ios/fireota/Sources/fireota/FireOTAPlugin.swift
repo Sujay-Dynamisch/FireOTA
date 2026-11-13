@@ -33,7 +33,9 @@ public class FireOTAPlugin: NSObject, FlutterPlugin {
         result(FlutterError(code: "invalid_arguments", message: "url, sha256 and releaseId are required.", details: nil))
         return
       }
-      store.download(url: url, sha256: sha, releaseId: id) { error in
+      let expectedSize = (args["expectedSize"] as? NSNumber)?.int64Value ?? 0
+      let maxBytes = (args["maxBytes"] as? NSNumber)?.int64Value ?? 0
+      store.download(url: url, sha256: sha, releaseId: id, expectedSize: expectedSize, maxBytes: maxBytes) { error in
         DispatchQueue.main.async { result(error.map { FlutterError(code: $0.code, message: $0.message, details: nil) }) }
       }
     case "verifySignature":
@@ -250,9 +252,32 @@ final class FireOTAStore {
     return try? String(contentsOf: patchDir(current).appendingPathComponent("config.json"), encoding: .utf8)
   }
 
-  func download(url urlString: String, sha256 expected: String, releaseId: String, completion: @escaping (FireOTAError?) -> Void) {
+  /// Absolute caps, whatever the app configures.
+  static let hardLimit: Int64 = 512 * 1024 * 1024
+  static let unpackedLimit: Int64 = 1024 * 1024 * 1024
+  static let maxFiles = 20_000
+
+  func download(
+    url urlString: String,
+    sha256 expected: String,
+    releaseId: String,
+    expectedSize: Int64 = 0,
+    maxBytes: Int64 = 0,
+    completion: @escaping (FireOTAError?) -> Void
+  ) {
     guard let url = URL(string: urlString), url.scheme == "https" else {
       completion(FireOTAError(code: "insecure_url", message: "Updates must be downloaded over HTTPS."))
+      return
+    }
+    let limit = maxBytes > 0 && maxBytes < Self.hardLimit ? maxBytes : Self.hardLimit
+    if expectedSize > limit {
+      completion(FireOTAError(code: "too_large", message: "The update is larger than the download limit."))
+      return
+    }
+    let needed = (expectedSize > 0 ? expectedSize : limit / 4) * 3
+    if let free = (try? root.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]))?.volumeAvailableCapacityForImportantUsage,
+       free > 0, free < needed {
+      completion(FireOTAError(code: "insufficient_storage", message: "Not enough free storage for the update."))
       return
     }
     if (defaults.stringArray(forKey: Self.kBlocked) ?? []).contains(releaseId) {
@@ -263,6 +288,15 @@ final class FireOTAStore {
       let status = (response as? HTTPURLResponse)?.statusCode ?? 0
       guard error == nil, let location, (200...299).contains(status) else {
         completion(FireOTAError(code: "download_failed", message: "Download failed (HTTP \(status))."))
+        return
+      }
+      let size = ((try? FileManager.default.attributesOfItem(atPath: location.path))?[.size] as? NSNumber)?.int64Value ?? -1
+      if size > limit || (expectedSize > 0 && size > expectedSize) {
+        completion(FireOTAError(code: "too_large", message: "The update is larger than announced."))
+        return
+      }
+      if expectedSize > 0 && size != expectedSize {
+        completion(FireOTAError(code: "size_mismatch", message: "The update is smaller than announced."))
         return
       }
       guard Self.sha256(of: location) == expected.lowercased() else {
@@ -337,6 +371,14 @@ final class FireOTAStore {
     guard length > 0, length <= 4 * 1024 * 1024, let header = read(length),
           let json = try? JSONSerialization.jsonObject(with: header) as? [String: Any],
           let files = json["files"] as? [[String: Any]] else { return "Invalid package header." }
+    // Refuse decompression bombs before writing anything.
+    if files.count > maxFiles { return "The update package has too many files." }
+    var unpacked: Int64 = 0
+    for entry in files {
+      guard let size = (entry["size"] as? NSNumber)?.int64Value, size >= 0 else { return "Invalid package header." }
+      unpacked += size
+    }
+    if unpacked > unpackedLimit { return "The update unpacks to more than the limit." }
     let fm = FileManager.default
     try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
     let base = dir.standardizedFileURL.path
