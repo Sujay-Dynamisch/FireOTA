@@ -40,7 +40,8 @@ jobs:
           test "fireota-v${version}" = "${GITHUB_REF_NAME}" || { echo "Tag ${GITHUB_REF_NAME} does not match pubspec version ${version}"; exit 1; }
 
       - run: flutter pub get
-      - run: flutter analyze
+      # Infos (such as new deprecations) must not block a release; warnings and errors still do.
+      - run: flutter analyze --no-fatal-infos
       - run: flutter test
       - run: flutter pub publish --dry-run
       - run: flutter pub publish --force

@@ -1,4 +1,7 @@
 import 'package:fireota/fireota.dart';
+// material.dart is deprecated in newer Flutter, but package:material_ui does not exist in the
+// older versions this package supports (Flutter 3.22+).
+// ignore: deprecated_member_use
 import 'package:flutter/material.dart';
 
 // Pass these at build time, or let `fireota init` write them into lib/fireota_config.dart:
