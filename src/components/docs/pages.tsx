@@ -279,6 +279,11 @@ export function SettingsScreen() {
   );
 }`;
 
+const AGENT_INSTALL = `npx @fireota/cli agent install`;
+
+const AGENT_PROMPT = `Set up FireOTA over-the-air updates in this project.
+Follow https://fireota.creoai.in/skills/fireota/SKILL.md`;
+
 const FLUTTER_INSTALL = `flutter pub add fireota
 npm install -g @fireota/cli
 fireota init --app YOUR_APP_ID --server-url https://fireota.example.com`;
@@ -902,6 +907,70 @@ export const docGroups: DocGroup[] = [
     title: "Set up",
     icon: "settings",
     pages: [
+      {
+        slug: "ai-agents",
+        title: "Set up with an AI coding agent",
+        badge: "new",
+        description:
+          "Let Claude Code, Codex, Cursor, Antigravity or another coding agent add FireOTA to your React Native, Expo or Flutter app with one command or one prompt.",
+        sections: [
+          {
+            id: "one-command",
+            title: "Option 1: one command",
+            body: (
+              <>
+                <p>Run this in your project, then ask your agent to set up FireOTA:</p>
+                <Code code={AGENT_INSTALL} />
+                <Bullets
+                  items={[
+                    <><C>.claude/skills/fireota/SKILL.md</C>: picked up by Claude Code.</>,
+                    <><C>.agents/skills/fireota/SKILL.md</C>: picked up by Codex and other tools that read the Agent Skills standard.</>,
+                    <>A short section in <C>AGENTS.md</C> pointing to the skill, for agents that read <C>AGENTS.md</C>.</>,
+                  ]}
+                />
+                <p>
+                  Commit these files so everyone on the team, and every agent, gets the same instructions. Run the command
+                  again after updating the CLI to refresh them; add <C>--force</C> to replace a skill you edited.
+                </p>
+              </>
+            ),
+          },
+          {
+            id: "one-prompt",
+            title: "Option 2: one prompt",
+            body: (
+              <>
+                <p>Agents that can read the web don't need the command. Paste this prompt:</p>
+                <Code code={AGENT_PROMPT} />
+              </>
+            ),
+          },
+          {
+            id: "what-it-does",
+            title: "What the agent does",
+            body: (
+              <Steps
+                items={[
+                  "Asks you for your FireOTA URL, App ID and channel. It never guesses them.",
+                  "Detects React Native, Expo or Flutter, installs the SDK and runs fireota init, which makes the native changes.",
+                  "Sets up code signing on request, and keeps the private key out of git.",
+                  "Builds the app to check the setup, then publishes an update or adds CI when you ask.",
+                ]}
+              />
+            ),
+          },
+          {
+            id: "safety",
+            title: "Keys stay with you",
+            body: (
+              <Callout kind="important">
+                The skill tells the agent never to write <C>FIREOTA_API_KEY</C> or your private signing key into a file. Give
+                the API key through an environment variable when you publish, and store both as CI secrets.
+              </Callout>
+            ),
+          },
+        ],
+      },
       {
         slug: "storage-targets",
         title: "Multi-Cloud Sovereign Storage",

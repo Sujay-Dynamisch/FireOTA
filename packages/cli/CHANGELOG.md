@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.8.0] - 2026-11-16
+
+### Added
+- **AI coding agents**: `fireota agent install` adds the FireOTA setup skill to a project: `.claude/skills/fireota/SKILL.md` for Claude Code, `.agents/skills/fireota/SKILL.md` for Codex and other Agent Skills tools, and a pointer in `AGENTS.md`. Then ask your agent to "set up FireOTA". The same skill is published at https://fireota.creoai.in/skills/fireota/SKILL.md for agents that read the web.
+
 ## [0.7.0] - 2026-11-10
 
 ### Added

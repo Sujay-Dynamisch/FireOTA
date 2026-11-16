@@ -14,6 +14,7 @@ import { tmpdir } from "node:os";
 import { createRequire } from "node:module";
 import { join, relative, resolve } from "node:path";
 
+import { installAgentFiles } from "../lib/agent.mjs";
 import { detectCi } from "../lib/ci.mjs";
 import {
   buildPatchApk,
@@ -61,6 +62,11 @@ Usage:
   fireota release pause    <releaseId>
   fireota release rollback <releaseId> --reason "..." [--target <releaseId>]
   fireota releases [--app <appId>] [--json]
+
+AI coding agents (Claude Code, Codex, Cursor, Antigravity and others):
+  fireota agent install [--tools claude,agents,agents-md] [--force] [--dry-run]
+                   Adds the FireOTA setup skill to this project (.claude/skills, .agents/skills and a
+                   pointer in AGENTS.md). Then ask your agent: "Set up FireOTA in this project".
 
 Flutter (pub.dev package \`fireota\`):
   fireota init     In a Flutter project: writes lib/fireota_config.dart, starts FireOTA in main.dart
@@ -646,6 +652,24 @@ async function main() {
   }
   if (command === "bundle") {
     bundle(parseArgs(process.argv.slice(3)).flags);
+    return;
+  }
+  if (command === "agent") {
+    if (sub !== "install") fail("usage: fireota agent install [--tools claude,agents,agents-md] [--force] [--dry-run]");
+    const all = parseArgs(process.argv.slice(4)).flags;
+    const tools = all.tools && all.tools !== true ? String(all.tools).split(",").map((t) => t.trim()).filter(Boolean) : undefined;
+    let results;
+    try {
+      results = installAgentFiles({ ...(tools ? { tools } : {}), force: Boolean(all.force), dry: Boolean(all["dry-run"]) });
+    } catch (error) {
+      fail(error instanceof Error ? error.message : String(error));
+    }
+    console.log(all["dry-run"] ? "\nFireOTA agent skill (dry run — nothing written):\n" : "\nFireOTA agent skill installed:\n");
+    for (const [mark, text] of results) console.log(`  ${mark} ${text}`);
+    console.log(`
+Next, ask your coding agent:
+  "Set up FireOTA over-the-air updates in this project."
+It will ask you for your FireOTA URL and App ID. Commit the skill files so your whole team gets them.`);
     return;
   }
   if (command === "flutter") {

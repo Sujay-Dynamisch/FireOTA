@@ -1,0 +1,14 @@
+# FireOTA
+
+> Over-the-air updates for React Native, Expo and Flutter apps: publish JavaScript bundles, Dart code patches (Android) and asset/config updates without a store release, with signing, staged rollouts and automatic rollback.
+
+## Set up FireOTA with an AI coding agent
+
+- [FireOTA setup skill](https://fireota.creoai.in/skills/fireota/SKILL.md): step-by-step instructions an agent follows to add FireOTA to a React Native, Expo or Flutter project, publish an update and wire CI.
+
+## Docs
+
+- [Documentation](https://fireota.creoai.in/docs)
+- [Expo](https://fireota.creoai.in/docs/expo)
+- [Flutter](https://fireota.creoai.in/docs/flutter)
+- [CLI reference](https://fireota.creoai.in/docs/cli-reference)
