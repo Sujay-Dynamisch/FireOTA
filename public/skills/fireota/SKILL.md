@@ -61,7 +61,7 @@ flutter pub add fireota
 npx @fireota/cli init --app <APP_ID> --server-url <FIREOTA_URL> --channel <CHANNEL>
 ```
 
-`init` writes `lib/fireota_config.dart`, makes `main()` call `await FireOTA.init(fireotaConfig)` before `runApp`, and makes `MainActivity` extend `FireOTAFlutterActivity`.
+`init` writes `lib/fireota_config.dart`, makes `main()` call `await FireOTA.init(fireotaConfig)` before `runApp`, and makes `MainActivity` extend `FireOTAFlutterActivity`. Then add the update dialogs once: `MaterialApp(builder: (context, child) => FireOTAUpdatePrompt(child: child!))`, and set `autoDownload: false` in the config if the user should tap Update before a download.
 
 - Runtime version = the `pubspec.yaml` version with its build number (`1.4.0+12`). Bump it for every store release.
 - iOS gets asset and config updates only, never code.

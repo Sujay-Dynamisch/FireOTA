@@ -8,6 +8,7 @@ import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
+import com.facebook.react.modules.core.DeviceEventManagerModule
 import java.security.KeyFactory
 import java.security.Signature
 import java.security.spec.X509EncodedKeySpec
@@ -41,7 +42,17 @@ class FireOTAModule(private val reactContext: ReactApplicationContext) : ReactCo
   fun downloadUpdate(url: String, sha256: String, releaseId: String, promise: Promise) {
     io.execute {
       try {
-        store.download(url, sha256, releaseId)
+        store.download(url, sha256, releaseId) { received, total ->
+          val event = Arguments.createMap()
+          event.putString("releaseId", releaseId)
+          event.putDouble("received", received.toDouble())
+          event.putDouble("total", total.toDouble())
+          if (reactContext.hasActiveReactInstance()) {
+            reactContext
+              .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+              .emit("FireOTADownloadProgress", event)
+          }
+        }
         promise.resolve(null)
       } catch (e: SecurityException) {
         promise.reject("FIREOTA_CHECKSUM", e.message, e)

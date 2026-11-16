@@ -1053,9 +1053,11 @@ function AppContent() {
   );
 }
 
-/** Mirrors FireOTATheme in @fireota/react-native; the defaults are the SDK's defaultTheme. */
+/** Mirrors FireOTATheme in @fireota/react-native; the defaults are the SDK's lightTheme (Material 3). */
 interface PromptTheme {
   accent: string;
+  onAccent: string;
+  accentContainer: string;
   background: string;
   card: string;
   text: string;
@@ -1063,53 +1065,100 @@ interface PromptTheme {
 }
 
 const SDK_DEFAULT_THEME: PromptTheme = {
-  accent: "#FF5A1F",
-  background: "#0E1013",
-  card: "#171A1F",
-  text: "#F4F5F7",
-  muted: "#9AA1AC",
+  accent: "#6750A4",
+  onAccent: "#FFFFFF",
+  accentContainer: "#EADDFF",
+  background: "#FEF7FF",
+  card: "#F3EDF7",
+  text: "#1D1B20",
+  muted: "#49454F",
+};
+
+const SDK_DARK_THEME: PromptTheme = {
+  accent: "#D0BCFF",
+  onAccent: "#381E72",
+  accentContainer: "#4F378B",
+  background: "#141218",
+  card: "#2B2930",
+  text: "#E6E0E9",
+  muted: "#CAC4D0",
 };
 
 const EXAMPLE_CUSTOM_THEME: PromptTheme = {
-  accent: "#6D28D9",
-  background: "#FFFFFF",
-  card: "#F4F1FB",
-  text: "#1F1235",
-  muted: "#6B6280",
+  ...SDK_DEFAULT_THEME,
+  accent: "#FF5A1F",
+  accentContainer: "#FFE1D6",
 };
 
-function PromptBanner({
+type PromptStep = "available" | "downloading" | "ready";
+
+/** The built-in Material 3 dialog over a dimmed app screen. */
+function PromptDialog({
   theme,
-  title = "Update ready",
-  message = "Fix checkout crash",
+  step,
+  title,
+  message,
+  dark = false,
 }: {
   theme: PromptTheme;
+  step: PromptStep;
   title?: string;
   message?: string;
+  dark?: boolean;
 }) {
+  const heading =
+    title ?? (step === "available" ? "Update available" : step === "downloading" ? "Downloading update" : "Update ready");
+  const body =
+    message ??
+    (step === "downloading" ? "You can keep using the app while this finishes." : "Faster checkout and a login fix.");
   return (
-    <div
-      className="absolute inset-x-2 bottom-3 flex items-center gap-1.5 rounded-lg p-2 shadow-lg"
-      style={{ background: theme.card }}
-    >
-      <div className="min-w-0 flex-1">
-        <p className="text-[9px] font-semibold" style={{ color: theme.text }}>
-          {title}
+    <>
+      <div className="absolute inset-0" style={{ background: dark ? "rgba(0,0,0,0.5)" : "rgba(0,0,0,0.32)" }} />
+      <div className="absolute inset-x-2.5 top-1/2 -translate-y-1/2 rounded-2xl p-2.5 text-center shadow-xl" style={{ background: theme.card }}>
+        <div
+          className="mx-auto mb-1.5 grid size-5 place-items-center rounded-full text-[10px] font-bold"
+          style={{ background: theme.accentContainer, color: theme.accent }}
+        >
+          {step === "ready" ? "✓" : "↓"}
+        </div>
+        <p className="mb-1 text-[11px]" style={{ color: theme.text }}>
+          {heading}
         </p>
-        <p className="truncate text-[8px]" style={{ color: theme.muted }}>
-          {message}
+        <p className="text-left text-[8px] leading-snug" style={{ color: theme.muted }}>
+          {body}
         </p>
+        {step === "available" ? (
+          <div className="mt-1.5 flex gap-1">
+            {["v1.4.1", "2.4 MB"].map((chip) => (
+              <span key={chip} className="rounded border px-1 text-[7px]" style={{ borderColor: theme.accentContainer, color: theme.muted }}>
+                {chip}
+              </span>
+            ))}
+          </div>
+        ) : null}
+        {step === "downloading" ? (
+          <div className="mt-2 space-y-1">
+            <div className="h-1 overflow-hidden rounded-full" style={{ background: theme.accentContainer }}>
+              <div className="h-full w-[62%] rounded-full" style={{ background: theme.accent }} />
+            </div>
+            <p className="flex justify-between text-[7px]" style={{ color: theme.muted }}>
+              <span>1.5 MB of 2.4 MB</span>
+              <span>62%</span>
+            </p>
+          </div>
+        ) : null}
+        <div className="mt-2 flex items-center justify-end gap-1.5">
+          <span className="text-[8px] font-medium" style={{ color: theme.accent }}>
+            {step === "available" ? "Not now" : step === "downloading" ? "Hide" : "Later"}
+          </span>
+          {step !== "downloading" ? (
+            <span className="rounded-full px-2 py-0.5 text-[8px] font-medium" style={{ background: theme.accent, color: theme.onAccent }}>
+              {step === "available" ? "Update" : "Restart now"}
+            </span>
+          ) : null}
+        </div>
       </div>
-      <span className="text-[8px]" style={{ color: theme.muted }}>
-        Later
-      </span>
-      <span
-        className="rounded px-1.5 py-0.5 text-[8px] font-medium text-white"
-        style={{ background: theme.accent }}
-      >
-        Restart
-      </span>
-    </div>
+    </>
   );
 }
 
@@ -1118,47 +1167,29 @@ function PhoneCaption({ children }: { children: ReactNode }) {
 }
 
 export function UpdatePromptMocks({ theme = SDK_DEFAULT_THEME }: { theme?: PromptTheme }) {
+  const steps: [PromptStep, string][] = [
+    ["available", "1. Update available"],
+    ["downloading", "2. Downloading"],
+    ["ready", "3. Update ready"],
+  ];
   return (
     <div className="flex flex-wrap items-start justify-center gap-6">
+      {steps.map(([step, caption]) => (
+        <div key={step} className="space-y-2 text-center">
+          <PhoneFrame>
+            <AppContent />
+            <PromptDialog theme={theme} step={step} />
+          </PhoneFrame>
+          <PhoneCaption>{caption}</PhoneCaption>
+        </div>
+      ))}
       <div className="space-y-2 text-center">
         <PhoneFrame>
-          <AppContent />
-          <PromptBanner theme={theme} />
-        </PhoneFrame>
-        <PhoneCaption>Normal update — downloaded</PhoneCaption>
-      </div>
-      <div className="space-y-2 text-center">
-        <PhoneFrame>
-          <div
-            className="absolute inset-0 grid place-items-center px-3 text-center"
-            style={{ background: theme.background }}
-          >
-            <div className="space-y-1.5">
-              <div
-                className="mx-auto size-5 animate-spin rounded-full border-2"
-                style={{ borderColor: theme.muted, borderTopColor: theme.accent }}
-              />
-              <p className="text-[10px] font-semibold" style={{ color: theme.text }}>
-                Installing an important update
-              </p>
-              <p className="text-[8px]" style={{ color: theme.muted }}>
-                This only takes a moment.
-              </p>
-            </div>
-          </div>
-        </PhoneFrame>
-        <PhoneCaption>Mandatory update</PhoneCaption>
-      </div>
-      <div className="space-y-2 text-center">
-        <PhoneFrame>
-          <div
-            className="absolute inset-0 space-y-1.5 px-2.5 pt-5"
-            style={{ background: theme.background }}
-          >
-            <p className="text-[11px] font-semibold" style={{ color: theme.text }}>
+          <div className="absolute inset-0 space-y-1.5 px-2.5 pt-5" style={{ background: theme.background }}>
+            <p className="text-[11px]" style={{ color: theme.text }}>
               App updates
             </p>
-            <div className="rounded text-[8px]" style={{ background: theme.card }}>
+            <div className="rounded-lg text-[8px]" style={{ background: theme.card }}>
               {[
                 ["App version", "1.0.0"],
                 ["Runtime", "1.0.0"],
@@ -1175,8 +1206,8 @@ export function UpdatePromptMocks({ theme = SDK_DEFAULT_THEME }: { theme?: Promp
               ))}
             </div>
             <span
-              className="block rounded py-1 text-center text-[8px] font-medium text-white"
-              style={{ background: theme.accent }}
+              className="block rounded-full py-1 text-center text-[8px] font-medium"
+              style={{ background: theme.accent, color: theme.onAccent }}
             >
               Check for updates
             </span>
@@ -1188,34 +1219,30 @@ export function UpdatePromptMocks({ theme = SDK_DEFAULT_THEME }: { theme?: Promp
   );
 }
 
-/** Default prompt next to the same prompt with a custom theme and custom text. */
+/** Default prompt (light and dark) next to the same prompt with a brand accent. */
 export function ThemeCompareMock() {
   return (
     <div className="flex flex-wrap items-start justify-center gap-6">
       <div className="space-y-2 text-center">
         <PhoneFrame>
           <AppContent />
-          <PromptBanner theme={SDK_DEFAULT_THEME} />
+          <PromptDialog theme={SDK_DEFAULT_THEME} step="ready" />
         </PhoneFrame>
-        <PhoneCaption>Default theme</PhoneCaption>
+        <PhoneCaption>Default, light mode</PhoneCaption>
+      </div>
+      <div className="space-y-2 text-center">
+        <PhoneFrame>
+          <div className="absolute inset-0" style={{ background: SDK_DARK_THEME.background }} />
+          <PromptDialog theme={SDK_DARK_THEME} step="ready" dark />
+        </PhoneFrame>
+        <PhoneCaption>Default, dark mode</PhoneCaption>
       </div>
       <div className="space-y-2 text-center">
         <PhoneFrame>
           <AppContent />
-          <PromptBanner theme={EXAMPLE_CUSTOM_THEME} />
+          <PromptDialog theme={EXAMPLE_CUSTOM_THEME} step="ready" title="New version available" message="Restart to get the latest fixes." />
         </PhoneFrame>
-        <PhoneCaption>theme: accent #6D28D9, light card</PhoneCaption>
-      </div>
-      <div className="space-y-2 text-center">
-        <PhoneFrame>
-          <AppContent />
-          <PromptBanner
-            theme={EXAMPLE_CUSTOM_THEME}
-            title="New version available"
-            message="Restart to get the latest fixes."
-          />
-        </PhoneFrame>
-        <PhoneCaption>Custom title and message</PhoneCaption>
+        <PhoneCaption>theme accent #FF5A1F + custom text</PhoneCaption>
       </div>
     </div>
   );

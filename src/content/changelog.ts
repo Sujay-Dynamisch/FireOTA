@@ -35,6 +35,37 @@ const SUJAL: ChangelogAuthor = {
 
 export const changelog: ChangelogEntry[] = [
   {
+    slug: "material-update-dialogs",
+    date: "2026-11-16",
+    title: "A modern update flow: ask, download with progress, restart",
+    summary:
+      "The built-in update prompt in the React Native and Flutter SDKs is now a Material 3 dialog flow that follows your app's light or dark theme, with a real download progress bar.",
+    tags: ["React Native 0.6.0", "Flutter 0.3.0", "UI"],
+    authors: [SUJAL],
+    body: [
+      { type: "h", text: "From a bottom card to a complete flow" },
+      {
+        type: "list",
+        items: [
+          "Update available: the release notes, version and download size, with Update and Not now.",
+          "Downloading: a progress bar with size and percent on Android and iOS, which the user can hide for optional updates.",
+          "Update ready: Restart now or Later. A failed download shows Try again.",
+          "Mandatory updates download straight away and cannot be dismissed.",
+        ],
+      },
+      { type: "h", text: "Fits any app" },
+      {
+        type: "p",
+        text: "React Native follows the device's light/dark mode with Material 3 colors; pass theme={{ accent }} to match your brand. Flutter uses your app's Theme. Every label can be changed or translated.",
+      },
+      { type: "code", code: "// Flutter\nMaterialApp(builder: (context, child) => FireOTAUpdatePrompt(child: child!));\n\n// React Native: nothing to add, <FireOTAProvider> shows it" },
+      {
+        type: "p",
+        text: "New autoDownload option: false waits for the user to tap Update (the React Native provider's default); true downloads in the background and only asks to restart.",
+      },
+    ],
+  },
+  {
     slug: "ai-agent-setup",
     date: "2026-11-16",
     title: "Set up FireOTA with your AI coding agent, plus a more secure Flutter SDK",

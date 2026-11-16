@@ -68,6 +68,10 @@ static BOOL FOTARead(gzFile gz, void *into, unsigned length)
   return YES;
 }
 
+// The download in flight, so JS can poll its progress (iOS has no progress events here).
+static NSURLSessionDownloadTask *FOTACurrentTask;
+static NSString *FOTACurrentRelease;
+
 @implementation FireOTA
 
 RCT_EXPORT_MODULE(FireOTA)
@@ -173,8 +177,12 @@ RCT_EXPORT_METHOD(downloadUpdate:(NSString *)urlString
   NSURLSessionConfiguration *config = [NSURLSessionConfiguration defaultSessionConfiguration];
   config.timeoutIntervalForRequest = 60;
   NSURLSession *session = [NSURLSession sessionWithConfiguration:config];
-  [[session downloadTaskWithURL:url
+  NSURLSessionDownloadTask *task = [session downloadTaskWithURL:url
               completionHandler:^(NSURL *location, NSURLResponse *response, NSError *error) {
+                @synchronized([FireOTA class]) {
+                  FOTACurrentTask = nil;
+                  FOTACurrentRelease = nil;
+                }
                 NSInteger status =
                     [response isKindOfClass:[NSHTTPURLResponse class]] ? ((NSHTTPURLResponse *)response).statusCode : 0;
                 if (error || !location || status < 200 || status > 299) {
@@ -207,7 +215,28 @@ RCT_EXPORT_METHOD(downloadUpdate:(NSString *)urlString
                 }
                 [FOTADefaults() setObject:releaseId forKey:kDownloaded];
                 resolve(nil);
-              }] resume];
+              }];
+  @synchronized([FireOTA class]) {
+    FOTACurrentTask = task;
+    FOTACurrentRelease = releaseId;
+  }
+  [task resume];
+}
+
+RCT_EXPORT_METHOD(getDownloadProgress:(NSString *)releaseId
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+  @synchronized([FireOTA class]) {
+    if (!FOTACurrentTask || ![FOTACurrentRelease isEqualToString:releaseId]) {
+      resolve([NSNull null]);
+      return;
+    }
+    resolve(@{
+      @"received" : @(FOTACurrentTask.countOfBytesReceived),
+      @"total" : @(MAX(FOTACurrentTask.countOfBytesExpectedToReceive, 0)),
+    });
+  }
 }
 
 RCT_EXPORT_METHOD(installUpdate:(NSString *)releaseId resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)

@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:fireota/fireota.dart';
+// ignore: deprecated_member_use
+import 'package:flutter/material.dart' show FilledButton, MaterialApp, Scaffold, TextButton;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart' show AppLifecycleState;
 import 'package:flutter_test/flutter_test.dart';
@@ -170,6 +172,7 @@ Future<(FireOTAUpdater, FakeNative, FakeServer)> start(
   void Function(FireOTAEvent event)? onEvent,
   int maxDownloadBytes = 200 * 1024 * 1024,
   Duration minCheckInterval = const Duration(minutes: 10),
+  bool autoDownload = true,
 }) async {
   final native = FakeNative(nativeState);
   final server = FakeServer();
@@ -186,6 +189,7 @@ Future<(FireOTAUpdater, FakeNative, FakeServer)> start(
     onEvent: onEvent,
     maxDownloadBytes: maxDownloadBytes,
     minCheckInterval: minCheckInterval,
+    autoDownload: autoDownload,
   ));
   await tester.pump();
   await tester.pump();
@@ -345,6 +349,65 @@ void main() {
       expect(result.reason, 'error');
       expect(updater.state.value.status, UpdateStatus.error);
       expect(updater.state.value.error, contains('server down'));
+    });
+  });
+
+  group('update prompt', () {
+    Future<(FireOTAUpdater, FakeNative)> showPrompt(WidgetTester tester, {bool mandatory = false}) async {
+      final (updater, native, _) = await start(tester, autoDownload: false, arrange: (_, server) {
+        server.release = {...release(), 'mandatory': mandatory};
+      });
+      final previous = FireOTA.instance;
+      FireOTA.instance = updater;
+      addTearDown(() => FireOTA.instance = previous);
+      await tester.pumpWidget(MaterialApp(
+        builder: (context, child) => FireOTAUpdatePrompt(child: child!),
+        home: const Scaffold(),
+      ));
+      await updater.sync();
+      await tester.pumpAndSettle();
+      return (updater, native);
+    }
+
+    testWidgets('asks first, then downloads with progress and offers a restart', (tester) async {
+      final (updater, native) = await showPrompt(tester);
+      expect(native.calls, isNot(contains('download:rel-1')));
+      expect(find.text('Update available'), findsOneWidget);
+      expect(find.text('Fixes'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Update'));
+      await tester.pumpAndSettle();
+      expect(native.calls, containsAllInOrder(['download:rel-1', 'install:rel-1']));
+      expect(updater.state.value.status, UpdateStatus.installed);
+      expect(find.text('Update ready'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Restart now'));
+      await tester.pumpAndSettle();
+      expect(native.calls, contains('restart'));
+    });
+
+    testWidgets('"Not now" closes the dialog without downloading', (tester) async {
+      final (_, native) = await showPrompt(tester);
+      await tester.tap(find.widgetWithText(TextButton, 'Not now'));
+      await tester.pumpAndSettle();
+      expect(find.text('Update available'), findsNothing);
+      expect(native.calls, isNot(contains('download:rel-1')));
+    });
+
+    testWidgets('shows a retry dialog when the download fails', (tester) async {
+      final (_, native) = await showPrompt(tester);
+      native.downloadError = PlatformException(code: 'FIREOTA_DOWNLOAD', message: 'No connection');
+      await tester.tap(find.widgetWithText(FilledButton, 'Update'));
+      await tester.pumpAndSettle();
+      expect(find.text('Update failed'), findsOneWidget);
+      expect(find.text('No connection'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Try again'), findsOneWidget);
+    });
+
+    testWidgets('downloads mandatory updates without asking', (tester) async {
+      final (_, native) = await showPrompt(tester, mandatory: true);
+      expect(native.calls, contains('download:rel-1'));
+      expect(find.text('Update available'), findsNothing);
     });
   });
 

@@ -119,8 +119,19 @@ On Android, asset updates apply on the next start. On iOS, `FireOTA.restart()` (
 
 ## UI
 
+The built-in prompt is a Material 3 dialog flow that uses your app's `Theme`, light and dark: **Update available** → *Update* → **Downloading** (progress bar) → **Update ready** → *Restart now*. Mandatory updates download without asking and cannot be dismissed.
+
 ```dart
-const FireOTAUpdateBanner()                    // "An update is ready" with a Restart button
+await FireOTA.init(FireOTAConfig(appId: ..., serverUrl: ..., autoDownload: false)); // ask before downloading
+
+MaterialApp(
+  builder: (context, child) => FireOTAUpdatePrompt(child: child!),   // add once
+  // labels: FireOTAPromptLabels(update: 'Install', ...) to translate
+);
+```
+
+```dart
+const FireOTAUpdateBanner()                    // a compact MaterialBanner instead of dialogs
 FireOTABuilder(builder: (context, state) => Text(state.status.name))
 await FireOTA.sync()                           // check, download and install now
 ```
@@ -152,7 +163,7 @@ FireOTAConfig(
 )
 ```
 
-`FireOTA.state.value.downloadProgress` goes from 0.0 to 1.0 while an update downloads (Android).
+`FireOTA.state.value.downloadProgress` goes from 0.0 to 1.0 while an update downloads (Android and iOS).
 
 ## Security
 

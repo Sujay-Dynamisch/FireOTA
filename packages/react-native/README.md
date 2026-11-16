@@ -177,7 +177,7 @@ const { status, available, pendingReleaseId, check, install, restart } = useFire
 <FireOTAProvider config={fireotaConfig} theme={{ accent: "#6D28D9" }} renderPrompt={(s) => <MyBanner {...s} />}>
 ```
 
-`<UpdatePrompt />` (shown automatically) displays a "Restart to update" card when an update is downloaded and a full-screen notice while a mandatory update installs. Pass `prompt={false}` (or `withFireOTA(App, config, { prompt: false })`) to hide it.
+`<UpdatePrompt />` (shown automatically) is a Material 3 dialog flow that follows the device's light/dark mode: **Update available** → *Update* → **Downloading** (progress bar, size and percent) → **Update ready** → *Restart now*. Optional updates wait for the user to tap *Update* (set `autoDownload: true` in the config to download in the background instead); mandatory updates download straight away and cannot be dismissed. Match your brand with `theme={{ accent: "#FF5A1F" }}`, force a mode with `colorScheme="light" | "dark"`, and translate with `<UpdatePrompt labels={{ update: "Install" }} />`. Pass `prompt={false}` (or `withFireOTA(App, config, { prompt: false })`) to hide it.
 
 ## Android
 
@@ -265,7 +265,7 @@ if (result.updateAvailable) {
 | `subscribe(listener)` / `getSnapshot()` | Watch / read status, available update, pending update, runtime, channel. |
 | `<FireOTAProvider config>` / `withFireOTA(App, config)` | Configure + built-in prompt. |
 | `useFireOTA()` | State plus `check()`, `install()`, `restart()` for custom UI. |
-| `<UpdateScreen />`, `<UpdatePrompt />` | Ready-made screens; theme with `theme={{ accent, background, card, text, muted }}`. |
+| `<UpdateScreen />`, `<UpdatePrompt />` | Ready-made dialogs and screen; theme with `theme={{ accent, onAccent, accentContainer, background, card, text, muted, danger, scrim }}` (Material 3 light/dark by default). |
 
 Options: `appId`, `serverUrl` (required), `runtimeVersion` (defaults to the store version), `channel`, `checkOnAppStart`, `installMode`, `mandatoryInstallMode`, `codeSigningCertificate`, `onStatusChange(status, detail)`.
 

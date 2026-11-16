@@ -11,14 +11,27 @@ import zlib
 /// Patches live in Application Support/fireota/patches/<releaseId>/ (excluded from backups).
 /// Launch rules match Android: a new store build discards patches, a pending patch becomes current
 /// on the next start, and a patch that reaches a second launch unconfirmed is rolled back.
-public class FireOTAPlugin: NSObject, FlutterPlugin {
+public class FireOTAPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
   private let store = FireOTAStore.shared
+  private var progressSink: FlutterEventSink?
 
   public static func register(with registrar: FlutterPluginRegistrar) {
     let channel = FlutterMethodChannel(name: "dev.fireota/flutter", binaryMessenger: registrar.messenger())
     let instance = FireOTAPlugin()
     FireOTAStore.shared.resolveLaunch()
     registrar.addMethodCallDelegate(instance, channel: channel)
+    FlutterEventChannel(name: "dev.fireota/flutter/progress", binaryMessenger: registrar.messenger())
+      .setStreamHandler(instance)
+  }
+
+  public func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
+    progressSink = events
+    return nil
+  }
+
+  public func onCancel(withArguments arguments: Any?) -> FlutterError? {
+    progressSink = nil
+    return nil
   }
 
   public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
@@ -35,7 +48,12 @@ public class FireOTAPlugin: NSObject, FlutterPlugin {
       }
       let expectedSize = (args["expectedSize"] as? NSNumber)?.int64Value ?? 0
       let maxBytes = (args["maxBytes"] as? NSNumber)?.int64Value ?? 0
-      store.download(url: url, sha256: sha, releaseId: id, expectedSize: expectedSize, maxBytes: maxBytes) { error in
+      let onProgress: (Int64, Int64) -> Void = { [weak self] received, total in
+        DispatchQueue.main.async {
+          self?.progressSink?(["releaseId": id, "received": received, "total": total > 0 ? total : expectedSize])
+        }
+      }
+      store.download(url: url, sha256: sha, releaseId: id, expectedSize: expectedSize, maxBytes: maxBytes, onProgress: onProgress) { error in
         DispatchQueue.main.async { result(error.map { FlutterError(code: $0.code, message: $0.message, details: nil) }) }
       }
     case "verifySignature":
@@ -263,6 +281,7 @@ final class FireOTAStore {
     releaseId: String,
     expectedSize: Int64 = 0,
     maxBytes: Int64 = 0,
+    onProgress: ((Int64, Int64) -> Void)? = nil,
     completion: @escaping (FireOTAError?) -> Void
   ) {
     guard let url = URL(string: urlString), url.scheme == "https" else {
@@ -284,7 +303,11 @@ final class FireOTAStore {
       completion(FireOTAError(code: "blocked", message: "This patch failed on this device before."))
       return
     }
-    URLSession.shared.downloadTask(with: url) { location, response, error in
+    var observation: NSKeyValueObservation?
+    var lastReport = Date.distantPast
+    let task = URLSession.shared.downloadTask(with: url) { location, response, error in
+      observation?.invalidate()
+      observation = nil
       let status = (response as? HTTPURLResponse)?.statusCode ?? 0
       guard error == nil, let location, (200...299).contains(status) else {
         completion(FireOTAError(code: "download_failed", message: "Download failed (HTTP \(status))."))
@@ -332,7 +355,16 @@ final class FireOTAStore {
       }
       self.defaults.set(releaseId, forKey: Self.kDownloaded)
       completion(nil)
-    }.resume()
+    }
+    if let onProgress {
+      observation = task.progress.observe(\.completedUnitCount) { progress, _ in
+        let now = Date()
+        guard now.timeIntervalSince(lastReport) >= 0.1 || progress.completedUnitCount >= progress.totalUnitCount else { return }
+        lastReport = now
+        onProgress(progress.completedUnitCount, progress.totalUnitCount)
+      }
+    }
+    task.resume()
   }
 
   private func safe(_ id: String) -> String { id.filter { $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" } }

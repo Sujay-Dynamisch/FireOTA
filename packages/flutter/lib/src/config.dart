@@ -19,6 +19,7 @@ class FireOTAConfig {
     this.codeSigningCertificate,
     this.allowCodePush = false,
     this.checkOnAppStart = true,
+    this.autoDownload = true,
     this.installMode = InstallMode.nextRestart,
     this.mandatoryInstallMode = InstallMode.immediate,
     this.onStatusChange,
@@ -53,6 +54,10 @@ class FireOTAConfig {
 
   /// Checks for an update when [FireOTA.init] runs.
   final bool checkOnAppStart;
+
+  /// Downloads optional updates as soon as they are found. Set false to let the user decide
+  /// with [FireOTAUpdatePrompt] (or your own UI); mandatory updates always download.
+  final bool autoDownload;
 
   /// How an optional update applies.
   final InstallMode installMode;

@@ -41,6 +41,9 @@ abstract final class FireOTA {
   static Future<void> restart() => _instance.restart();
   static Future<void> clearPendingUpdate() => _instance.clearPendingUpdate();
   static Map<String, Object?> get config => _instance.config;
+
+  /// Whether optional updates download without asking (see [FireOTAConfig.autoDownload]).
+  static bool get autoDownload => _instance.autoDownload;
   static Future<File?> assetFile(String path) => _instance.assetFile(path);
 }
 
@@ -104,6 +107,7 @@ class FireOTAUpdater with WidgetsBindingObserver {
       }
     }
     _config = config;
+    _autoDownload = config.autoDownload;
     await _native.setCodePushEnabled(config.allowCodePush && _os == 'android');
     final device = await _native.getState();
     _device = device;
@@ -243,6 +247,7 @@ class FireOTAUpdater with WidgetsBindingObserver {
       );
     } on PlatformException catch (error) {
       unawaited(_report('install_failed', release.id, {'reason': error.code}));
+      _setStatus(UpdateStatus.error, releaseId: release.id, error: error.message ?? error.code);
       rethrow;
     } finally {
       // Not awaited: an event channel cancel round-trips to the platform and nothing depends on it.
@@ -301,7 +306,7 @@ class FireOTAUpdater with WidgetsBindingObserver {
       try {
         final result = await checkForUpdate();
         final release = result.release;
-        if (result.updateAvailable && release != null) {
+        if (result.updateAvailable && release != null && (_config.autoDownload || release.mandatory)) {
           await downloadUpdate(release);
           await installUpdate(release, mode: release.mandatory ? _config.mandatoryInstallMode : _config.installMode);
         }
@@ -359,6 +364,10 @@ class FireOTAUpdater with WidgetsBindingObserver {
     );
     return device;
   }
+
+  /// Whether optional updates download without asking (see [FireOTAConfig.autoDownload]).
+  bool get autoDownload => _autoDownload;
+  bool _autoDownload = true;
 
   void _requireInit() {
     if (_initializing == null) throw StateError('Call FireOTA.init() before using the SDK.');

@@ -99,7 +99,7 @@ internal class FireOTAStore(private val context: Context) {
   fun clear(key: String) = prefs.edit().remove(key).commit()
 
   /** Streams the package to disk, verifies its SHA-256, then unpacks it atomically. */
-  fun download(url: String, expectedSha256: String, releaseId: String) {
+  fun download(url: String, expectedSha256: String, releaseId: String, onProgress: ((Long, Long) -> Unit)? = null) {
     require(url.startsWith("https://")) { "Updates must be downloaded over HTTPS." }
     root.mkdirs()
     val tmp = File(root, ".${safe(releaseId)}.download")
@@ -113,12 +113,22 @@ internal class FireOTAStore(private val context: Context) {
       connection.inputStream.use { input ->
         FileOutputStream(tmp).use { output ->
           val buffer = ByteArray(64 * 1024)
+          val total = connection.contentLengthLong
+          var received = 0L
+          var lastReport = 0L
           while (true) {
             val read = input.read(buffer)
             if (read < 0) break
             digest.update(buffer, 0, read)
             output.write(buffer, 0, read)
+            received += read
+            val now = System.currentTimeMillis()
+            if (onProgress != null && now - lastReport >= 100) {
+              lastReport = now
+              onProgress(received, total)
+            }
           }
+          onProgress?.invoke(received, if (total > 0) total else received)
         }
       }
       val actual = digest.digest().joinToString("") { "%02x".format(it) }
