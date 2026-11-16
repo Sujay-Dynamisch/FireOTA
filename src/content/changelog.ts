@@ -35,6 +35,55 @@ const SUJAL: ChangelogAuthor = {
 
 export const changelog: ChangelogEntry[] = [
   {
+    slug: "ai-agent-setup",
+    date: "2026-11-16",
+    title: "Set up FireOTA with your AI coding agent, plus a more secure Flutter SDK",
+    summary:
+      "One command or one prompt lets Claude Code, Codex, Cursor, Antigravity and other coding agents add FireOTA to a React Native, Expo or Flutter app. Flutter SDK 0.2.0 adds download limits, HTTPS enforcement, progress and hooks.",
+    tags: ["AI agents", "CLI 0.8.0", "Flutter 0.2.0", "Security", "Docs"],
+    authors: [SUJAL],
+    body: [
+      { type: "h", text: "Set up FireOTA with one command" },
+      {
+        type: "p",
+        text: "Run one command in your project, then ask your agent to set up FireOTA. It adds the FireOTA setup skill where coding agents look for it: .claude/skills for Claude Code, .agents/skills for Codex and other tools that read the Agent Skills standard, and a pointer in AGENTS.md. Commit the files so your whole team gets the same instructions.",
+      },
+      { type: "code", code: "npx @fireota/cli agent install" },
+      { type: "h", text: "…or with one prompt" },
+      {
+        type: "p",
+        text: "Agents that can read the web don't need the command:",
+      },
+      {
+        type: "code",
+        code: "Set up FireOTA over-the-air updates in this project.\nFollow https://fireota.creoai.in/skills/fireota/SKILL.md",
+      },
+      {
+        type: "list",
+        items: [
+          "The agent asks for your FireOTA URL, App ID and channel instead of guessing them.",
+          "It detects React Native, Expo or Flutter and runs fireota init, which makes the native changes.",
+          "It never writes your API key or private signing key to a file.",
+          "It builds the app to check the setup, and publishes an update or adds CI only when you ask.",
+        ],
+      },
+      { type: "h", text: "Flutter SDK 0.2.0: more secure downloads" },
+      {
+        type: "list",
+        items: [
+          "Release builds require an https:// server URL; a malformed signing certificate now fails at startup.",
+          "Downloads must match the size the server announced and stay under maxDownloadBytes (200 MB by default, 512 MB absolute).",
+          "Unpacking refuses oversized packages, and downloads stop when the device is low on storage.",
+          "New: download progress on Android, a check when the app returns to the foreground, custom request headers, and an onEvent hook to forward update events to Sentry, Datadog or your analytics.",
+        ],
+      },
+      {
+        type: "p",
+        text: "Heads-up: apps that point FireOTA at an http:// server now fail at startup in release builds. For local testing, set allowInsecureServer: true, which only works in debug and profile builds.",
+      },
+    ],
+  },
+  {
     slug: "flutter-sdk",
     date: "2026-11-10",
     title: "FireOTA for Flutter: Dart code push on Android, asset updates on iOS",
