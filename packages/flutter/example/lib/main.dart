@@ -19,6 +19,7 @@ Future<void> main() async {
     appId: appId,
     serverUrl: serverUrl,
     allowCodePush: true,
+    autoDownload: false,
     codeSigningCertificate: certificate == '' ? null : certificate,
   ));
   runApp(const ExampleApp());
@@ -32,11 +33,11 @@ class ExampleApp extends StatelessWidget {
     return MaterialApp(
       title: 'FireOTA example',
       theme: ThemeData(colorSchemeSeed: const Color(0xFFD84315), useMaterial3: true),
+      builder: (context, child) => FireOTAUpdatePrompt(child: child!),
       home: Scaffold(
         appBar: AppBar(title: const Text('FireOTA example')),
         body: Column(
           children: [
-            const FireOTAUpdateBanner(),
             Expanded(
               child: Center(
                 child: FireOTABuilder(

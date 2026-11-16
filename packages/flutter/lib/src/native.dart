@@ -67,7 +67,7 @@ class MethodChannelFireOTANative implements FireOTANative {
       .receiveBroadcastStream()
       .where((event) => event is Map)
       .map((event) => (event as Map).cast<String, Object?>())
-      // Platforms without progress events (iOS) answer with an error; there is simply no progress.
+      // Older plugin builds without progress events answer with an error; there is simply no progress.
       .handleError((Object _) {});
 
   @override

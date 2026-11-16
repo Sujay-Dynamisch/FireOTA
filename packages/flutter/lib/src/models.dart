@@ -112,7 +112,7 @@ class FireOTASnapshot {
   /// Increases whenever assets or config change, so widgets can rebuild.
   final int revision;
 
-  /// 0.0 to 1.0 while an update downloads (Android), otherwise null.
+  /// 0.0 to 1.0 while an update downloads, otherwise null.
   final double? downloadProgress;
 
   FireOTASnapshot copyWith({

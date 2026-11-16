@@ -8,7 +8,7 @@
  *
  * Updates are identified by their ID (like Expo) and target exactly one runtime version.
  */
-import { NativeModules, Platform } from "react-native";
+import { DeviceEventEmitter, NativeModules, Platform } from "react-native";
 
 export type InstallMode = "nextRestart" | "immediate";
 export type UpdateStatus =
@@ -38,6 +38,11 @@ export interface FireOTAConfig {
   codeSigningCertificate?: string;
   /** Check (and download) automatically when configure() runs. Default true. */
   checkOnAppStart?: boolean;
+  /**
+   * Download optional updates as soon as they are found. Default true. Set false to let the user
+   * choose (the built-in update dialog does this); mandatory updates always download.
+   */
+  autoDownload?: boolean;
   /** When a normal update is applied. Default "nextRestart". */
   installMode?: InstallMode;
   /** When a mandatory update is applied. Default "immediate". */
@@ -90,6 +95,8 @@ interface FireOTANative {
   clearFailed(): Promise<void>;
   restartApp(): Promise<void>;
   verifySignature(message: string, signatureBase64: string, publicKeyBase64: string): Promise<boolean>;
+  /** iOS only: bytes received so far for the download in flight. */
+  getDownloadProgress?(releaseId: string): Promise<{ received: number; total: number } | null>;
 }
 
 const native = NativeModules["FireOTA"] as FireOTANative | undefined;
@@ -116,6 +123,8 @@ export interface FireOTASnapshot {
   appVersion: string;
   lastCheckedAt: number | null;
   error: string | null;
+  /** 0–1 while an update downloads, otherwise null. */
+  downloadProgress: number | null;
 }
 
 let snapshot: FireOTASnapshot = {
@@ -129,6 +138,7 @@ let snapshot: FireOTASnapshot = {
   appVersion: "",
   lastCheckedAt: null,
   error: null,
+  downloadProgress: null,
 };
 const listeners = new Set<(snapshot: FireOTASnapshot) => void>();
 
@@ -316,9 +326,34 @@ async function assertSigned(release: AvailableUpdate) {
 export async function downloadUpdate(release: AvailableUpdate) {
   if (!/^[0-9a-f]{64}$/i.test(release.bundle.hash)) throw new Error("The update has no valid checksum.");
   await assertSigned(release);
+  const nativeModule = requireNative();
+  const poll = Platform.OS === "ios" ? nativeModule.getDownloadProgress : undefined;
+  update({ downloadProgress: Platform.OS === "android" || poll ? 0 : null });
   setStatus("downloading", { releaseId: release.id });
   void report("download_started", release.id);
-  await requireNative().downloadUpdate(release.bundle.url, release.bundle.hash.toLowerCase(), release.id);
+  const onProgress = (event: { releaseId: string; received: number; total: number }) => {
+    const total = event.total > 0 ? event.total : release.bundle.size;
+    if (event.releaseId === release.id && total > 0) update({ downloadProgress: Math.min(1, event.received / total) });
+  };
+  const progress = DeviceEventEmitter.addListener("FireOTADownloadProgress", onProgress);
+  // iOS: poll the native download, since the module has no event emitter.
+  const timer = poll
+    ? setInterval(() => {
+        poll(release.id)
+          .then((value) => value && onProgress({ releaseId: release.id, ...value }))
+          .catch(() => undefined);
+      }, 200)
+    : null;
+  try {
+    await nativeModule.downloadUpdate(release.bundle.url, release.bundle.hash.toLowerCase(), release.id);
+  } catch (error) {
+    setStatus("error", { releaseId: release.id, error: error instanceof Error ? error.message : String(error) });
+    throw error;
+  } finally {
+    progress.remove();
+    if (timer) clearInterval(timer);
+    update({ downloadProgress: null });
+  }
   void report("download_completed", release.id);
   setStatus("downloaded", { releaseId: release.id });
 }
@@ -336,7 +371,7 @@ export function sync(): Promise<CheckResult> {
   running = (async () => {
     try {
       const result = await checkForUpdate();
-      if (result.updateAvailable && result.release) {
+      if (result.updateAvailable && result.release && (config.autoDownload || result.release.mandatory)) {
         await downloadUpdate(result.release);
         await installUpdate(
           result.release,
@@ -402,6 +437,7 @@ async function doConfigure(options: FireOTAConfig) {
   config = {
     channel: "production",
     checkOnAppStart: true,
+    autoDownload: true,
     installMode: "nextRestart",
     mandatoryInstallMode: "immediate",
     ...options,

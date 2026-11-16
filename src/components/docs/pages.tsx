@@ -239,7 +239,10 @@ export default function App() {
   return (
     <>
       <RootNavigator />
-      <UpdatePrompt title="New version available" message="Restart to get the latest fixes." />
+      <UpdatePrompt
+        title="New version available"
+        labels={{ update: "Install", notNow: "Later", restart: "Restart" }}
+      />
     </>
   );
 }`;
@@ -297,12 +300,19 @@ Future<void> main() async {
     appId: 'YOUR_APP_ID',
     serverUrl: 'https://fireota.example.com',
     allowCodePush: true, // Android code patches; read "Store policy" first
+    autoDownload: false, // ask before downloading, with FireOTAUpdatePrompt
     codeSigningCertificate: '''-----BEGIN PUBLIC KEY-----
 ...
 -----END PUBLIC KEY-----''',
   ));
   runApp(const MyApp());
-}`;
+}
+
+// The update dialogs (Material 3, your app's theme): add once
+MaterialApp(
+  builder: (context, child) => FireOTAUpdatePrompt(child: child!),
+  home: const HomePage(),
+);`;
 
 const FLUTTER_ACTIVITY = `// android/app/src/main/kotlin/.../MainActivity.kt
 import dev.fireota.flutter.FireOTAFlutterActivity
@@ -1358,12 +1368,12 @@ npx react-native run-ios --mode Release`}
             title: "Built-in update UI",
             body: (
               <>
-              <Figure caption="What users see. Left: the prompt after a normal update downloads (Later hides it until the next update). Middle: a mandatory update installing. Right: the optional <UpdateScreen /> for your settings.">
+              <Figure caption="What users see: the Material 3 dialog flow (update available, download progress, update ready) and the optional <UpdateScreen /> for your settings. It follows the device's light or dark mode.">
                 <UpdatePromptMocks />
               </Figure>
               <Bullets
                 items={[
-                  <><C>&lt;UpdatePrompt /&gt;</C> — shown automatically: “Restart to update” card, full-screen notice for mandatory updates.</>,
+                  <><C>&lt;UpdatePrompt /&gt;</C> — shown automatically: “Update available” → <strong>Update</strong> → download progress → “Update ready” → <strong>Restart now</strong>. Mandatory updates download straight away and cannot be dismissed.</>,
                   <><C>&lt;UpdateScreen /&gt;</C> — a complete “App updates” screen (version, runtime, channel, check / download / restart).</>,
                   <><C>useFireOTA()</C> — state plus <C>check()</C>, <C>install()</C>, <C>restart()</C> to build your own UI.</>,
                   <>Restyle with <C>theme</C>, replace the prompt with <C>renderPrompt</C>, or hide it with <C>prompt={"{false}"}</C> — step by step in <D to="customize-ui">Customize the update prompt</D>.</>,
@@ -1930,6 +1940,11 @@ function UpdateBadge() {
                 <p>Or set it up by hand:</p>
                 <Code language="dart" code={FLUTTER_MAIN} />
                 <Code language="kotlin" code={FLUTTER_ACTIVITY} />
+                <p>
+                  <C>FireOTAUpdatePrompt</C> shows the same flow as the React Native SDK — “Update available” → <strong>Update</strong> →
+                  download progress → “Update ready” → <strong>Restart now</strong> — as Material 3 dialogs that use your app's{" "}
+                  <C>Theme</C>, light and dark. Change the text with <C>FireOTAPromptLabels</C>.
+                </p>
                 <Callout kind="note">
                   The runtime version is your <C>pubspec.yaml</C> version with its build number, for example{" "}
                   <C>1.4.0+12</C>. A patch only reaches devices running that exact store build, so bump the version for every
@@ -2058,15 +2073,16 @@ function UpdateBadge() {
             title: "What the built-in prompt does",
             body: (
               <>
-                <Figure caption="The built-in UI with the default theme: the prompt after a download, the mandatory-update screen, and <UpdateScreen />.">
+                <Figure caption="The built-in UI with the default theme: the three prompt dialogs and <UpdateScreen />.">
                   <UpdatePromptMocks />
                 </Figure>
                 <Bullets
                   items={[
-                    <>A card appears at the bottom once a normal update is <strong>downloaded</strong> (status <C>installed</C>). It shows the update's <C>--message</C>.</>,
-                    <><strong>Restart</strong> applies it now; <strong>Later</strong> hides the card for that update — it still applies on the next cold start.</>,
-                    <>For a <strong>mandatory</strong> update a full-screen “Installing an important update” notice blocks the app while it downloads, then the app restarts.</>,
-                    <>Nothing is shown when there is no update, while checking, or after an error.</>,
+                    <><strong>Update available</strong> appears when a check finds an update, with its <C>--message</C>, version and download size. <strong>Not now</strong> hides it for that update.</>,
+                    <><strong>Update</strong> starts the download and shows a progress bar with size and percent (Android and iOS). <strong>Hide</strong> lets it finish in the background.</>,
+                    <><strong>Update ready</strong> follows: <strong>Restart now</strong> applies it; <strong>Later</strong> keeps it for the next cold start. A failed download shows <strong>Try again</strong>.</>,
+                    <>A <strong>mandatory</strong> update skips the first dialog, downloads straight away behind a progress dialog that cannot be dismissed, then the app restarts.</>,
+                    <>With <C>autoDownload: true</C> in <C>fireota.config.js</C>, optional updates download in the background and only “Update ready” is shown.</>,
                   ]}
                 />
               </>
@@ -2078,22 +2094,24 @@ function UpdateBadge() {
             body: (
               <>
                 <p>
-                  Pass a <C>theme</C> as the third argument of <C>withFireOTA</C> in <C>index.js</C>. Every key is optional; missing keys
-                  keep the default. The same theme also styles <C>&lt;UpdateScreen /&gt;</C>.
+                  The prompt uses Material 3 colors and follows the device's light or dark mode. Pass a <C>theme</C> as the third argument
+                  of <C>withFireOTA</C> in <C>index.js</C> to match your brand — usually just <C>accent</C>. Every key is optional; missing keys
+                  keep the default for the current mode. The same theme also styles <C>&lt;UpdateScreen /&gt;</C>.
                 </p>
                 <Code language="js" code={UI_THEME} />
-                <Figure caption="Left: default theme. Middle: the theme above. Right: the same theme with custom text (option 2).">
+                <Figure caption="Left and middle: the default theme in light and dark mode. Right: a brand accent with custom text (option 2).">
                   <ThemeCompareMock />
                 </Figure>
-                <p>Default values, for reference:</p>
+                <p>Default values (light / dark), exported as <C>lightTheme</C> and <C>darkTheme</C>:</p>
                 <Code
                   language="ts"
-                  code={`accent: "#FF5A1F"   background: "#0E1013"   card: "#171A1F"
-text:   "#F4F5F7"   muted:      "#9AA1AC"   danger: "#F05252"`}
+                  code={`accent:          "#6750A4" / "#D0BCFF"   onAccent: "#FFFFFF" / "#381E72"
+accentContainer: "#EADDFF" / "#4F378B"   card:     "#F3EDF7" / "#2B2930"
+background:      "#FEF7FF" / "#141218"   text:     "#1D1B20" / "#E6E0E9"
+muted:           "#49454F" / "#CAC4D0"   danger:   "#B3261E" / "#F2B8B5"`}
                 />
                 <Callout kind="tip">
-                  Want light and dark versions? Compute the theme from <C>Appearance.getColorScheme()</C> before calling{" "}
-                  <C>withFireOTA</C>, or use option 3 with <C>useColorScheme()</C> inside your component to follow live changes.
+                  Pass <C>colorScheme: "light"</C> or <C>"dark"</C> next to <C>theme</C> to stop following the device setting.
                 </Callout>
               </>
             ),
@@ -2104,14 +2122,14 @@ text:   "#F4F5F7"   muted:      "#9AA1AC"   danger: "#F05252"`}
             body: (
               <>
                 <p>
-                  <C>&lt;UpdatePrompt /&gt;</C> takes <C>title</C> (default “Update ready”) and <C>message</C> (default: the update's
-                  message, or “A new version is ready. Restart to use it.”). Turn the automatic prompt off with{" "}
+                  <C>&lt;UpdatePrompt /&gt;</C> takes <C>title</C> (the “Update ready” heading), <C>message</C> (default: the update's
+                  message) and <C>labels</C> for every other text — buttons, headings and the download text — to rephrase or translate. Turn the automatic prompt off with{" "}
                   <C>{"{ prompt: false }"}</C> and place your own instance — otherwise two prompts appear.
                 </p>
                 <Code language="tsx" code={UI_TEXT} />
                 <Callout kind="note">
-                  Render <C>&lt;UpdatePrompt /&gt;</C> after your navigator so it draws on top of the screens. It positions itself at the
-                  bottom and handles mandatory updates the same way as the built-in one.
+                  Render <C>&lt;UpdatePrompt /&gt;</C> after your navigator so it draws on top of the screens. It opens as a dialog
+                  and handles mandatory updates the same way as the built-in one.
                 </Callout>
               </>
             ),

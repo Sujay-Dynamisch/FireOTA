@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.0] - 2026-11-16
+
+### Changed
+- `<UpdatePrompt />` is now a Material 3 dialog flow instead of a bottom card: "Update available" → Update → download progress → "Update ready" → Restart now, with a "Try again" dialog when a download fails.
+- The built-in UI follows the device's light/dark mode (Material 3 baseline colors). Override with `theme` or `colorScheme`.
+
+### Added
+- `autoDownload` config option (default `true`). `<FireOTAProvider>` with the built-in prompt defaults it to `false` so optional updates wait for the user; mandatory updates always download.
+- `downloadProgress` in the snapshot (Android progress events, iOS via `getDownloadProgress`) and an exported `<ProgressBar />`.
+- `lightTheme`, `darkTheme`, `defaultPromptLabels`.
+
 ## [0.5.0] - 2026-10-30
 
 ### Added

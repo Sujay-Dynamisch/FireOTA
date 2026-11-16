@@ -1,3 +1,11 @@
+## 0.3.0
+
+New:
+- `FireOTAUpdatePrompt`: the full update flow as Material 3 dialogs that follow the app's theme (light and dark). "Update available" → Update → download progress with size and percent → "Update ready" → Restart now. A download that fails offers "Try again". Text is configurable with `FireOTAPromptLabels`.
+- `FireOTAConfig.autoDownload` (default `true`). Set it to `false` so optional updates wait for the user; mandatory updates always download.
+- Download progress on iOS too, so the progress bar shows size and percent on both platforms.
+- A failed download now sets the `error` status.
+
 ## 0.2.0
 
 Security:
