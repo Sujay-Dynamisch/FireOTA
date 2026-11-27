@@ -21,6 +21,8 @@ On the device, the SDK checks that the patch was built for exactly this store bu
 
 ## Install
 
+Requirements: Flutter 3.22 or newer, Android 5.0 (API 21) or newer, iOS 12 or newer. Works in apps that use Android Gradle Plugin 7, 8 or 9, with or without AGP 9's built-in Kotlin.
+
 ```sh
 flutter pub add fireota
 npm install -g @fireota/cli     # or use npx @fireota/cli

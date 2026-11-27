@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Update management commands: `fireota update:list`, `update:view`, `update:republish`, `update:rollback`, `update:edit`, `update:pause`, `update:resume`, `update:delete`.
   - Channel management commands: `fireota channel:list`, `channel:create`, `channel:view`, `channel:rollout`.
 
+### Fixed
+- `fireota init` (and the Expo config plugin) produced Android code that did not compile on React Native 0.73 to 0.80, whose `MainApplication` calls `getDefaultReactHost(context, reactNativeHost)`. It now overrides `getJSBundleFile()` there and passes `jsBundleFilePath` only to the newer `packageList` form. CI now builds fresh React Native 0.73, 0.76 and latest apps for iOS and Android, and a fresh Expo app.
+
 ## [0.8.0] - 2026-11-16
 
 ### Added

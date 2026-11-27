@@ -146,7 +146,7 @@ npx fireota init --app YOUR_APP_ID --server-url https://ota.example.com
 
 Rebuild the app once, and you're done. The runtime version defaults to your store version (`versionName` / `CFBundleShortVersionString`) — bump it with every store build that changes native code. Every step is idempotent; `--dry-run` shows the changes without writing.
 
-Requires React Native 0.73 or newer. Prefer to wire it by hand? Follow the Android, iOS and Configure sections below.
+Requires React Native 0.73 or newer (tested in CI on 0.73, 0.76 and the latest release, iOS and Android, plus Expo prebuild). Prefer to wire it by hand? Follow the Android, iOS and Configure sections below.
 
 ## Expo
 
