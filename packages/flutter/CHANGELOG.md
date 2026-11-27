@@ -1,3 +1,10 @@
+## 0.3.1
+
+Compatibility fixes (no API changes):
+- Works in apps from Flutter 3.22 to the current release. Tested in CI by building freshly created apps for iOS and Android on Flutter 3.22.3 and stable.
+- Android: minimum API 21 (was 24). The plugin's build script is now Groovy and adapts to the app: Android Gradle Plugin 7 or 8 with the Kotlin plugin, or AGP 9 with or without built-in Kotlin.
+- iOS: minimum iOS 12 (was 15).
+
 ## 0.3.0
 
 New:
@@ -6,10 +13,6 @@ New:
 - Download progress on iOS too, so the progress bar shows size and percent on both platforms.
 - A failed download now sets the `error` status.
 
-Compatibility:
-- Works in apps from Flutter 3.22 to the current release. Tested in CI by building freshly created apps for iOS and Android on Flutter 3.22.3 and stable.
-- Android: minimum API 21 (was 24). The plugin's build script is now Groovy and adapts to the app: Android Gradle Plugin 7 or 8 with the Kotlin plugin, or AGP 9 with or without built-in Kotlin.
-- iOS: minimum iOS 12 (was 15).
 
 ## 0.2.0
 

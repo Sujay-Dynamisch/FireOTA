@@ -40,7 +40,7 @@ export const changelog: ChangelogEntry[] = [
     title: "EAS Update parity: drop-in CLI commands, expo-updates SDK, and enhanced security",
     summary:
       "FireOTA now provides full command-line and SDK parity for teams migrating from EAS Update: familiar fireota update commands, an expo-updates-compatible Updates API in @fireota/react-native 0.7.0, and security hardening.",
-    tags: ["CLI 0.9.0", "React Native 0.7.0", "Flutter 0.3.0", "Security"],
+    tags: ["CLI 0.9.0", "React Native 0.7.0", "Flutter 0.3.1", "Security"],
     authors: [SUJAL],
     body: [
       { type: "h", text: "Familiar EAS commands and workflow" },
