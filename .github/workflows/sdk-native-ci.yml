@@ -138,7 +138,8 @@ jobs:
       - name: Test the package
         working-directory: packages/flutter
         run: |
-          flutter pub get
+          # The example targets current Flutter; old Flutter only checks the package itself.
+          flutter pub get --no-example
           flutter test
       - name: Create a fresh Flutter app and wire FireOTA with the CLI (fireota init)
         run: |
