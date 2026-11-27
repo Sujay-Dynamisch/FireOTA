@@ -63,3 +63,5 @@ declare module "react-native" {
   };
   export const StyleSheet: { create<T extends Record<string, Record<string, unknown>>>(styles: T): T };
 }
+
+declare const __DEV__: boolean;

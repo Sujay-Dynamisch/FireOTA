@@ -38,6 +38,7 @@ import { runInit } from "../lib/init.mjs";
 import { packDirectory } from "../lib/package.mjs";
 import { findFile, isExpoProject, readExpoAppJson, storeVersion } from "../lib/project.mjs";
 import { generateKeys, loadPrivateKey, signUpdate } from "../lib/signing.mjs";
+import { dispatchUpdateCommand } from "../lib/update-commands.mjs";
 
 const HELP = `FireOTA CLI
 
@@ -62,6 +63,23 @@ Usage:
   fireota release pause    <releaseId>
   fireota release rollback <releaseId> --reason "..." [--target <releaseId>]
   fireota releases [--app <appId>] [--json]
+
+EAS Update parity:
+  fireota update   --channel|--branch <name> [--message <msg> | --auto] [--platform all|android|ios]
+                   [--rollout-percentage <0-100>] [--private-key-path <key.pem>] [--json] [--non-interactive]
+                   EAS-style wrapper: builds and publishes an update to a channel.
+  fireota update:list [--channel|--branch <name>] [--platform <p>] [--limit <n>] [--json]
+  fireota update:view <releaseId> [--json]
+  fireota update:republish <releaseId> --destination-channel|--destination-branch <name> [--rollout-percentage <0-100>]
+  fireota update:rollback <releaseId> [--reason <msg>]
+  fireota update:edit <releaseId> --rollout-percentage <0-100>
+  fireota update:pause <releaseId>
+  fireota update:resume <releaseId>
+  fireota update:delete <releaseId> [--yes] [--non-interactive]
+  fireota channel:list [--app <appId>] [--json]
+  fireota channel:create <name> [--app <appId>] [--environment <env>]
+  fireota channel:view <name> [--app <appId>] [--json]
+  fireota channel:rollout <name> --percent <0-100>
 
 AI coding agents (Claude Code, Codex, Cursor, Antigravity and others):
   fireota agent install [--tools claude,agents,agents-md] [--force] [--dry-run]
@@ -422,6 +440,32 @@ async function publishOne(flags, platform, file, extra, privateKey) {
   return { id: release.id, number: release.number, platform, rollout: result.rollout, status: "published" };
 }
 
+async function executePublish(all) {
+  jsonMode = Boolean(all.json);
+  const platform = need(all, "platform");
+  if (!["android", "ios", "all"].includes(platform)) fail("--platform must be android, ios or all");
+  if (all.expo) return publishExpo(all, platform === "all" ? ["android", "ios"] : [platform]);
+  if (platform === "all" && all.file) fail("--file cannot be combined with --platform all (each platform needs its own package).");
+  let privateKey = null;
+  try {
+    privateKey = loadPrivateKey(all["private-key"] && all["private-key"] !== true ? String(all["private-key"]) : undefined);
+  } catch (error) {
+    fail(`Could not read the signing key: ${error instanceof Error ? error.message : error}`);
+  }
+
+  const platforms = platform === "all" ? ["android", "ios"] : [platform];
+  const files = Object.fromEntries(platforms.map((p) => [p, all.file ? String(all.file) : bundle(all, p)]));
+  // Android + iOS built from the same commit form one update group (Expo-style).
+  const extra =
+    platform === "all"
+      ? { groupId: groupIdFrom(platforms.map((p) => `${sha256(readFileSync(files[p]))}@${runtimeFor(all, p)}`).join(":")) }
+      : {};
+  const results = [];
+  for (const p of platforms) results.push(await publishOne(all, p, files[p], extra, privateKey));
+  if (jsonMode) console.log(JSON.stringify({ ok: true, groupId: extra.groupId ?? null, updates: results }));
+  return { ok: true, groupId: extra.groupId ?? null, updates: results };
+}
+
 // ---------- Flutter ----------
 
 /** Arguments after a bare `--` go to `flutter build` unchanged. */
@@ -650,6 +694,15 @@ async function main() {
     console.log(HELP);
     return;
   }
+  const handled = await dispatchUpdateCommand(command, sub, positional, flags, {
+    api,
+    jsonMode,
+    need,
+    fail,
+    executePublish,
+    log,
+  });
+  if (handled) return;
   if (command === "bundle") {
     bundle(parseArgs(process.argv.slice(3)).flags);
     return;
@@ -749,28 +802,7 @@ Next:
   }
   if (command === "publish") {
     const all = parseArgs(process.argv.slice(3)).flags;
-    jsonMode = Boolean(all.json);
-    const platform = need(all, "platform");
-    if (!["android", "ios", "all"].includes(platform)) fail("--platform must be android, ios or all");
-    if (all.expo) return publishExpo(all, platform === "all" ? ["android", "ios"] : [platform]);
-    if (platform === "all" && all.file) fail("--file cannot be combined with --platform all (each platform needs its own package).");
-    let privateKey = null;
-    try {
-      privateKey = loadPrivateKey(all["private-key"] && all["private-key"] !== true ? String(all["private-key"]) : undefined);
-    } catch (error) {
-      fail(`Could not read the signing key: ${error instanceof Error ? error.message : error}`);
-    }
-
-    const platforms = platform === "all" ? ["android", "ios"] : [platform];
-    const files = Object.fromEntries(platforms.map((p) => [p, all.file ? String(all.file) : bundle(all, p)]));
-    // Android + iOS built from the same commit form one update group (Expo-style).
-    const extra =
-      platform === "all"
-        ? { groupId: groupIdFrom(platforms.map((p) => `${sha256(readFileSync(files[p]))}@${runtimeFor(all, p)}`).join(":")) }
-        : {};
-    const results = [];
-    for (const p of platforms) results.push(await publishOne(all, p, files[p], extra, privateKey));
-    if (jsonMode) console.log(JSON.stringify({ ok: true, groupId: extra.groupId ?? null, updates: results }));
+    await executePublish(all);
     return;
   }
   if (command === "release") {

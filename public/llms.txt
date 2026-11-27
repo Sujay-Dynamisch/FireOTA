@@ -6,6 +6,12 @@
 
 - [FireOTA setup skill](https://fireota.creoai.in/skills/fireota/SKILL.md): step-by-step instructions an agent follows to add FireOTA to a React Native, Expo or Flutter project, publish an update and wire CI.
 
+## EAS Update parity
+
+- Drop-in commands: `fireota update` (`--branch` alias for `--channel`, `--platform all|android|ios`, `--rollout-percentage`, `--auto`).
+- Full lifecycle management: `fireota update:list|view|republish|rollback|edit|pause|resume|delete` and `fireota channel:list|create|view|rollout`.
+- [Coming from EAS Update](https://fireota.creoai.in/docs/coming-from-eas): command and SDK API mapping from EAS to FireOTA.
+
 ## Docs
 
 - [Documentation](https://fireota.creoai.in/docs)

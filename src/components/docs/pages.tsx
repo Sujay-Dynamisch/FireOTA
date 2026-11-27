@@ -487,6 +487,39 @@ const EXPO_MIGRATE = `npm uninstall expo-updates
 # remove "updates" and "runtimeVersion" from app.json, then rebuild
 npx expo prebuild --clean`;
 
+const EAS_UPDATE_CLI = `# Publish an update to production (Android + iOS)
+fireota update --branch production --message "Fix checkout"
+
+# Publish with staged rollout percentage
+fireota update --branch production --message "Roll out new paywall" --rollout-percentage 20
+
+# View releases on a branch
+fireota update:list --branch production
+
+# Republish or promote a release to another channel
+fireota update:republish <releaseId> --destination-branch production
+
+# Roll back a release
+fireota update:rollback <releaseId>
+
+# Channel rollout
+fireota channel:rollout production --percent 50`;
+
+const EAS_SDK_EXAMPLE = `// Use expo-updates-style Updates and useUpdates hook with @fireota/react-native
+import { Updates, useUpdates } from "@fireota/react-native";
+
+export function CustomUpdateFlow() {
+  const { isChecking, isDownloading, isUpdateAvailable, isUpdatePending } = useUpdates();
+
+  async function onCheck() {
+    const result = await Updates.checkForUpdateAsync();
+    if (result.isAvailable) {
+      await Updates.fetchUpdateAsync();
+      await Updates.reloadAsync();
+    }
+  }
+}`;
+
 const UI_RENDER_PROMPT = `// index.js — use FireOTAProvider instead of withFireOTA to pass renderPrompt
 import { AppRegistry } from "react-native";
 import { FireOTAProvider } from "@fireota/react-native";
@@ -1892,6 +1925,94 @@ function UpdateBadge() {
                   ["Web support?", <>No. <C>expo-updates</C> only updates Android and iOS apps.</>],
                 ]}
               />
+            ),
+          },
+        ],
+      },
+      {
+        slug: "coming-from-eas",
+        title: "Coming from EAS Update",
+        badge: "new",
+        description:
+          "Drop-in CLI commands, branch-to-channel mapping, and expo-updates API parity for teams moving from EAS Update to FireOTA.",
+        sections: [
+          {
+            id: "overview",
+            title: "Overview",
+            body: (
+              <>
+                <p>
+                  FireOTA provides drop-in parity for EAS Update workflows. You can keep your team's muscle memory,
+                  CI scripts, and app update code while hosting OTA update packages securely in your own storage backend.
+                </p>
+                <Callout kind="note">
+                  <strong>EAS branch == FireOTA channel.</strong> In FireOTA, release streams are called channels. The FireOTA CLI
+                  accepts <C>--branch</C> everywhere as an alias for <C>--channel</C>, so your existing EAS commands and CI arguments work unchanged.
+                </Callout>
+                <Bullets
+                  items={[
+                    <><strong>Multi-platform update groups:</strong> <C>fireota update</C> publishes Android and iOS together under a single group ID, matching EAS update groups.</>,
+                    <><strong>Non-interactive CI:</strong> Supports <C>--auto</C> (reads git commit message), <C>--json</C>, and <C>--non-interactive</C> flags.</>,
+                    <><strong>Direct storage downloads:</strong> Devices download bundles directly from your own cloud storage (S3, Cloudflare R2, MinIO, or Firebase Storage).</>,
+                  ]}
+                />
+              </>
+            ),
+          },
+          {
+            id: "cli-mapping",
+            title: "CLI command mapping",
+            body: (
+              <>
+                <p>
+                  Compare EAS Update commands to their FireOTA equivalents:
+                </p>
+                <FieldTable
+                  head={["EAS command", "FireOTA command", "Notes"]}
+                  rows={[
+                    [<C>eas update</C>, <C>fireota update</C>, <>Supports <C>--branch</C> / <C>--channel</C>, <C>--platform all|android|ios</C>, <C>--rollout-percentage</C>, <C>--auto</C></>],
+                    [<C>eas update:list</C>, <C>fireota update:list</C>, <>Filter by <C>--branch</C> / <C>--channel</C>, <C>--platform</C>, <C>--limit</C>, <C>--json</C></>],
+                    [<C>eas update:view &lt;id&gt;</C>, <C>fireota update:view &lt;id&gt;</C>, <>Inspect release metadata, status, and bundle hash</>],
+                    [<C>eas update:republish &lt;id&gt;</C>, <C>fireota update:republish &lt;id&gt;</C>, <>Promote/republish to another channel/branch (<C>--destination-channel</C>)</>],
+                    [<C>eas update:rollback &lt;id&gt;</C>, <C>fireota update:rollback &lt;id&gt;</C>, <>Roll back an update release</>],
+                    [<C>eas update:edit &lt;id&gt;</C>, <C>fireota update:edit &lt;id&gt;</C>, <>Adjust rollout percentage (<C>--rollout-percentage</C>)</>],
+                    [<C>eas update:pause &lt;id&gt;</C>, <C>fireota update:pause &lt;id&gt;</C>, <>Pause an active update</>],
+                    [<C>eas update:resume &lt;id&gt;</C>, <C>fireota update:resume &lt;id&gt;</C>, <>Resume a paused update</>],
+                    [<C>eas update:delete &lt;id&gt;</C>, <C>fireota update:delete &lt;id&gt;</C>, <>Delete draft, ready, or archived releases (<C>--non-interactive</C>)</>],
+                    [<C>eas channel:list</C>, <C>fireota channel:list</C>, <>List channels and their latest published release</>],
+                    [<C>eas channel:create &lt;name&gt;</C>, <C>fireota channel:create &lt;name&gt;</C>, <>Create a release channel with optional <C>--environment</C></>],
+                    [<C>eas channel:view &lt;name&gt;</C>, <C>fireota channel:view &lt;name&gt;</C>, <>View channel details and latest release status</>],
+                    [<C>eas channel:rollout &lt;name&gt;</C>, <C>fireota channel:rollout &lt;name&gt; --percent &lt;N&gt;</C>, <>Set rollout percentage on the channel's latest release</>],
+                  ]}
+                />
+                <p>Example publishing and channel management:</p>
+                <Code code={EAS_UPDATE_CLI} />
+              </>
+            ),
+          },
+          {
+            id: "sdk-mapping",
+            title: "expo-updates to @fireota/react-native mapping",
+            body: (
+              <>
+                <p>
+                  In <C>@fireota/react-native</C> (0.7.0+), the <C>Updates</C> module and <C>useUpdates()</C> hook provide drop-in
+                  method-for-method parity with <C>expo-updates</C>:
+                </p>
+                <FieldTable
+                  head={["expo-updates API", "@fireota/react-native API", "Description"]}
+                  rows={[
+                    [<C>Updates.checkForUpdateAsync()</C>, <C>Updates.checkForUpdateAsync()</C>, <>Checks if a newer update is published for this app and channel.</>],
+                    [<C>Updates.fetchUpdateAsync()</C>, <C>Updates.fetchUpdateAsync()</C>, <>Downloads and cryptographically verifies the update package.</>],
+                    [<C>Updates.reloadAsync()</C>, <C>Updates.reloadAsync()</C>, <>Reloads the JavaScript bundle with the downloaded update.</>],
+                    [<C>Updates.readLogEntriesAsync()</C>, <C>Updates.readLogEntriesAsync(maxAge?)</C>, <>Reads diagnostic log entries from update checks and downloads.</>],
+                    [<C>Updates.clearLogEntriesAsync()</C>, <C>Updates.clearLogEntriesAsync()</C>, <>Clears local update diagnostic logs.</>],
+                    [<C>useUpdates()</C>, <C>useUpdates()</C>, <>React hook returning <C>isChecking</C>, <C>isDownloading</C>, <C>isUpdateAvailable</C>, <C>isUpdatePending</C>, etc.</>],
+                  ]}
+                />
+                <p>Using the API in your React Native app:</p>
+                <Code language="tsx" code={EAS_SDK_EXAMPLE} />
+              </>
             ),
           },
         ],

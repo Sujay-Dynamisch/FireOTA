@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.9.0] - 2026-11-27
+
+### Added
+- **EAS Update parity**:
+  - `fireota update` with `--channel` / `--branch` alias, `--platform all|android|ios`, `--rollout-percentage`, `--private-key-path`, `--auto`, `--json`, and `--non-interactive`.
+  - Update management commands: `fireota update:list`, `update:view`, `update:republish`, `update:rollback`, `update:edit`, `update:pause`, `update:resume`, `update:delete`.
+  - Channel management commands: `fireota channel:list`, `channel:create`, `channel:view`, `channel:rollout`.
+
 ## [0.8.0] - 2026-11-16
 
 ### Added

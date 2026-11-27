@@ -50,11 +50,13 @@ import { Route as SettingsApiKeysRouteImport } from './routes/settings.api-keys'
 import { Route as SettingsCiCdRouteImport } from './routes/settings.ci-cd'
 import { Route as SettingsWebhooksRouteImport } from './routes/settings.webhooks'
 import { Route as AppsAppIdIndexRouteImport } from './routes/apps.$appId.index'
+import { Route as ApiPublicV1ChannelsRouteImport } from './routes/api.public.v1.channels'
 import { Route as ApiPublicV1MeRouteImport } from './routes/api.public.v1.me'
 import { Route as ApiPublicV1ReleasesRouteImport } from './routes/api.public.v1.releases'
 import { Route as AppsAppIdReleasesNewRouteImport } from './routes/apps.$appId.releases.new'
 import { Route as ApiPublicV1FirebaseCallbackRouteImport } from './routes/api.public.v1.firebase.callback'
 import { Route as ApiPublicV1InternalMaintenanceRouteImport } from './routes/api.public.v1.internal.maintenance'
+import { Route as ApiPublicV1ReleasesReleaseIdRouteImport } from './routes/api.public.v1.releases.$releaseId'
 import { Route as ApiPublicV1UpdatesCheckRouteImport } from './routes/api.public.v1.updates.check'
 import { Route as ApiPublicV1UpdatesEventsRouteImport } from './routes/api.public.v1.updates.events'
 import { Route as ApiPublicV1ExpoAppIdManifestRouteImport } from './routes/api.public.v1.expo.$appId.manifest'
@@ -266,6 +268,11 @@ const AppsAppIdIndexRoute = AppsAppIdIndexRouteImport.update({
   path: '/apps/$appId/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicV1ChannelsRoute = ApiPublicV1ChannelsRouteImport.update({
+  id: '/api/public/v1/channels',
+  path: '/api/public/v1/channels',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicV1MeRoute = ApiPublicV1MeRouteImport.update({
   id: '/api/public/v1/me',
   path: '/api/public/v1/me',
@@ -293,6 +300,12 @@ const ApiPublicV1InternalMaintenanceRoute =
     path: '/api/public/v1/internal/maintenance',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicV1ReleasesReleaseIdRoute =
+  ApiPublicV1ReleasesReleaseIdRouteImport.update({
+    id: '/$releaseId',
+    path: '/$releaseId',
+    getParentRoute: () => ApiPublicV1ReleasesRoute,
+  } as any)
 const ApiPublicV1UpdatesCheckRoute = ApiPublicV1UpdatesCheckRouteImport.update({
   id: '/api/public/v1/updates/check',
   path: '/api/public/v1/updates/check',
@@ -312,15 +325,15 @@ const ApiPublicV1ExpoAppIdManifestRoute =
   } as any)
 const ApiPublicV1ReleasesReleaseIdBundleRoute =
   ApiPublicV1ReleasesReleaseIdBundleRouteImport.update({
-    id: '/$releaseId/bundle',
-    path: '/$releaseId/bundle',
-    getParentRoute: () => ApiPublicV1ReleasesRoute,
+    id: '/bundle',
+    path: '/bundle',
+    getParentRoute: () => ApiPublicV1ReleasesReleaseIdRoute,
   } as any)
 const ApiPublicV1ReleasesReleaseIdPublishRoute =
   ApiPublicV1ReleasesReleaseIdPublishRouteImport.update({
-    id: '/$releaseId/publish',
-    path: '/$releaseId/publish',
-    getParentRoute: () => ApiPublicV1ReleasesRoute,
+    id: '/publish',
+    path: '/publish',
+    getParentRoute: () => ApiPublicV1ReleasesReleaseIdRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
@@ -365,11 +378,13 @@ export interface FileRoutesByFullPath {
   '/rollouts/': typeof RolloutsIndexRoute
   '/settings/': typeof SettingsIndexRoute
   '/apps/$appId/': typeof AppsAppIdIndexRoute
+  '/api/public/v1/channels': typeof ApiPublicV1ChannelsRoute
   '/api/public/v1/me': typeof ApiPublicV1MeRoute
   '/api/public/v1/releases': typeof ApiPublicV1ReleasesRouteWithChildren
   '/apps/$appId/releases/new': typeof AppsAppIdReleasesNewRoute
   '/api/public/v1/firebase/callback': typeof ApiPublicV1FirebaseCallbackRoute
   '/api/public/v1/internal/maintenance': typeof ApiPublicV1InternalMaintenanceRoute
+  '/api/public/v1/releases/$releaseId': typeof ApiPublicV1ReleasesReleaseIdRouteWithChildren
   '/api/public/v1/updates/check': typeof ApiPublicV1UpdatesCheckRoute
   '/api/public/v1/updates/events': typeof ApiPublicV1UpdatesEventsRoute
   '/api/public/v1/expo/$appId/manifest': typeof ApiPublicV1ExpoAppIdManifestRoute
@@ -417,11 +432,13 @@ export interface FileRoutesByTo {
   '/rollouts': typeof RolloutsIndexRoute
   '/settings': typeof SettingsIndexRoute
   '/apps/$appId': typeof AppsAppIdIndexRoute
+  '/api/public/v1/channels': typeof ApiPublicV1ChannelsRoute
   '/api/public/v1/me': typeof ApiPublicV1MeRoute
   '/api/public/v1/releases': typeof ApiPublicV1ReleasesRouteWithChildren
   '/apps/$appId/releases/new': typeof AppsAppIdReleasesNewRoute
   '/api/public/v1/firebase/callback': typeof ApiPublicV1FirebaseCallbackRoute
   '/api/public/v1/internal/maintenance': typeof ApiPublicV1InternalMaintenanceRoute
+  '/api/public/v1/releases/$releaseId': typeof ApiPublicV1ReleasesReleaseIdRouteWithChildren
   '/api/public/v1/updates/check': typeof ApiPublicV1UpdatesCheckRoute
   '/api/public/v1/updates/events': typeof ApiPublicV1UpdatesEventsRoute
   '/api/public/v1/expo/$appId/manifest': typeof ApiPublicV1ExpoAppIdManifestRoute
@@ -471,11 +488,13 @@ export interface FileRoutesById {
   '/rollouts/': typeof RolloutsIndexRoute
   '/settings/': typeof SettingsIndexRoute
   '/apps/$appId/': typeof AppsAppIdIndexRoute
+  '/api/public/v1/channels': typeof ApiPublicV1ChannelsRoute
   '/api/public/v1/me': typeof ApiPublicV1MeRoute
   '/api/public/v1/releases': typeof ApiPublicV1ReleasesRouteWithChildren
   '/apps/$appId/releases/new': typeof AppsAppIdReleasesNewRoute
   '/api/public/v1/firebase/callback': typeof ApiPublicV1FirebaseCallbackRoute
   '/api/public/v1/internal/maintenance': typeof ApiPublicV1InternalMaintenanceRoute
+  '/api/public/v1/releases/$releaseId': typeof ApiPublicV1ReleasesReleaseIdRouteWithChildren
   '/api/public/v1/updates/check': typeof ApiPublicV1UpdatesCheckRoute
   '/api/public/v1/updates/events': typeof ApiPublicV1UpdatesEventsRoute
   '/api/public/v1/expo/$appId/manifest': typeof ApiPublicV1ExpoAppIdManifestRoute
@@ -526,11 +545,13 @@ export interface FileRouteTypes {
     | '/rollouts/'
     | '/settings/'
     | '/apps/$appId/'
+    | '/api/public/v1/channels'
     | '/api/public/v1/me'
     | '/api/public/v1/releases'
     | '/apps/$appId/releases/new'
     | '/api/public/v1/firebase/callback'
     | '/api/public/v1/internal/maintenance'
+    | '/api/public/v1/releases/$releaseId'
     | '/api/public/v1/updates/check'
     | '/api/public/v1/updates/events'
     | '/api/public/v1/expo/$appId/manifest'
@@ -578,11 +599,13 @@ export interface FileRouteTypes {
     | '/rollouts'
     | '/settings'
     | '/apps/$appId'
+    | '/api/public/v1/channels'
     | '/api/public/v1/me'
     | '/api/public/v1/releases'
     | '/apps/$appId/releases/new'
     | '/api/public/v1/firebase/callback'
     | '/api/public/v1/internal/maintenance'
+    | '/api/public/v1/releases/$releaseId'
     | '/api/public/v1/updates/check'
     | '/api/public/v1/updates/events'
     | '/api/public/v1/expo/$appId/manifest'
@@ -631,11 +654,13 @@ export interface FileRouteTypes {
     | '/rollouts/'
     | '/settings/'
     | '/apps/$appId/'
+    | '/api/public/v1/channels'
     | '/api/public/v1/me'
     | '/api/public/v1/releases'
     | '/apps/$appId/releases/new'
     | '/api/public/v1/firebase/callback'
     | '/api/public/v1/internal/maintenance'
+    | '/api/public/v1/releases/$releaseId'
     | '/api/public/v1/updates/check'
     | '/api/public/v1/updates/events'
     | '/api/public/v1/expo/$appId/manifest'
@@ -681,6 +706,7 @@ export interface RootRouteChildren {
   RolloutsIndexRoute: typeof RolloutsIndexRoute
   SettingsIndexRoute: typeof SettingsIndexRoute
   AppsAppIdIndexRoute: typeof AppsAppIdIndexRoute
+  ApiPublicV1ChannelsRoute: typeof ApiPublicV1ChannelsRoute
   ApiPublicV1MeRoute: typeof ApiPublicV1MeRoute
   ApiPublicV1ReleasesRoute: typeof ApiPublicV1ReleasesRouteWithChildren
   AppsAppIdReleasesNewRoute: typeof AppsAppIdReleasesNewRoute
@@ -980,6 +1006,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppsAppIdIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/v1/channels': {
+      id: '/api/public/v1/channels'
+      path: '/api/public/v1/channels'
+      fullPath: '/api/public/v1/channels'
+      preLoaderRoute: typeof ApiPublicV1ChannelsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/v1/me': {
       id: '/api/public/v1/me'
       path: '/api/public/v1/me'
@@ -1015,6 +1048,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicV1InternalMaintenanceRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/v1/releases/$releaseId': {
+      id: '/api/public/v1/releases/$releaseId'
+      path: '/$releaseId'
+      fullPath: '/api/public/v1/releases/$releaseId'
+      preLoaderRoute: typeof ApiPublicV1ReleasesReleaseIdRouteImport
+      parentRoute: typeof ApiPublicV1ReleasesRoute
+    }
     '/api/public/v1/updates/check': {
       id: '/api/public/v1/updates/check'
       path: '/api/public/v1/updates/check'
@@ -1038,17 +1078,17 @@ declare module '@tanstack/react-router' {
     }
     '/api/public/v1/releases/$releaseId/bundle': {
       id: '/api/public/v1/releases/$releaseId/bundle'
-      path: '/$releaseId/bundle'
+      path: '/bundle'
       fullPath: '/api/public/v1/releases/$releaseId/bundle'
       preLoaderRoute: typeof ApiPublicV1ReleasesReleaseIdBundleRouteImport
-      parentRoute: typeof ApiPublicV1ReleasesRoute
+      parentRoute: typeof ApiPublicV1ReleasesReleaseIdRoute
     }
     '/api/public/v1/releases/$releaseId/publish': {
       id: '/api/public/v1/releases/$releaseId/publish'
-      path: '/$releaseId/publish'
+      path: '/publish'
       fullPath: '/api/public/v1/releases/$releaseId/publish'
       preLoaderRoute: typeof ApiPublicV1ReleasesReleaseIdPublishRouteImport
-      parentRoute: typeof ApiPublicV1ReleasesRoute
+      parentRoute: typeof ApiPublicV1ReleasesReleaseIdRoute
     }
   }
 }
@@ -1078,16 +1118,31 @@ const HealthRouteChildren: HealthRouteChildren = {
 const HealthRouteWithChildren =
   HealthRoute._addFileChildren(HealthRouteChildren)
 
-interface ApiPublicV1ReleasesRouteChildren {
+interface ApiPublicV1ReleasesReleaseIdRouteChildren {
   ApiPublicV1ReleasesReleaseIdBundleRoute: typeof ApiPublicV1ReleasesReleaseIdBundleRoute
   ApiPublicV1ReleasesReleaseIdPublishRoute: typeof ApiPublicV1ReleasesReleaseIdPublishRoute
 }
 
+const ApiPublicV1ReleasesReleaseIdRouteChildren: ApiPublicV1ReleasesReleaseIdRouteChildren =
+  {
+    ApiPublicV1ReleasesReleaseIdBundleRoute:
+      ApiPublicV1ReleasesReleaseIdBundleRoute,
+    ApiPublicV1ReleasesReleaseIdPublishRoute:
+      ApiPublicV1ReleasesReleaseIdPublishRoute,
+  }
+
+const ApiPublicV1ReleasesReleaseIdRouteWithChildren =
+  ApiPublicV1ReleasesReleaseIdRoute._addFileChildren(
+    ApiPublicV1ReleasesReleaseIdRouteChildren,
+  )
+
+interface ApiPublicV1ReleasesRouteChildren {
+  ApiPublicV1ReleasesReleaseIdRoute: typeof ApiPublicV1ReleasesReleaseIdRouteWithChildren
+}
+
 const ApiPublicV1ReleasesRouteChildren: ApiPublicV1ReleasesRouteChildren = {
-  ApiPublicV1ReleasesReleaseIdBundleRoute:
-    ApiPublicV1ReleasesReleaseIdBundleRoute,
-  ApiPublicV1ReleasesReleaseIdPublishRoute:
-    ApiPublicV1ReleasesReleaseIdPublishRoute,
+  ApiPublicV1ReleasesReleaseIdRoute:
+    ApiPublicV1ReleasesReleaseIdRouteWithChildren,
 }
 
 const ApiPublicV1ReleasesRouteWithChildren =
@@ -1131,6 +1186,7 @@ const rootRouteChildren: RootRouteChildren = {
   RolloutsIndexRoute: RolloutsIndexRoute,
   SettingsIndexRoute: SettingsIndexRoute,
   AppsAppIdIndexRoute: AppsAppIdIndexRoute,
+  ApiPublicV1ChannelsRoute: ApiPublicV1ChannelsRoute,
   ApiPublicV1MeRoute: ApiPublicV1MeRoute,
   ApiPublicV1ReleasesRoute: ApiPublicV1ReleasesRouteWithChildren,
   AppsAppIdReleasesNewRoute: AppsAppIdReleasesNewRoute,
@@ -1153,3 +1209,4 @@ declare module '@tanstack/react-start' {
     config: Awaited<ReturnType<typeof startInstance.getOptions>>
   }
 }
+

@@ -36,6 +36,8 @@ export interface FireOTAConfig {
    * signature from the matching private key or it is rejected before download.
    */
   codeSigningCertificate?: string;
+  /** Custom request headers sent with API requests to serverUrl. Cannot override content-type or x-fireota-sdk. */
+  requestHeaders?: Record<string, string>;
   /** Check (and download) automatically when configure() runs. Default true. */
   checkOnAppStart?: boolean;
   /**
@@ -102,8 +104,42 @@ interface FireOTANative {
 const native = NativeModules["FireOTA"] as FireOTANative | undefined;
 const PROTOCOL_VERSION = "1";
 
-let config: Required<Omit<FireOTAConfig, "onStatusChange" | "codeSigningCertificate">> &
-  Pick<FireOTAConfig, "onStatusChange" | "codeSigningCertificate">;
+export interface UpdatesLogEntry {
+  timestamp: number;
+  message: string;
+  level: "info" | "warn" | "error";
+  code?: string;
+  updateId?: string;
+}
+
+const MAX_LOG_ENTRIES = 200;
+const logEntries: UpdatesLogEntry[] = [];
+
+export function addLogEntry(entry: Omit<UpdatesLogEntry, "timestamp"> & { timestamp?: number }) {
+  const item: UpdatesLogEntry = {
+    timestamp: entry.timestamp ?? Date.now(),
+    message: entry.message,
+    level: entry.level,
+    code: entry.code,
+    updateId: entry.updateId,
+  };
+  if (logEntries.length >= MAX_LOG_ENTRIES) {
+    logEntries.shift();
+  }
+  logEntries.push(item);
+}
+
+export async function readLogEntriesAsync(maxAgeMs: number = 3600000): Promise<UpdatesLogEntry[]> {
+  const cutoff = Date.now() - maxAgeMs;
+  return logEntries.filter((entry) => entry.timestamp >= cutoff);
+}
+
+export async function clearLogEntriesAsync(): Promise<void> {
+  logEntries.length = 0;
+}
+
+let config: Required<Omit<FireOTAConfig, "onStatusChange" | "codeSigningCertificate" | "requestHeaders">> &
+  Pick<FireOTAConfig, "onStatusChange" | "codeSigningCertificate" | "requestHeaders">;
 let status: UpdateStatus = "idle";
 let running: Promise<CheckResult> | null = null;
 let configuring: Promise<void> | null = null;
@@ -180,6 +216,21 @@ function setStatus(next: UpdateStatus, detail?: { releaseId?: string; error?: st
     error: next === "error" ? (detail?.error ?? "Update failed") : null,
     ...(next === "installed" && detail?.releaseId ? { pendingReleaseId: detail.releaseId } : {}),
   });
+  const codeMap: Record<UpdateStatus, string> = {
+    idle: "UPDATE_IDLE",
+    checking: "UPDATE_CHECKING",
+    upToDate: "UPDATE_UP_TO_DATE",
+    downloading: "UPDATE_DOWNLOADING",
+    downloaded: "UPDATE_DOWNLOADED",
+    installed: "UPDATE_INSTALLED",
+    error: "UPDATE_ERROR",
+  };
+  addLogEntry({
+    level: next === "error" ? "error" : "info",
+    message: next === "error" ? (detail?.error ?? "Update failed") : `Update status changed to ${next}`,
+    code: codeMap[next] ?? "UPDATE_STATUS",
+    updateId: detail?.releaseId,
+  });
   config?.onStatusChange?.(next, detail);
 }
 
@@ -188,9 +239,24 @@ function randomId() {
 }
 
 async function post<T>(path: string, body: unknown): Promise<T> {
-  const response = await fetch(`${requireConfig().serverUrl.replace(/\/+$/, "")}${path}`, {
+  const cfg = requireConfig();
+  const customHeaders: Record<string, string> = {};
+  if (cfg.requestHeaders) {
+    for (const [key, value] of Object.entries(cfg.requestHeaders)) {
+      const lower = key.toLowerCase();
+      if (lower !== "content-type" && lower !== "x-fireota-sdk") {
+        customHeaders[key] = value;
+      }
+    }
+  }
+
+  const response = await fetch(`${cfg.serverUrl.replace(/\/+$/, "")}${path}`, {
     method: "POST",
-    headers: { "content-type": "application/json", "x-fireota-sdk": `react-native/${PROTOCOL_VERSION}` },
+    headers: {
+      ...customHeaders,
+      "content-type": "application/json",
+      "x-fireota-sdk": `react-native/${PROTOCOL_VERSION}`,
+    },
     body: JSON.stringify(body),
   });
   const json = (await response.json()) as { success: boolean; data?: T; error?: { code: string; message: string } };
@@ -235,7 +301,13 @@ export async function checkForUpdate(): Promise<CheckResult> {
     currentReleaseId: state.pendingReleaseId ?? state.currentReleaseId,
   });
   // Defence in depth: never accept a release built for another runtime.
-  if (result.updateAvailable && result.release?.runtimeVersion !== cfg.runtimeVersion) {
+  if (result.updateAvailable && result.release && result.release.runtimeVersion !== cfg.runtimeVersion) {
+    addLogEntry({
+      level: "warn",
+      message: `Release ${result.release.id} rejected: runtime version ${result.release.runtimeVersion} does not match ${cfg.runtimeVersion}`,
+      code: "RUNTIME_INCOMPATIBLE",
+      updateId: result.release.id,
+    });
     update({ available: null, lastCheckedAt: Date.now() });
     setStatus("upToDate");
     return { updateAvailable: false, reason: "runtime_incompatible" };
@@ -317,6 +389,12 @@ async function assertSigned(release: AvailableUpdate) {
       )
     : false;
   if (!valid) {
+    addLogEntry({
+      level: "error",
+      message: signature ? "The update signature is not valid for this app." : "The update is not signed; this app only accepts signed updates.",
+      code: signature ? "SIGNATURE_INVALID" : "UNSIGNED",
+      updateId: release.id,
+    });
     void report("install_failed", release.id, { reason: signature ? "signature_invalid" : "unsigned" });
     throw new Error(signature ? "The update signature is not valid for this app." : "The update is not signed; this app only accepts signed updates.");
   }
@@ -425,10 +503,33 @@ export function configure(options: FireOTAConfig): Promise<void> {
   return configuring;
 }
 
+function validateServerUrl(serverUrl: string) {
+  let parsed: URL;
+  try {
+    parsed = new URL(serverUrl);
+  } catch {
+    throw new Error(`Invalid serverUrl: "${serverUrl}" is not a valid URL.`);
+  }
+  if (parsed.protocol === "https:") {
+    return;
+  }
+  const isDev = typeof __DEV__ !== "undefined" ? Boolean(__DEV__) : false;
+  const isAllowedLocal =
+    parsed.protocol === "http:" &&
+    (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1" || parsed.hostname === "10.0.2.2");
+
+  if (!isDev || !isAllowedLocal) {
+    throw new Error(
+      `Invalid serverUrl: "${serverUrl}". FireOTA requires an HTTPS server URL in production. In development (__DEV__=true), http://localhost, http://127.0.0.1, and http://10.0.2.2 are allowed.`,
+    );
+  }
+}
+
 async function doConfigure(options: FireOTAConfig) {
   if (!options.appId || !options.serverUrl) {
     throw new Error("FireOTA.configure() needs appId and serverUrl (see fireota.config.js).");
   }
+  validateServerUrl(options.serverUrl);
   const nativeModule = requireNative();
   const state = await nativeModule.getState();
   // Like Expo's "appVersion" policy: the store version of this build is its runtime version.
@@ -453,11 +554,23 @@ async function doConfigure(options: FireOTAConfig) {
   });
 
   if (state.failedReleaseId) {
+    addLogEntry({
+      level: "warn",
+      message: `Rolled back unconfirmed release ${state.failedReleaseId}`,
+      code: "LAUNCH_FAILED_ROLLBACK",
+      updateId: state.failedReleaseId,
+    });
     void report("rollback", state.failedReleaseId, { reason: "launch_not_confirmed" });
     void report("install_failed", state.failedReleaseId, { reason: "launch_not_confirmed" });
     await nativeModule.clearFailed();
   }
   if (state.isFirstRun && state.currentReleaseId) {
+    addLogEntry({
+      level: "info",
+      message: `Confirmed launch of release ${state.currentReleaseId}`,
+      code: "LAUNCH_SUCCESS",
+      updateId: state.currentReleaseId,
+    });
     await nativeModule.markSuccess();
     void report("install_succeeded", state.currentReleaseId);
   }
@@ -476,6 +589,8 @@ export const FireOTA = {
   clearPendingUpdate,
   getCurrentRelease,
   getUpdateStatus,
+  readLogEntriesAsync,
+  clearLogEntriesAsync,
 };
 
 export default FireOTA;

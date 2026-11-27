@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.7.0] - 2026-11-27
+
+### Added
+- **EAS Update Parity / expo-updates drop-in API surface**:
+  - `Updates.checkForUpdateAsync()` — queries update server and returns `{ isAvailable, manifest }`.
+  - `Updates.fetchUpdateAsync()` — downloads and stages update for next restart, returning `{ isNew, manifest }`.
+  - `Updates.reloadAsync()` — restarts the app to apply staged update.
+  - `useUpdates()` hook — reactive hook tracking `{ isChecking, isDownloading, isUpdateAvailable, isUpdatePending, availableUpdate, downloadedUpdate, currentlyRunning, checkError, downloadError, downloadProgress, lastCheckForUpdateTimeSinceRestart }`.
+  - In-memory bounded diagnostic log buffer (200 entries): `Updates.readLogEntriesAsync(maxAgeMs?)` and `Updates.clearLogEntriesAsync()`.
+  - Configurable `requestHeaders` in `FireOTAConfig` for custom HTTP request headers (prevents overriding `content-type` or `x-fireota-sdk`).
+  - Strict HTTPS validation on `configure()` serverUrl; non-HTTPS is rejected except `http://localhost`, `127.0.0.1`, and `10.0.2.2` when `__DEV__` is true.
+
 ## [0.6.0] - 2026-11-16
 
 ### Changed
