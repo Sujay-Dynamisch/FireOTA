@@ -40,7 +40,7 @@ export const changelog: ChangelogEntry[] = [
     title: "EAS Update parity: drop-in CLI commands, expo-updates SDK, and enhanced security",
     summary:
       "FireOTA now provides full command-line and SDK parity for teams migrating from EAS Update: familiar fireota update commands, an expo-updates-compatible Updates API in @fireota/react-native 0.7.0, and security hardening.",
-    tags: ["CLI 0.9.0", "React Native 0.7.0", "Security"],
+    tags: ["CLI 0.9.0", "React Native 0.7.0", "Flutter 0.3.0", "Security"],
     authors: [SUJAL],
     body: [
       { type: "h", text: "Familiar EAS commands and workflow" },
@@ -95,6 +95,15 @@ fireota channel:rollout production --percent 50`,
           "eas update:delete → fireota update:delete <id>",
           "eas channel:list / create / view → fireota channel:list / channel:create / channel:view",
           "eas channel:rollout → fireota channel:rollout <name> --percent <N>",
+        ],
+      },
+      { type: "h", text: "Works in more apps, verified on macOS" },
+      {
+        type: "list",
+        items: [
+          "CI now builds fresh React Native 0.73, 0.76 and latest apps for iOS and Android, a fresh Expo app, and fresh Flutter 3.22 and stable apps, all set up with fireota init.",
+          "Fixed: fireota init produced Android code that did not compile on React Native 0.73 to 0.80.",
+          "Flutter: now supports Android 5.0 (API 21) and iOS 12, and apps on Android Gradle Plugin 7, 8 or 9.",
         ],
       },
     ],

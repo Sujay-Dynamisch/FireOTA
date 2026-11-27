@@ -187,7 +187,7 @@ internal class FireOTAStore(context: Context) {
       if (connection.responseCode !in 200..299) {
         throw FireOTAException("download_failed", "Download failed: HTTP ${connection.responseCode}")
       }
-      val declared = connection.contentLengthLong
+      val declared = connection.getHeaderField("Content-Length")?.toLongOrNull() ?: -1L // contentLengthLong needs API 24
       if (declared > limit) throw FireOTAException("too_large", "The update is larger than the download limit.")
       val total = if (expectedSize > 0) expectedSize else declared
       val digest = MessageDigest.getInstance("SHA-256")
