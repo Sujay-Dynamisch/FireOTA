@@ -9,6 +9,12 @@ on:
   pull_request:
     paths: ["packages/**", ".github/workflows/sdk-native-ci.yml"]
   workflow_dispatch:
+    inputs:
+      suite:
+        description: Which builds to run
+        type: choice
+        options: [all, flutter, react-native]
+        default: all
 
 concurrency:
   group: sdk-native-${{ github.ref }}
@@ -16,6 +22,7 @@ concurrency:
 
 jobs:
   react-native:
+    if: github.event_name != 'workflow_dispatch' || inputs.suite == 'all' || inputs.suite == 'react-native'
     name: React Native ${{ matrix.rn }} · ${{ matrix.platform }}
     runs-on: ${{ matrix.platform == 'ios' && 'macos-15' || 'ubuntu-latest' }}
     timeout-minutes: 60
@@ -88,6 +95,7 @@ jobs:
         run: ./gradlew assembleRelease --no-daemon --stacktrace
 
   expo:
+    if: github.event_name != 'workflow_dispatch' || inputs.suite == 'all' || inputs.suite == 'react-native'
     name: Expo (prebuild) · android
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -116,6 +124,7 @@ jobs:
           cd android && ./gradlew assembleRelease --no-daemon --stacktrace
 
   flutter:
+    if: github.event_name != 'workflow_dispatch' || inputs.suite == 'all' || inputs.suite == 'flutter'
     name: Flutter ${{ matrix.flutter }} · ${{ matrix.platform }}
     runs-on: ${{ matrix.platform == 'ios' && 'macos-15' || 'ubuntu-latest' }}
     timeout-minutes: 45
@@ -138,8 +147,9 @@ jobs:
       - name: Test the package
         working-directory: packages/flutter
         run: |
-          # The example targets current Flutter; old Flutter only checks the package itself.
-          flutter pub get --no-example
+          # The example targets current Flutter; on older Flutter test the package without it.
+          if [ "${{ matrix.flutter }}" != "stable" ]; then rm -rf example; fi
+          flutter pub get
           flutter test
       - name: Create a fresh Flutter app and wire FireOTA with the CLI (fireota init)
         run: |
