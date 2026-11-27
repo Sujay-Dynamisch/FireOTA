@@ -22,7 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        rn: ["0.73.11", "latest"]
+        rn: ["0.73.11", "0.76.9", "latest"]
         platform: [ios, android]
     steps:
       - uses: actions/checkout@v4
@@ -135,16 +135,30 @@ jobs:
         with:
           flutter-version: ${{ matrix.flutter != 'stable' && matrix.flutter || '' }}
           channel: stable
-      - name: Test
+      - name: Test the package
         working-directory: packages/flutter
         run: |
           flutter pub get
           flutter test
-      - name: Build example for iOS (no signing)
+      - name: Create a fresh Flutter app and wire FireOTA with the CLI (fireota init)
+        run: |
+          flutter create --org dev.fireota.ci "$RUNNER_TEMP/ci_app"
+          cd "$RUNNER_TEMP/ci_app"
+          flutter pub add fireota --path "$GITHUB_WORKSPACE/packages/flutter"
+          node "$GITHUB_WORKSPACE/packages/cli/bin/fireota.mjs" init --app ci-demo --server-url https://ota.example.com --force
+          # Use the update dialogs the way the docs describe.
+          perl -0pi -e 's/return MaterialApp\(/return MaterialApp(builder: (context, child) => FireOTAUpdatePrompt(child: child!), /' lib/main.dart
+          grep -q "FireOTAUpdatePrompt" lib/main.dart
+          flutter analyze --no-fatal-infos --no-fatal-warnings
+      - name: Build for iOS (no signing)
         if: matrix.platform == 'ios'
-        working-directory: packages/flutter/example
+        working-directory: ${{ runner.temp }}/ci_app
         run: flutter build ios --release --no-codesign
-      - name: Build example for Android
+      - name: Build for Android
         if: matrix.platform == 'android'
-        working-directory: packages/flutter/example
+        working-directory: ${{ runner.temp }}/ci_app
         run: flutter build apk --release
+      - name: Build the example app (current Flutter only)
+        if: matrix.flutter == 'stable'
+        working-directory: packages/flutter/example
+        run: flutter build ${{ matrix.platform == 'ios' && 'ios --release --no-codesign' || 'apk --release' }}
