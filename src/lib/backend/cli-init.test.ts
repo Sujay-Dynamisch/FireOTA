@@ -99,6 +99,19 @@ describe("fireota init: Android", () => {
     expect(source).toContain("import dev.fireota.reactnative.FireOTA");
   });
 
+  it("does not pass jsBundleFilePath to getDefaultReactHost(context, reactNativeHost) (RN 0.73–0.80)", () => {
+    const template = KOTLIN_073.replace(
+      /\n}\s*$/,
+      "\n  override val reactHost: ReactHost\n    get() = getDefaultReactHost(applicationContext, reactNativeHost)\n}\n",
+    );
+    expect(template).toContain("getDefaultReactHost(applicationContext, reactNativeHost)");
+    const { source, status } = patchMainApplication(template, true);
+    expect(status).toBe("patched");
+    expect(source).not.toContain("jsBundleFilePath");
+    expect(source).toContain("override fun getJSBundleFile(): String?");
+    expect(source).toContain("getDefaultReactHost(applicationContext, reactNativeHost)");
+  });
+
   it("patches Java templates", () => {
     const { source, status } = patchMainApplication(JAVA, false);
     expect(status).toBe("patched");

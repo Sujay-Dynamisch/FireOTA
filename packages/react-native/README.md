@@ -162,6 +162,57 @@ Expo SDK 50+ is supported with development and release builds (`npx expo run:and
 
 The runtime version is `expo.version`. `fireota publish` bundles Expo apps with `expo export:embed` and the same entry point as the native build (expo-router included). `expo-updates` must not be installed — both replace the bundle at launch; the plugin stops the build if it finds it (`{ "allowExpoUpdates": true }` while migrating).
 
+## Coming from expo-updates
+
+If you are migrating an Expo app from `expo-updates` / EAS Update to FireOTA, `@fireota/react-native` provides drop-in compatibility for common `expo-updates` APIs and patterns.
+
+### API Mapping
+
+| expo-updates API | FireOTA Equivalent | Description |
+| :--- | :--- | :--- |
+| `Updates.checkForUpdateAsync()` | `Updates.checkForUpdateAsync()` | Queries server for updates; returns `{ isAvailable, manifest? }`. |
+| `Updates.fetchUpdateAsync()` | `Updates.fetchUpdateAsync()` | Downloads and stages update; returns `{ isNew, manifest? }`. |
+| `Updates.reloadAsync()` | `Updates.reloadAsync()` | Restarts the app to apply staged update. |
+| `useUpdates()` | `useUpdates()` | Reactive hook returning `{ isChecking, isDownloading, isUpdateAvailable, isUpdatePending, availableUpdate, downloadedUpdate, currentlyRunning, checkError, downloadError, downloadProgress, lastCheckForUpdateTimeSinceRestart }`. |
+| `Updates.readLogEntriesAsync(maxAge?)` | `Updates.readLogEntriesAsync(maxAgeMs?)` | Reads diagnostic log entries from ring buffer (default 1 hour). |
+| `Updates.clearLogEntriesAsync()` | `Updates.clearLogEntriesAsync()` | Clears diagnostic log buffer. |
+| `Updates.channel` | `Updates.channel` | Currently active channel name. |
+| `Updates.runtimeVersion` | `Updates.runtimeVersion` | Current runtime version string. |
+| `Updates.updateId` | `Updates.updateId` | Unique ID of running update (or null if embedded). |
+| `Updates.isEnabled` | `Updates.isEnabled` | Whether SDK is configured and enabled. |
+| `Updates.isEmbeddedLaunch` | `Updates.isEmbeddedLaunch` | True if running embedded binary assets. |
+
+### app.json `updates` Mapping
+
+| app.json `updates` Key | FireOTA Configuration | Description |
+| :--- | :--- | :--- |
+| `updates.url` | `serverUrl` | Remote server URL (`https://ota.example.com`). |
+| `updates.checkAutomatically` | `checkOnAppStart` | `"ON_LOAD"` -> `checkOnAppStart: true`, `"NEVER"` -> `false`. |
+| `updates.requestHeaders` | `requestHeaders` | Custom request headers (cannot override `content-type` or `x-fireota-sdk`). |
+| `updates.codeSigningCertificate` | `codeSigningCertificate` | Embedded public key for verifying update signatures. |
+| `updates.fallbackToCacheTimeout` | `installMode` / `autoDownload` | Immediate or background download and restart behavior. |
+
+### Usage Example
+
+```ts
+import { Updates, useUpdates } from "@fireota/react-native";
+
+// Imperative check and reload
+async function checkUpdates() {
+  const check = await Updates.checkForUpdateAsync();
+  if (check.isAvailable) {
+    await Updates.fetchUpdateAsync();
+    await Updates.reloadAsync();
+  }
+}
+
+// Declarative hook
+function MyComponent() {
+  const { isChecking, isDownloading, isUpdateAvailable, isUpdatePending, downloadProgress } = useUpdates();
+  // ...
+}
+```
+
 ## Built-in UI (customizable)
 
 ```tsx

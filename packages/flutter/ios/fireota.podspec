@@ -12,7 +12,7 @@ automatic rollback. Dart code patches are Android only.
   s.source           = { :path => '.' }
   s.source_files     = 'fireota/Sources/fireota/**/*.swift'
   s.dependency 'Flutter'
-  s.platform = :ios, '15.0'
+  s.platform = :ios, '12.0'
   s.library = 'z'
 
   # Flutter.framework does not contain a i386 slice.

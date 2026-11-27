@@ -6,5 +6,6 @@
  * Everything is customizable: use the hooks and components below, or the plain API.
  */
 export * from "./core";
+export * from "./updates";
 export * from "./ui";
 export { default } from "./core";

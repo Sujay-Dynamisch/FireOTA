@@ -1,0 +1,60 @@
+// Groovy on purpose: this script must work in apps made with any Flutter 3.22+ template
+// (AGP 7/8 with the separate Kotlin plugin, or AGP 9 with Kotlin built in).
+group = "dev.fireota.flutter"
+version = "1.0"
+
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        // Fallbacks only: Gradle uses the versions the host app already loaded (parent classloader).
+        // AGP 9 built-in Kotlin needs the Kotlin Gradle plugin on this classpath.
+        classpath("com.android.tools.build:gradle:9.1.0")
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.4.0")
+    }
+}
+
+rootProject.allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+apply plugin: "com.android.library"
+
+def agpMajor = com.android.Version.ANDROID_GRADLE_PLUGIN_VERSION.tokenize(".")[0].toInteger()
+// Built-in Kotlin is on for AGP 9+ unless the app sets android.builtInKotlin=false (current Flutter templates do).
+def builtInKotlin = agpMajor >= 9 && findProperty("android.builtInKotlin")?.toString() != "false"
+if (!builtInKotlin) {
+    apply plugin: "kotlin-android"
+}
+
+android {
+    namespace = "dev.fireota.flutter"
+    compileSdk = 35
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    sourceSets {
+        main.java.srcDirs += "src/main/kotlin"
+        test.java.srcDirs += "src/test/kotlin"
+    }
+
+    defaultConfig {
+        minSdk = 24
+    }
+}
+
+// Kotlin bytecode must match Java 17. KGP 1.9+ has compilerOptions; older KGP only kotlinOptions.
+def kotlinExtension = extensions.findByName("kotlin")
+if (kotlinExtension != null && kotlinExtension.hasProperty("compilerOptions")) {
+    kotlinExtension.compilerOptions.jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+} else {
+    android.kotlinOptions.jvmTarget = "17"
+}

@@ -1,0 +1,175 @@
+# Builds the FireOTA SDKs inside real, freshly created apps on macOS (iOS) and Linux (Android),
+# so native code is compiled on every supported toolchain before a release.
+name: SDK native builds
+
+on:
+  push:
+    branches: [main, "release/**"]
+    paths: ["packages/**", ".github/workflows/sdk-native-ci.yml"]
+  pull_request:
+    paths: ["packages/**", ".github/workflows/sdk-native-ci.yml"]
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: Which builds to run
+        type: choice
+        options: [all, flutter, react-native]
+        default: all
+
+concurrency:
+  group: sdk-native-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  react-native:
+    if: github.event_name != 'workflow_dispatch' || inputs.suite == 'all' || inputs.suite == 'react-native'
+    name: React Native ${{ matrix.rn }} · ${{ matrix.platform }}
+    runs-on: ${{ matrix.platform == 'ios' && 'macos-15' || 'ubuntu-latest' }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        rn: ["0.73.11", "0.76.9", "latest"]
+        platform: [ios, android]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - if: matrix.platform == 'android'
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: 17
+
+      - name: Create a fresh React Native app
+        run: |
+          npx --yes @react-native-community/cli@latest init FireOTAApp \
+            --version ${{ matrix.rn }} --skip-git-init --install-pods false --pm npm --directory "$RUNNER_TEMP/FireOTAApp"
+
+      - name: Install the SDK from a packed tarball (what npm users get)
+        run: |
+          cd packages/react-native
+          TARBALL=$(npm pack --pack-destination "$RUNNER_TEMP" | tail -1)
+          cd "$RUNNER_TEMP/FireOTAApp"
+          npm install "$RUNNER_TEMP/$TARBALL"
+
+      - name: Wire FireOTA with the CLI (fireota init)
+        working-directory: ${{ runner.temp }}/FireOTAApp
+        run: node "$GITHUB_WORKSPACE/packages/cli/bin/fireota.mjs" init --app ci-demo --server-url https://ota.example.com --force
+
+      - name: Use the SDK UI and expo-updates-style API in App
+        working-directory: ${{ runner.temp }}/FireOTAApp
+        run: |
+          APP=$(ls App.tsx App.js 2>/dev/null | head -1)
+          cat >> "$APP" <<'EOF'
+
+          // CI: make sure the public API type-checks and bundles.
+          import { Updates, useUpdates, UpdateScreen, useFireOTA } from "@fireota/react-native";
+          export function FireOTACiProbe() {
+            const updates = useUpdates();
+            const ota = useFireOTA();
+            void Updates.checkForUpdateAsync;
+            return updates.isUpdateAvailable || ota.busy ? <UpdateScreen /> : null;
+          }
+          EOF
+
+      - name: Bundle JavaScript (Metro)
+        working-directory: ${{ runner.temp }}/FireOTAApp
+        run: npx react-native bundle --platform ${{ matrix.platform }} --dev false --entry-file index.js --bundle-output "$RUNNER_TEMP/index.bundle"
+
+      - name: Build iOS (Release, simulator, no signing)
+        if: matrix.platform == 'ios'
+        working-directory: ${{ runner.temp }}/FireOTAApp/ios
+        run: |
+          bundle install || true
+          (bundle exec pod install || pod install)
+          set -o pipefail
+          xcodebuild -workspace FireOTAApp.xcworkspace -scheme FireOTAApp -configuration Release \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO build | tail -n 80
+
+      - name: Build Android (Release)
+        if: matrix.platform == 'android'
+        working-directory: ${{ runner.temp }}/FireOTAApp/android
+        run: ./gradlew assembleRelease --no-daemon --stacktrace
+
+  expo:
+    if: github.event_name != 'workflow_dispatch' || inputs.suite == 'all' || inputs.suite == 'react-native'
+    name: Expo (prebuild) · android
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: 17
+      - name: Create a fresh Expo app
+        run: npx --yes create-expo-app@latest "$RUNNER_TEMP/ExpoApp" --template blank-typescript --yes
+      - name: Install the SDK and add the config plugin
+        run: |
+          cd packages/react-native
+          TARBALL=$(npm pack --pack-destination "$RUNNER_TEMP" | tail -1)
+          cd "$RUNNER_TEMP/ExpoApp"
+          npm install "$RUNNER_TEMP/$TARBALL"
+          node "$GITHUB_WORKSPACE/packages/cli/bin/fireota.mjs" init --app ci-demo --server-url https://ota.example.com --force
+      - name: Prebuild and build Android
+        working-directory: ${{ runner.temp }}/ExpoApp
+        run: |
+          npx expo prebuild --platform android --no-install --clean
+          cd android && ./gradlew assembleRelease --no-daemon --stacktrace
+
+  flutter:
+    if: github.event_name != 'workflow_dispatch' || inputs.suite == 'all' || inputs.suite == 'flutter'
+    name: Flutter ${{ matrix.flutter }} · ${{ matrix.platform }}
+    runs-on: ${{ matrix.platform == 'ios' && 'macos-15' || 'ubuntu-latest' }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        flutter: ["3.22.3", "stable"]
+        platform: [ios, android]
+    steps:
+      - uses: actions/checkout@v4
+      - if: matrix.platform == 'android'
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: 17
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ matrix.flutter != 'stable' && matrix.flutter || '' }}
+          channel: stable
+      - name: Test the package
+        working-directory: packages/flutter
+        run: |
+          # The example targets current Flutter; on older Flutter test the package without it.
+          if [ "${{ matrix.flutter }}" != "stable" ]; then rm -rf example; fi
+          flutter pub get
+          flutter test
+      - name: Create a fresh Flutter app and wire FireOTA with the CLI (fireota init)
+        run: |
+          flutter create --org dev.fireota.ci "$RUNNER_TEMP/ci_app"
+          cd "$RUNNER_TEMP/ci_app"
+          flutter pub add fireota --path "$GITHUB_WORKSPACE/packages/flutter"
+          node "$GITHUB_WORKSPACE/packages/cli/bin/fireota.mjs" init --app ci-demo --server-url https://ota.example.com --force
+          # Use the update dialogs the way the docs describe.
+          perl -0pi -e 's/return MaterialApp\(/return MaterialApp(builder: (context, child) => FireOTAUpdatePrompt(child: child!), /' lib/main.dart
+          grep -q "FireOTAUpdatePrompt" lib/main.dart
+          flutter analyze --no-fatal-infos --no-fatal-warnings
+      - name: Build for iOS (no signing)
+        if: matrix.platform == 'ios'
+        working-directory: ${{ runner.temp }}/ci_app
+        run: flutter build ios --release --no-codesign
+      - name: Build for Android
+        if: matrix.platform == 'android'
+        working-directory: ${{ runner.temp }}/ci_app
+        run: flutter build apk --release
+      - name: Build the example app (current Flutter only)
+        if: matrix.flutter == 'stable'
+        working-directory: packages/flutter/example
+        run: flutter build ${{ matrix.platform == 'ios' && 'ios --release --no-codesign' || 'apk --release' }}

@@ -109,6 +109,8 @@ npx @fireota/cli flutter assets --platform all --app <APP_ID> --assets ./ota-ass
 
 Start with a small `--rollout` and let the user raise it from the dashboard.
 
+Users coming from EAS Update can use the same command shapes: `npx fireota update --branch production --message "What changed" --platform all` (`--branch` is the channel), then `fireota update:list`, `update:edit <id> --rollout-percentage 50`, `update:rollback <id>`, `update:republish <id> --destination-branch <name>`, and `channel:list|create|view|rollout`. Add `--json --non-interactive` in CI.
+
 ## 7. CI (when the user asks)
 
 Add secrets `FIREOTA_URL`, `FIREOTA_API_KEY` and, if signing, `FIREOTA_SIGNING_KEY`. Run the step 6 publish command after the build job, on the release branch only. The CLI detects GitHub Actions, GitLab, Bitbucket, Jenkins, Azure DevOps, CircleCI, Bitrise and Codemagic automatically.

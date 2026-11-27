@@ -35,6 +35,71 @@ const SUJAL: ChangelogAuthor = {
 
 export const changelog: ChangelogEntry[] = [
   {
+    slug: "eas-update-parity",
+    date: "2026-11-27",
+    title: "EAS Update parity: drop-in CLI commands, expo-updates SDK, and enhanced security",
+    summary:
+      "FireOTA now provides full command-line and SDK parity for teams migrating from EAS Update: familiar fireota update commands, an expo-updates-compatible Updates API in @fireota/react-native 0.7.0, and security hardening.",
+    tags: ["CLI 0.9.0", "React Native 0.7.0", "Security"],
+    authors: [SUJAL],
+    body: [
+      { type: "h", text: "Familiar EAS commands and workflow" },
+      {
+        type: "p",
+        text: "You can now use familiar EAS Update commands directly with FireOTA. In FireOTA, an EAS branch maps directly to a channel, and --branch is accepted everywhere as an alias for --channel.",
+      },
+      {
+        type: "code",
+        code: `# Publish an update to production (Android + iOS)
+fireota update --branch production --message "Fix checkout"
+
+# Publish with staged rollout percentage
+fireota update --branch production --message "Roll out new paywall" --rollout-percentage 20
+
+# View, republish, and manage releases
+fireota update:list --branch production
+fireota update:view <releaseId>
+fireota update:republish <releaseId> --destination-branch staging
+fireota update:rollback <releaseId>
+fireota update:edit <releaseId> --rollout-percentage 50
+fireota update:pause <releaseId>
+fireota update:resume <releaseId>
+fireota update:delete <releaseId>
+
+# Channel management
+fireota channel:list
+fireota channel:create preview --environment staging
+fireota channel:rollout production --percent 50`,
+      },
+      { type: "h", text: "What's new across FireOTA" },
+      {
+        type: "list",
+        items: [
+          "CLI 0.9.0: Added fireota update with --branch, --platform all|android|ios, --rollout-percentage, --private-key-path, --auto, --json, and --non-interactive flags.",
+          "CLI Update & Channel Commands: Full suite of update:list, update:view, update:republish, update:rollback, update:edit, update:pause, update:resume, update:delete, and channel:list/create/view/rollout.",
+          "React Native SDK 0.7.0: Added expo-updates-style Updates object (checkForUpdateAsync, fetchUpdateAsync, reloadAsync, readLogEntriesAsync, clearLogEntriesAsync) and useUpdates() hook.",
+          "Security Hardening: Strict SSRF guards on externalBundle URLs (https only, private and loopback networks blocked), eas-client-id sanitization, and scoped API key least privilege.",
+        ],
+      },
+      { type: "h", text: "EAS to FireOTA command mapping" },
+      {
+        type: "list",
+        items: [
+          "eas update → fireota update (--branch <name> maps to channel)",
+          "eas update:list → fireota update:list",
+          "eas update:view → fireota update:view <id>",
+          "eas update:republish → fireota update:republish <id> --destination-channel <name>",
+          "eas update:rollback → fireota update:rollback <id>",
+          "eas update:edit → fireota update:edit <id> --rollout-percentage <N>",
+          "eas update:pause / resume → fireota update:pause / fireota update:resume",
+          "eas update:delete → fireota update:delete <id>",
+          "eas channel:list / create / view → fireota channel:list / channel:create / channel:view",
+          "eas channel:rollout → fireota channel:rollout <name> --percent <N>",
+        ],
+      },
+    ],
+  },
+  {
     slug: "material-update-dialogs",
     date: "2026-11-16",
     title: "A modern update flow: ask, download with progress, restart",

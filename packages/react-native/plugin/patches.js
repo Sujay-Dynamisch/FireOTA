@@ -59,7 +59,9 @@ function patchMainApplication(source, isKotlin) {
     if (call !== -1) {
       const open = call + "getDefaultReactHost".length;
       const close = closingParen(source, open);
-      if (close !== -1) {
+      // Only the packageList form takes jsBundleFilePath; React Native 0.73–0.75 call
+      // getDefaultReactHost(context, reactNativeHost), which reads getJSBundleFile() from the host below.
+      if (close !== -1 && source.slice(open, close).includes("packageList")) {
         let head = source.slice(0, close).replace(/\s+$/, "");
         if (!head.endsWith(",") && !head.endsWith("(")) head += ",";
         const patched =

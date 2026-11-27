@@ -13,7 +13,7 @@ import { clientIp } from "@/lib/backend/client-ip";
 import { admin } from "@/lib/backend/context.server";
 import { sha256Hex } from "@/lib/backend/crypto.server";
 import { jsonError } from "@/lib/backend/errors";
-import { EXPO_RESPONSE_HEADERS, expoManifest, expoMultipart, type ExpoManifestTemplate } from "@/lib/backend/expo";
+import { EXPO_RESPONSE_HEADERS, expoManifest, expoMultipart, sanitizeEasClientId, type ExpoManifestTemplate } from "@/lib/backend/expo";
 import { recordEvent, resolveApp, updateCheck } from "@/lib/backend/ota.server";
 
 const headersSchema = z.object({
@@ -23,7 +23,7 @@ const headersSchema = z.object({
   protocol: z.enum(["0", "1"]),
   currentUpdateId: z.string().uuid().nullable(),
   embeddedUpdateId: z.string().uuid().nullable(),
-  clientId: z.string().min(8).max(120).nullable(),
+  clientId: z.string().nullable(),
 });
 
 const UUID = z.string().uuid();
@@ -43,7 +43,7 @@ export const Route = createFileRoute("/api/public/v1/expo/$appId/manifest")({
             protocol: h.get("expo-protocol-version") ?? "0",
             currentUpdateId: uuidOrNull(h.get("expo-current-update-id")),
             embeddedUpdateId: uuidOrNull(h.get("expo-embedded-update-id")),
-            clientId: h.get("eas-client-id"),
+            clientId: sanitizeEasClientId(h.get("eas-client-id")),
           });
           const ip = clientIp(request);
           // expo-updates sends a stable per-install EAS-Client-ID; without it, fall back to the network.

@@ -9,6 +9,7 @@ import { z } from "zod";
 import { contextFromApiKey, rateLimit } from "@/lib/backend/apikeys.server";
 import { jsonError, jsonOk } from "@/lib/backend/errors";
 import { createRelease } from "@/lib/backend/releases.server";
+import { isSafeExternalUrl } from "@/lib/backend/url-safety";
 
 const createSchema = z.object({
   appId: z.string().uuid(),
@@ -27,7 +28,7 @@ const createSchema = z.object({
   buildNumber: z.string().max(40).optional(),
   externalBundle: z
     .object({
-      url: z.string().url(),
+      url: z.string().url().refine(isSafeExternalUrl, "URL must be https and cannot point to private or internal hosts"),
       sha256: z.string().length(64),
       size: z.number().positive(),
     })
@@ -45,15 +46,62 @@ export const Route = createFileRoute("/api/public/v1/releases")({
           const url = new URL(request.url);
           let query = ctx.db
             .from("releases")
-            .select("id, number, app_id, platform, version, group_id, runtime_version, status, rollout_percentage, release_notes, published_at")
+            .select("id, number, app_id, channel_id, platform, version, group_id, runtime_version, status, rollout_percentage, release_notes, published_at")
             .eq("organization_id", ctx.organizationId)
             .neq("status", "deleted")
             .order("number", { ascending: false })
             .limit(Math.min(Number(url.searchParams.get("limit") ?? 50), 200));
+
           const appId = url.searchParams.get("appId");
           if (appId) query = query.eq("app_id", appId);
+
+          const channelParam = url.searchParams.get("channel") ?? url.searchParams.get("branch");
+          if (channelParam) {
+            let channelQuery = ctx.db
+              .from("channels")
+              .select("id")
+              .eq("organization_id", ctx.organizationId)
+              .eq("name", channelParam);
+            if (appId) channelQuery = channelQuery.eq("app_id", appId);
+            const { data: channelRows } = await channelQuery;
+            const channelIds = (channelRows ?? []).map((c) => c.id);
+            if (channelIds.length === 0) {
+              return jsonOk([], { headers: { "x-request-id": requestId, "cache-control": "private, no-store" } });
+            }
+            query = query.in("channel_id", channelIds);
+          }
+
+          const platform = url.searchParams.get("platform");
+          if (platform) query = query.eq("platform", platform);
+
+          const groupId = url.searchParams.get("groupId") ?? url.searchParams.get("group_id");
+          if (groupId) query = query.eq("group_id", groupId);
+
+          const runtimeVersion = url.searchParams.get("runtimeVersion") ?? url.searchParams.get("runtime_version");
+          if (runtimeVersion) query = query.eq("runtime_version", runtimeVersion);
+
           const { data } = await query;
-          return jsonOk(data ?? [], { headers: { "x-request-id": requestId, "cache-control": "private, no-store" } });
+          const releases = data ?? [];
+
+          const channelIds = [...new Set(releases.map((r) => r.channel_id).filter((id): id is string => Boolean(id)))];
+          const channelMap = new Map<string, string>();
+          if (channelIds.length > 0) {
+            const { data: channels } = await ctx.db
+              .from("channels")
+              .select("id, name")
+              .in("id", channelIds);
+            for (const ch of channels ?? []) {
+              channelMap.set(ch.id, ch.name);
+            }
+          }
+
+          const results = releases.map((row) => ({
+            ...row,
+            channel: (row.channel_id ? channelMap.get(row.channel_id) : null) ?? null,
+            message: row.release_notes,
+          }));
+
+          return jsonOk(results, { headers: { "x-request-id": requestId, "cache-control": "private, no-store" } });
         } catch (error) {
           return jsonError(error, requestId);
         }

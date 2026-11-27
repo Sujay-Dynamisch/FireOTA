@@ -11,8 +11,17 @@ import { fail } from "./errors";
 import type { OrgRole } from "./rbac";
 import { recordSecurityEvent } from "./security.server";
 
-/** Maps API key scopes onto an effective role so one permission model governs everything. */
-function roleForScopes(scopes: string[]): OrgRole {
+/**
+ * Maps API key scopes onto an effective role so one permission model governs everything.
+ *
+ * NOTE: Keys with rollout scopes (e.g. rollout.write) map to "release_manager"
+ * because setRolloutPercentage requires "rollout.update" permission, which in
+ * src/lib/backend/rbac.ts is granted to release_manager (and admin/owner) but NOT
+ * to developer. Mapping rollout-only keys to developer would break setRolloutPercentage.
+ * Per-route scope checks (e.g. contextFromApiKey(request, "rollout.write")) guard
+ * endpoint access while preserving required execution permissions.
+ */
+export function roleForScopes(scopes: string[]): OrgRole {
   if (scopes.includes("admin") || scopes.includes("*")) return "admin";
   if (scopes.some((s) => s.startsWith("release.publish") || s.startsWith("rollout"))) return "release_manager";
   if (scopes.some((s) => s.startsWith("release.") || s.startsWith("app."))) return "developer";

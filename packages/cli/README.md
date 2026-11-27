@@ -79,6 +79,27 @@ fireota release rollback <releaseId> --reason "…" [--target <releaseId>]
 fireota releases [--app <appId>] [--json]
 ```
 
+
+## Coming from EAS Update
+
+FireOTA provides drop-in parity for EAS Update commands. EAS **branch** is an alias for FireOTA **channel** (`--branch` works wherever `--channel` is accepted):
+
+| EAS command | FireOTA command | Notes |
+| --- | --- | --- |
+| `eas update` | `fireota update` | `--branch` alias for `--channel`, `--platform all\|android\|ios`, `--rollout-percentage`, `--auto` |
+| `eas update:list` | `fireota update:list` | Filter by `--branch`/`--channel`, `--platform`, `--limit`, `--json` |
+| `eas update:view <id>` | `fireota update:view <id>` | View release metadata, status and bundle information |
+| `eas update:republish <id>` | `fireota update:republish <id>` | Promote/republish to another channel/branch (`--destination-channel`) |
+| `eas update:rollback <id>` | `fireota update:rollback <id>` | Roll back a release |
+| `eas update:edit <id>` | `fireota update:edit <id>` | Update rollout percentage (`--rollout-percentage`) |
+| `eas update:pause <id>` | `fireota update:pause <id>` | Pause an active update |
+| `eas update:resume <id>` | `fireota update:resume <id>` | Resume a paused update |
+| `eas update:delete <id>` | `fireota update:delete <id>` | Delete draft, ready or archived releases (`--non-interactive`) |
+| `eas channel:list` | `fireota channel:list` | List channels and latest release status |
+| `eas channel:create <name>` | `fireota channel:create <name>` | Create a release channel (`--environment`) |
+| `eas channel:view <name>` | `fireota channel:view <name>` | View channel details |
+| `eas channel:rollout <name>` | `fireota channel:rollout <name> --percent <N>` | Adjust rollout of latest published release |
+
 ## CI/CD
 
 The same command works on every CI. Commit, branch and build number are detected automatically on GitHub Actions, GitLab CI, Bitbucket Pipelines, Jenkins, Azure DevOps, CircleCI, Bitrise, Buildkite, Travis, TeamCity, Codemagic and AWS CodeBuild; anywhere else set `FIREOTA_GIT_SHA`, `FIREOTA_GIT_BRANCH` and `FIREOTA_BUILD_NUMBER`. Ready-made pipeline files for each tool are in the dashboard under **CI/CD**.

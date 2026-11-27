@@ -103,3 +103,11 @@ export const EXPO_RESPONSE_HEADERS = {
   "expo-sfv-version": "0",
   "cache-control": "private, max-age=0",
 } as const;
+
+export function isValidEasClientId(id: unknown): id is string {
+  return typeof id === "string" && id.length > 0 && id.length <= 64 && /^[A-Za-z0-9-]+$/.test(id);
+}
+
+export function sanitizeEasClientId(id: string | null | undefined): string | null {
+  return isValidEasClientId(id) ? id : null;
+}
